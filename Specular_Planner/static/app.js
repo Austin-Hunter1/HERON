@@ -64,7 +64,7 @@ const lakeLayer = L.geoJSON(null, {
   },
 }).addTo(map);
 const targetLayer = L.layerGroup().addTo(map);
-const pathStyle = { color: "#58a6ff", weight: 3, opacity: 0.9 };
+const pathStyle = { color: "#11a39a", weight: 3, opacity: 0.95 };
 const pathCopies = [-360, 0, 360].map((off) => {
   const line = L.polyline([], pathStyle).addTo(map);
   line._lngOff = off;
@@ -967,19 +967,19 @@ function clickOnLake(latlng) {
 function paintClickWps() {
   clickWpLayer.clearLayers();
   const n = document.getElementById("nClickWps");
-  if (n) n.textContent = `${clickWps.length} WP`;
+  if (n) n.textContent = `${clickWps.length} ${clickWps.length === 1 ? "waypoint" : "waypoints"}`;
   if (!clickWps.length) return;
   const padLL = padMarker ? padMarker.getLatLng() : null;
   const line = clickWps.map((w) => [w.lat, w.lon]);
   if (padLL) line.unshift([padLL.lat, padLL.lng]);
-  addWrappedCopies(clickWpLayer, line, { color: "#58a6ff", weight: 2, dashArray: "5 4", interactive: false });
+  addWrappedCopies(clickWpLayer, line, { color: "#11a39a", weight: 2.5, dashArray: "6 5", interactive: false });
   clickWps.forEach((w, i) => {
     wrapLngs(w.lon).forEach((lon) => {
       L.circleMarker([w.lat, lon], {
         radius: 6,
         color: "#fff",
         weight: 2,
-        fillColor: "#1f6feb",
+        fillColor: "#0b7068",
         fillOpacity: 1,
       }).addTo(clickWpLayer);
       L.marker([w.lat, lon], {
@@ -997,9 +997,16 @@ function paintClickWps() {
 
 function setMode(m) {
   missionMode = m;
-  document.getElementById("modeClick").classList.toggle("on", m === "click");
-  document.getElementById("modeAreas").classList.toggle("on", m === "areas");
-  document.getElementById("modeSurvey").classList.toggle("on", m === "survey");
+  const modeStates = [
+    ["modeClick", m === "click"],
+    ["modeAreas", m === "areas"],
+    ["modeSurvey", m === "survey"],
+  ];
+  modeStates.forEach(([id, active]) => {
+    const button = document.getElementById(id);
+    button.classList.toggle("on", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
   document.getElementById("clickTools").classList.toggle("hidden", m !== "click");
   document.getElementById("areaTools").classList.toggle("hidden", m !== "areas");
   document.getElementById("surveyTools").classList.toggle("hidden", m !== "survey");
@@ -1018,11 +1025,11 @@ function setMode(m) {
   if (m !== "areas") stopAreaDraw();
   if (m === "survey") {
     paintSurveyPicks();
-    setStatus("River: click start, then end. Lake: click once.");
+    setStatus("Choose a river stretch or select a lake on the map.");
   } else if (m === "areas") {
     startAreaDraw();
-    setStatus("Click two corners for a box, or more corners for a polygon.");
-  } else setStatus("Drop waypoints, then Compute.");
+    setStatus("Draw the survey boundary on the map.");
+  } else setStatus("Place your waypoints on the map, then build the mission.");
 }
 
 function layerIsLine(layer) {
@@ -1034,7 +1041,7 @@ function paintSurveyPicks() {
   surveyPickLayer.clearLayers();
   const n = document.getElementById("nSurveyPicks");
   if (!surveyStart) {
-    if (n) n.textContent = "no stretch";
+    if (n) n.textContent = "No water selected";
     return;
   }
   const mark = (ll, label) => {
@@ -1443,7 +1450,7 @@ function renderMixed(plan, tSec) {
   const spd = d.speed_mps || 0;
   const vs = d.vs_mps || 0;
   const vsSign = vs >= 0.05 ? "+" : vs <= -0.05 ? "" : "";
-  document.getElementById("hudPhase").textContent = phaseLabel(f.phase).toUpperCase();
+  document.getElementById("hudPhase").textContent = phaseLabel(f.phase);
   document.getElementById("hudAgl").textContent = `${agl.toFixed(0)}`;
   document.getElementById("hudAglFt").textContent = `${(agl * 3.28084).toFixed(0)} ft`;
   document.getElementById("hudMsl").textContent = `${(d.alt_m || 0).toFixed(0)}`;
@@ -1470,7 +1477,7 @@ function stopPlay() {
   playTimer = null;
   const btn = document.getElementById("btnPlay");
   btn.classList.remove("playing");
-  btn.setAttribute("aria-label", "Play");
+  btn.setAttribute("aria-label", "Play mission");
 }
 
 function startPlay(plan) {
@@ -1482,7 +1489,7 @@ function startPlay(plan) {
   playing = true;
   const btn = document.getElementById("btnPlay");
   btn.classList.add("playing");
-  btn.setAttribute("aria-label", "Pause");
+  btn.setAttribute("aria-label", "Pause mission");
   const lastT = plan.frames[plan.frames.length - 1].t;
   if (playT >= lastT) playT = 0;
   let last = performance.now();
@@ -1754,11 +1761,18 @@ map.on("zoomend", refreshWrapLayers);
   try {
     if (localStorage.getItem("heron.sidebar") === "0") document.body.classList.add("sidebar-collapsed");
   } catch (_) {}
+  const syncSidebarButton = () => {
+    const collapsed = document.body.classList.contains("sidebar-collapsed");
+    sideBtn.setAttribute("aria-expanded", String(!collapsed));
+    sideBtn.setAttribute("aria-label", collapsed ? "Show mission planner" : "Hide mission planner");
+  };
+  syncSidebarButton();
   sideBtn.onclick = () => {
-    const open = document.body.classList.toggle("sidebar-collapsed");
+    const collapsed = document.body.classList.toggle("sidebar-collapsed");
     try {
-      localStorage.setItem("heron.sidebar", open ? "0" : "1");
+      localStorage.setItem("heron.sidebar", collapsed ? "0" : "1");
     } catch (_) {}
+    syncSidebarButton();
   };
   L.DomEvent.disableClickPropagation(document.getElementById("sidebar"));
   L.DomEvent.disableClickPropagation(sideBtn);
@@ -1906,6 +1920,7 @@ document.getElementById("prnNone").onclick = () => {
 
   document.getElementById("btnAlmanac").onclick = () => {
     const hide = box.classList.toggle("hidden");
+    document.getElementById("btnAlmanac").setAttribute("aria-expanded", String(!hide));
     if (!hide) loadList();
   };
   document.getElementById("fileClose").onclick = () => fileScrim.classList.add("hidden");
