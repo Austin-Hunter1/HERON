@@ -55,9 +55,14 @@ data. After the flight, ground software processes the raw data.
 
 - `CLAUDE.md` — Rules and context for Claude Code. Humans: read it too.
 - `docs/` — All project documents (this folder).
-- `HERON_DEPLOY_SOFTWARE/Onboard_Software/` — New code for the NUC.
-- `HERON_DEPLOY_SOFTWARE/Base_Software/` — New code for the ground
-  station laptop: health display, controls, GNSS/RTK handling.
+- `HERON_DEPLOY_SOFTWARE/` — One `uv` workspace with three packages
+  (see its `README.md` for dependencies and commands):
+  - `Common_Software/` — `heron_common`: config loading and the link
+    protocol, used by both sides.
+  - `Onboard_Software/` — `heron_onboard`: the NUC supervisor, the C++
+    recorder, the systemd unit, config templates.
+  - `Base_Software/` — `heron_base`: the ground station laptop: health
+    display, controls, GNSS/RTK handling.
 - `SURGE/` — Legacy code. Read it. Do not change it.
 - `HERON_WRITING/`, `gps-tracking-example/` — Git submodules.
 
@@ -84,9 +89,11 @@ data. After the flight, ground software processes the raw data.
    `git clone --recurse-submodules https://github.com/Austin-Hunter1/HERON.git`
 2. Install `uv` (the Python package manager we use):
    `curl -LsSf https://astral.sh/uv/install.sh | sh`
-3. Go to `HERON_DEPLOY_SOFTWARE/` and run `uv sync`. This creates a
-   virtual environment and installs the locked dependencies.
+3. Go to `HERON_DEPLOY_SOFTWARE/` and run `uv sync --all-packages`.
+   This creates a virtual environment and installs the locked
+   dependencies of all three packages.
 4. Run the tests: `uv run pytest`.
+5. See the display without hardware: `uv run heron-base demo`.
 5. Read `docs/REQUIREMENTS.md` and `docs/DECISIONS.md` before you write
    code.
 
@@ -97,7 +104,8 @@ venv, and pip-tools with one tool. You declare dependencies in
 `pyproject.toml`. `uv` writes an exact lock file (`uv.lock`) so every
 engineer and every machine installs the same versions. Common commands:
 
-- `uv sync` — create the environment and install locked dependencies.
+- `uv sync --all-packages` — create the environment and install the
+  locked dependencies of every workspace package.
 - `uv add <package>` — add a dependency and update the lock file.
 - `uv run <command>` — run a command inside the project environment
   (example: `uv run pytest`, `uv run python main.py`).

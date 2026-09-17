@@ -19,13 +19,18 @@ any software, config, OS, or hardware change. Run the short check
    (2× B210, 2× B100) appear and match `HARDWARE.md` and the config.
 2. Run `uhd_usrp_probe` on each unit. Confirm no USB errors. Confirm
    each B210 sits on a USB 3.0 controller (`lsusb -t`).
-3. Confirm each unit locks to the shared oscillator (ref_locked
-   sensor where available). If sync hardware is not yet fitted,
-   record that this step is waived (Q-004).
+3. Confirm each unit locks to the shared 10 MHz (the recorder refuses
+   to start without `ref_locked`; the display shows `ref` per SDR).
+   Confirm the two B210s see PPS (the recorder reports "no PPS edge
+   seen" otherwise). If sync hardware is not yet fitted, set
+   `clock_source = "internal"` and `time_source = "none"` in a bench
+   config and record that this step is waived.
 
 ## 3. Capture test
 
-1. Start a manual 60-second recording with the flight config.
+1. Start a manual 60-second recording with the flight config:
+   `uv run heron-onboard record --config Onboard_Software/config/onboard.toml --seconds 60`
+   (stop the service first: `sudo systemctl stop heron-onboard`).
 2. Watch the console/log for overflow indications. Zero overflows is
    the pass condition.
 3. Confirm files appear in the data path with the expected segment
@@ -38,9 +43,10 @@ any software, config, OS, or hardware change. Run the short check
 
 ## 4. Ground link and control test
 
-1. Start `Base_Software` on the bench laptop with the payload link
-   hardware connected (or the loopback/test transport if the radio is
-   not yet chosen, Q-006).
+1. Start `uv run heron-base tui` on the bench laptop with the
+   flight-controller link connected (Cube + ground radio, D-016), or
+   with the `udp` transport over the bench network when the Cube is
+   not available (`base.bench-udp.toml` / `onboard.bench-loopback.toml`).
 2. Confirm the display shows link CONNECTED and live health data:
    per-SDR state, reference lock, disk space, data rate.
 3. Send START from the ground station. Confirm recording starts and

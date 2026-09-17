@@ -1,0 +1,167 @@
+# HERON onboard config template.
+# Copy to onboard.toml on the payload and edit the machine values
+# (serial numbers, ports, paths). Every key here is validated at start.
+# Sizing: 2x B210 @ 22 Msps x 2 ch + 2x B200mini @ 22 Msps x 1 ch
+#         = 6 channels x 44 MB/s = 264 MB/s at sc8. Check with
+#         `heron-onboard check-config`.
+
+[general]
+log_level = "INFO"
+log_dir = "/media/DataStore/logs"
+tick_s = 0.1
+
+[link]
+# Flight: "mavlink" through the Cube (D-016). Bench: "udp", "serial", or "loopback".
+transport = "mavlink"
+
+[link.mavlink]
+device = "/dev/serial/by-id/CHANGE_ME-cube-telem2"
+baud = 921600
+source_system = 1        # Same system id as the vehicle.
+source_component = 191   # MAV_COMP_ID_ONBOARD_COMPUTER
+target_system = 250      # heron-base on the laptop
+target_component = 0
+payload_type = 200
+heartbeat_hz = 1.0
+chunk_bytes = 125
+reassembly_timeout_s = 5.0
+
+[link.udp]
+local_host = "0.0.0.0"
+local_port = 14600
+remote_host = "0.0.0.0"
+remote_port = 0          # 0 = learn the laptop address from its first packet.
+
+[link.serial]
+port = "/dev/serial/by-id/CHANGE_ME-telemetry-radio"
+baud = 57600
+
+[telemetry]
+rate_hz = 1.0
+include_temps = true
+
+[control]
+fallback_mode = "record_if_no_link"   # record_if_no_link | record_at_boot | none
+link_grace_s = 120
+link_lost_s = 10
+rearm_fallback_on_link_loss = false
+flight_id_prefix = ""
+
+[disk]
+data_root = "/media/DataStore/iq"
+min_free_gb = 20
+min_free_pct = 5
+check_interval_s = 2
+
+[capture]
+recorder_binary = "/usr/local/bin/heron_recorder"
+segment_seconds = 30
+cpu_format = "sc8"        # File format (D-009).
+wire_format = "sc16"      # USB format. sc16 avoids FPGA quantisation; sc8 halves USB load.
+wire_peak = 0.25          # Used only with wire_format = "sc8".
+sync_lead_s = 6           # Seconds from launch to the common PPS sync epoch.
+start_lead_s = 3          # Seconds from the sync epoch to the first sample.
+buffer_seconds = 4
+status_interval_s = 1
+lock_timeout_s = 10
+ready_timeout_s = 60
+stop_timeout_s = 15
+file_extension = "sc8"
+
+[health]
+temp_labels = ["coretemp", "nvme", "acpitz"]
+
+# ---- SDR units (D-008, D-020). Signal plan is placeholder (Q-001). ----
+# clock_source: 10 MHz reference input. All four units take the GPSDO 10 MHz.
+# time_source:  PPS input. The B210 has separate REF and PPS inputs: "external".
+#               The B200mini has ONE reference input (10 MHz only): "none".
+
+[[sdr]]
+id = "b210_1"
+model = "b210"
+serial = "CHANGE_ME_1"
+device_args = "recv_buff_size=2e7,num_recv_frames=256"
+sample_rate_hz = 22e6
+clock_source = "external"
+time_source = "external"
+
+  [[sdr.channels]]
+  id = "L5_direct"
+  index = 0
+  center_freq_hz = 1176.45e6
+  gain_db = 45
+  bandwidth_hz = 20.322e6
+  antenna = "RX2"
+  antenna_label = "A1 up RHCP"
+
+  [[sdr.channels]]
+  id = "L5_reflected_L"
+  index = 1
+  center_freq_hz = 1176.45e6
+  gain_db = 45
+  bandwidth_hz = 20.322e6
+  antenna = "RX2"
+  antenna_label = "A2 down LHCP"
+
+[[sdr]]
+id = "b210_2"
+model = "b210"
+serial = "CHANGE_ME_2"
+device_args = "recv_buff_size=2e7,num_recv_frames=256"
+sample_rate_hz = 22e6
+clock_source = "external"
+time_source = "external"
+
+  [[sdr.channels]]
+  id = "L1_direct"
+  index = 0
+  center_freq_hz = 1575.42e6
+  gain_db = 45
+  bandwidth_hz = 20e6
+  antenna = "RX2"
+  antenna_label = "A1 up RHCP"
+
+  [[sdr.channels]]
+  id = "L1_reflected_L"
+  index = 1
+  center_freq_hz = 1575.42e6
+  gain_db = 45
+  bandwidth_hz = 20e6
+  antenna = "RX2"
+  antenna_label = "A2 down LHCP"
+
+[[sdr]]
+id = "b200mini_1"
+model = "b200mini"
+serial = "CHANGE_ME_3"
+device_args = "recv_buff_size=2e7,num_recv_frames=256"
+sample_rate_hz = 22e6
+clock_source = "external"
+time_source = "none"
+
+  [[sdr.channels]]
+  id = "L5_reflected_R"
+  index = 0
+  center_freq_hz = 1176.45e6
+  gain_db = 45
+  bandwidth_hz = 20.322e6
+  antenna = "RX2"
+  antenna_label = "A3 down RHCP"
+
+[[sdr]]
+id = "b200mini_2"
+model = "b200mini"
+serial = "CHANGE_ME_4"
+device_args = "recv_buff_size=2e7,num_recv_frames=256"
+sample_rate_hz = 22e6
+clock_source = "external"
+time_source = "none"
+
+  [[sdr.channels]]
+  id = "L1_reflected_R"
+  index = 0
+  center_freq_hz = 1575.42e6
+  gain_db = 45
+  bandwidth_hz = 20e6
+  antenna = "RX2"
+  antenna_label = "A3 down RHCP"

@@ -1,0 +1,44 @@
+[project]
+name = "heron-deploy-software"
+version = "0.1.0"
+description = "HERON deploy software workspace: onboard supervisor, base station, shared library."
+requires-python = ">=3.11"
+dependencies = [
+    "heron-common[serial,mavlink]",
+    "heron-onboard",
+    "heron-base",
+]
+
+[tool.uv.workspace]
+members = ["Common_Software", "Onboard_Software", "Base_Software"]
+
+[tool.uv.sources]
+heron-common = { workspace = true }
+heron-onboard = { workspace = true }
+heron-base = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["Common_Software/tests", "Onboard_Software/tests", "Base_Software/tests"]
+markers = [
+    "hardware: needs real SDRs or radio hardware; skipped in CI",
+]
+addopts = "-m 'not hardware' --import-mode=importlib"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+ignore_missing_imports = true

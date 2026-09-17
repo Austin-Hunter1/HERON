@@ -1,0 +1,57 @@
+# HERON base station config template. Copy to base.toml and edit.
+
+[general]
+log_level = "INFO"
+log_dir = "./heron_base_logs"
+flight_log_dir = "./heron_base_logs/flights"
+
+[link]
+# Flight: "mavlink" from the ground side of the flight-controller link (D-016).
+transport = "mavlink"
+
+[link.mavlink]
+# Herelink / GCS hotspot: MAVLink over UDP. Mission Planner also uses 14550;
+# use its "MAVLink mirror" to another port, or point the Herelink at this port.
+device = "udpin:0.0.0.0:14551"
+baud = 57600             # Used only for a serial device path.
+source_system = 250      # Our own GCS system id (Mission Planner is 255).
+source_component = 190
+target_system = 1        # The vehicle system id; the NUC shares it.
+target_component = 191   # MAV_COMP_ID_ONBOARD_COMPUTER
+payload_type = 200
+heartbeat_hz = 1.0
+chunk_bytes = 125
+reassembly_timeout_s = 5.0
+
+[link.udp]
+local_host = "0.0.0.0"
+local_port = 14601
+remote_host = "192.168.1.50"   # The payload address on the bench network.
+remote_port = 14600
+
+[link.serial]
+port = "/dev/serial/by-id/CHANGE_ME-telemetry-radio"
+baud = 57600
+
+[link_health]
+degraded_s = 3
+lost_s = 10
+command_timeout_s = 3
+command_retries = 3
+poll_s = 0.1
+
+[gnss]
+enabled = true
+port = "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00"
+baud = 38400
+log_dir = "./heron_base_logs/gnss"
+stale_fix_s = 5
+
+[gnss.correction]
+sink = "none"          # none | serial   (RTK correction path is Q-010)
+serial_port = ""
+serial_baud = 57600
+
+[display]
+refresh_hz = 2
+event_lines = 200

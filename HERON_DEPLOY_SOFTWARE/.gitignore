@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+*.egg-info/
+# Local machine configs hold serial numbers and ports; commit templates only.
+Onboard_Software/config/onboard.toml
+Base_Software/config/base.toml
+# Recorded data and logs never go in git.
+*.sc8
+*.ubx
+*.jsonl
+# Bench run outputs (relative paths in the bench configs).
+heron_base_logs/
+heron_onboard_logs/
+heron_onboard_data/
+*.log

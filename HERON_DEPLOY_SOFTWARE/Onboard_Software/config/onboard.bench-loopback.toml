@@ -1,0 +1,66 @@
+# Bench config: UDP link on localhost, fake data paths, one fake SDR set.
+# Use with:  heron-onboard run --config config/onboard.bench-loopback.toml --fake-capture
+# and on the same machine:  heron-base tui --config ../Base_Software/config/base.bench-udp.toml
+
+[general]
+log_level = "DEBUG"
+log_dir = "./heron_onboard_logs"
+
+[link]
+transport = "udp"
+
+[link.udp]
+local_host = "127.0.0.1"
+local_port = 14600
+remote_host = "127.0.0.1"
+remote_port = 14601
+
+[control]
+fallback_mode = "record_if_no_link"
+link_grace_s = 30
+link_lost_s = 5
+
+[disk]
+data_root = "./heron_onboard_data"
+min_free_gb = 1
+min_free_pct = 1
+
+[capture]
+recorder_binary = "./recorder/build/heron_recorder"
+
+[[sdr]]
+id = "b210_1"
+model = "b210"
+serial = "FAKE1"
+sample_rate_hz = 22e6
+clock_source = "internal"
+time_source = "none"
+
+  [[sdr.channels]]
+  id = "L5_direct"
+  index = 0
+  center_freq_hz = 1176.45e6
+  gain_db = 45
+  bandwidth_hz = 20.322e6
+
+  [[sdr.channels]]
+  id = "L5_reflected"
+  index = 1
+  center_freq_hz = 1176.45e6
+  gain_db = 45
+  bandwidth_hz = 20.322e6
+
+[[sdr]]
+id = "b200mini_1"
+model = "b200mini"
+serial = "FAKE2"
+sample_rate_hz = 22e6
+clock_source = "internal"
+time_source = "none"
+
+  [[sdr.channels]]
+  id = "L1_reflected"
+  index = 0
+  center_freq_hz = 1575.42e6
+  gain_db = 45
+  bandwidth_hz = 20e6

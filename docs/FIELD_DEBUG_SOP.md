@@ -17,7 +17,9 @@ start bench-style deep debugging in the field.
 
 ## 2. Standard health check (run before every flight)
 
-Run the status command (TBD when the code exists) or check by hand:
+From the laptop: `uv run heron-base send status --config
+Base_Software/config/base.toml` prints the ack and refreshes the
+display. Over SSH on the payload, check by hand:
 
 1. Service active: `systemctl status heron-onboard`.
 2. Disk mounted and free space OK: `df -h /media/DataStore`.

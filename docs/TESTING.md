@@ -53,11 +53,38 @@ fix ships with a test that fails before the fix and passes after.
 ## 2. Layout and conventions
 
 - Tests live in `HERON_DEPLOY_SOFTWARE/*/tests/`, mirroring module
-  names (`test_<module>.py`).
+  names (`test_<module>.py`). The three `tests/` folders have no
+  `__init__.py`; pytest runs with `--import-mode=importlib` (set in
+  the root `pyproject.toml`) so same-named files in different
+  packages do not collide.
 - Each test has a docstring in Simplified Technical English that says
   what behavior it protects.
 - No test may need network access or real hardware unless marked
   `hardware`.
+- Hardware interfaces have fakes: `LoopbackTransport` (link),
+  `FakeCaptureBackend` (recorders), `DiskMonitor(usage_fn=...)`
+  (disk). The supervisor and the link client take a `clock` callable,
+  so loop tests step a fake clock instead of sleeping.
+
+### What exists today (2026-09-17)
+
+- `Common_Software/tests/`: framing and CRC, message encode/decode and
+  size budget, loopback transport, MAVLink chunking and reassembly,
+  config loading.
+- `Onboard_Software/tests/`: config validation and every template,
+  the recording controller (start/stop, retry idempotence, link loss
+  keeps recording, fallback modes, disk low, capture fault), disk
+  threshold math, recorder command line and status parsing, metadata,
+  capture manager, and the whole supervisor loop over a loopback link.
+- `Base_Software/tests/`: link health thresholds, link client (ack
+  matching, retries, abandon, flight log), NMEA GGA, RTCM3 splitting
+  and CRC-24Q, the GNSS data path, config templates, and a headless
+  Textual test of the display (telemetry shown, START dialog sends a
+  START the fake payload accepts).
+
+Run from `HERON_DEPLOY_SOFTWARE/`: `uv run pytest` (about 1 s),
+`uv run ruff check .`, `uv run mypy Common_Software/src
+Onboard_Software/src Base_Software/src`.
 
 ## 3. Definition of done for a change
 
