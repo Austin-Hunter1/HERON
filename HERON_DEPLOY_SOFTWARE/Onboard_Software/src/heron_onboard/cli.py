@@ -9,6 +9,8 @@ Subcommands:
   ground link (TEST_BENCH_ROUTINE section 3).
 - ``check-config --config FILE``: validate the config and print the
   data-rate sizing.
+- ``rebuild-metadata FLIGHT_DIR``: rebuild ``metadata.json`` totals and
+  ``metadata.yml`` from the segment sidecars (after a power loss).
 """
 
 from __future__ import annotations
@@ -126,6 +128,18 @@ def cmd_check_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rebuild_metadata(args: argparse.Namespace) -> int:
+    from heron_onboard.capture.metadata_yaml import rebuild_flight_metadata
+
+    try:
+        yaml_path, count = rebuild_flight_metadata(args.flight_dir)
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    print(f"Rebuilt {yaml_path} from {count} segment sidecar(s)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="heron-onboard", description="HERON payload supervisor")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -148,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
     p_chk = sub.add_parser("check-config", help="validate a config file")
     p_chk.add_argument("--config", type=Path, required=True)
     p_chk.set_defaults(func=cmd_check_config)
+
+    p_rb = sub.add_parser("rebuild-metadata", help="rebuild metadata files from sidecars")
+    p_rb.add_argument("flight_dir", type=Path)
+    p_rb.set_defaults(func=cmd_rebuild_metadata)
 
     args = parser.parse_args(argv)
     return args.func(args)

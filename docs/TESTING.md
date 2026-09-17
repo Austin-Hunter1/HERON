@@ -74,8 +74,10 @@ fix ships with a test that fails before the fix and passes after.
 - `Onboard_Software/tests/`: config validation and every template,
   the recording controller (start/stop, retry idempotence, link loss
   keeps recording, fallback modes, disk low, capture fault), disk
-  threshold math, recorder command line and status parsing, metadata,
-  capture manager, and the whole supervisor loop over a loopback link.
+  threshold math, recorder command line and status parsing, metadata
+  (JSON and the SDR team's metadata.yml, plus rebuild from sidecars),
+  the recorder console log file, band validation, capture manager, and
+  the whole supervisor loop over a loopback link.
 - `Base_Software/tests/`: link health thresholds, link client (ack
   matching, retries, abandon, flight log), NMEA GGA, RTCM3 splitting
   and CRC-24Q, the GNSS data path, config templates, and a headless

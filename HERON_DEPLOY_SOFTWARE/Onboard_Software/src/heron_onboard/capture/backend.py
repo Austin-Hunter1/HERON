@@ -80,7 +80,8 @@ class RecorderBackend(CaptureBackend):
                 sync_epoch,
                 start_time,
             )
-            proc = RecorderProcess(sdr.id, argv)
+            log_path = flight_dir / sdr.id / f"{file_prefix}_recorder_log.txt"
+            proc = RecorderProcess(sdr.id, argv, log_path=log_path)
             proc.start()
             self._procs[sdr.id] = proc
         return {"sync_epoch": sync_epoch, "start_time": start_time}

@@ -41,7 +41,7 @@ Plus the C++ recorder in `Onboard_Software/recorder/` (payload only).
 ```bash
 cd HERON_DEPLOY_SOFTWARE
 uv sync --all-packages
-uv run pytest            # 89 tests, about 5 s (one headless TUI test)
+uv run pytest            # 98 tests, about 5 s (one headless TUI test)
 uv run ruff check .      # lint
 uv run mypy Common_Software/src Onboard_Software/src Base_Software/src
 ```
@@ -54,6 +54,7 @@ Onboard (payload):
 uv run heron-onboard check-config --config Onboard_Software/config/onboard.toml
 uv run heron-onboard run --config Onboard_Software/config/onboard.toml          # what systemd runs
 uv run heron-onboard record --config Onboard_Software/config/onboard.toml --seconds 60   # bench capture
+uv run heron-onboard rebuild-metadata /media/DataStore/iq/<flight_id>            # after a power loss
 ```
 
 Base (ground laptop):
@@ -95,7 +96,7 @@ ports.
 
 ## Status
 
-- Python packages: complete for the first bench; 89 unit, loop, and
+- Python packages: complete for the first bench; 98 unit, loop, and
   headless-TUI tests pass; ruff and mypy clean. The onboard supervisor
   (fake capture) and the base CLI were run end to end over UDP on a
   Windows laptop on 2026-09-17.

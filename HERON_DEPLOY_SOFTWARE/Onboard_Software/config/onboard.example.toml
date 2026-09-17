@@ -71,6 +71,11 @@ file_extension = "sc8"
 [health]
 temp_labels = ["coretemp", "nvme", "acpitz"]
 
+# GNSS band names used by the channels below and by metadata.yml (D-022).
+[bands]
+L1 = 1575.42e6
+L5 = 1176.45e6
+
 # ---- SDR units (D-008, D-020). Signal plan is placeholder (Q-001). ----
 # clock_source: 10 MHz reference input. All four units take the GPSDO 10 MHz.
 # time_source:  PPS input. The B210 has separate REF and PPS inputs: "external".
@@ -88,6 +93,7 @@ time_source = "external"
   [[sdr.channels]]
   id = "L5_direct"
   index = 0
+  band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
   bandwidth_hz = 20.322e6
@@ -97,6 +103,7 @@ time_source = "external"
   [[sdr.channels]]
   id = "L5_reflected_L"
   index = 1
+  band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
   bandwidth_hz = 20.322e6
@@ -115,6 +122,7 @@ time_source = "external"
   [[sdr.channels]]
   id = "L1_direct"
   index = 0
+  band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
   bandwidth_hz = 20e6
@@ -124,6 +132,7 @@ time_source = "external"
   [[sdr.channels]]
   id = "L1_reflected_L"
   index = 1
+  band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
   bandwidth_hz = 20e6
@@ -142,6 +151,7 @@ time_source = "none"
   [[sdr.channels]]
   id = "L5_reflected_R"
   index = 0
+  band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
   bandwidth_hz = 20.322e6
@@ -160,6 +170,7 @@ time_source = "none"
   [[sdr.channels]]
   id = "L1_reflected_R"
   index = 0
+  band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
   bandwidth_hz = 20e6

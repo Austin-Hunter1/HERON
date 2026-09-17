@@ -19,6 +19,7 @@ def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
         "general": {"log_dir": str(tmp_path / "logs")},
         "disk": {"data_root": str(tmp_path / "iq"), "min_free_gb": 0, "min_free_pct": 0},
         "capture": {"recorder_binary": str(tmp_path / "heron_recorder")},
+        "bands": {"L1": 1575.42e6, "L5": 1176.45e6},
         "sdr": [
             {
                 "id": "b210_1",
@@ -31,6 +32,7 @@ def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
                     {
                         "id": "L5_direct",
                         "index": 0,
+                        "band": "L5",
                         "center_freq_hz": 1176.45e6,
                         "gain_db": 45,
                         "bandwidth_hz": 20e6,
@@ -38,6 +40,7 @@ def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
                     {
                         "id": "L5_refl",
                         "index": 1,
+                        "band": "L5",
                         "center_freq_hz": 1176.45e6,
                         "gain_db": 45,
                         "bandwidth_hz": 20e6,
@@ -55,6 +58,7 @@ def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
                     {
                         "id": "L1_refl",
                         "index": 0,
+                        "band": "L1",
                         "center_freq_hz": 1575.42e6,
                         "gain_db": 40,
                         "bandwidth_hz": 10e6,

@@ -87,6 +87,10 @@ class ChannelConfig(BaseModel):
     antenna: str = Field(default="RX2", description="RX2 or TX/RX")
     subdev: str = Field(default="", description="UHD subdev spec; empty = default")
     antenna_label: str = Field(default="", description="Physical antenna label, for metadata")
+    band: str = Field(
+        default="",
+        description="GNSS band name from the [bands] table, e.g. L5 (used in metadata.yml)",
+    )
 
     @field_validator("id")
     @classmethod
@@ -192,6 +196,10 @@ class OnboardConfig(BaseModel):
     disk: DiskConfig = Field(default_factory=DiskConfig)
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
+    bands: dict[str, float] = Field(
+        default_factory=dict,
+        description="GNSS band name -> carrier centre frequency in Hz, e.g. L5 = 1176.45e6",
+    )
     sdr: list[SdrConfig] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -202,6 +210,25 @@ class OnboardConfig(BaseModel):
             raise ValueError("sdr ids must be unique")
         if len(set(serials)) != len(serials):
             raise ValueError("sdr serial numbers must be unique")
+        # A channel's band must exist in [bands]. Channels that share a
+        # band must share a centre frequency, because metadata.yml keeps
+        # one intermediate frequency per band (D-022).
+        centre_by_band: dict[str, tuple[str, float]] = {}
+        for sdr in self.sdr:
+            for ch in sdr.channels:
+                if not ch.band:
+                    continue
+                if ch.band not in self.bands:
+                    raise ValueError(
+                        f"sdr {sdr.id} channel {ch.id}: band {ch.band!r} is not in [bands]"
+                    )
+                seen = centre_by_band.get(ch.band)
+                if seen is not None and seen[1] != ch.center_freq_hz:
+                    raise ValueError(
+                        f"channels {seen[0]} and {sdr.id}/{ch.id} share band {ch.band} "
+                        "but have different center_freq_hz"
+                    )
+                centre_by_band.setdefault(ch.band, (f"{sdr.id}/{ch.id}", ch.center_freq_hz))
         return self
 
     @property

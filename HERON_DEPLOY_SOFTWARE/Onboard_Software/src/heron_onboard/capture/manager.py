@@ -15,6 +15,7 @@ from heron_common.timeutil import utc_stamp
 
 from heron_onboard.capture.backend import CaptureBackend
 from heron_onboard.capture.metadata import build_metadata, finalize_metadata, write_metadata
+from heron_onboard.capture.metadata_yaml import write_metadata_yaml
 from heron_onboard.config import OnboardConfig
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class CaptureManager:
             self._config, flight_id, file_prefix, now, self._version, timing, reason
         )
         path = write_metadata(flight_dir, self._meta)
+        self._write_yaml(flight_dir, file_prefix)
         log.info("recording %s started (%s); metadata %s", flight_id, reason, path)
 
     def stop(self, now: float, reason: str) -> None:
@@ -68,12 +70,20 @@ class CaptureManager:
                 write_metadata(self.flight_dir, self._meta)
             except OSError as exc:
                 log.error("cannot write final metadata: %s", exc)
+            self._write_yaml(self.flight_dir, self._meta["file_prefix"])
         clear = getattr(self._backend, "clear", None)
         if clear is not None:
             clear()
         self.flight_id = None
         self.flight_dir = None
         self._meta = None
+
+    def _write_yaml(self, flight_dir: Path, file_prefix: str) -> None:
+        """Write the SDR team's metadata.yml; never let it stop a recording."""
+        try:
+            write_metadata_yaml(flight_dir, self._config, file_prefix)
+        except (OSError, ValueError) as exc:
+            log.error("cannot write metadata.yml: %s", exc)
 
     def poll(self) -> list[SdrStatus]:
         """Return the current per-SDR status list."""

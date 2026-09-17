@@ -53,6 +53,50 @@ numbers and channel settings, the timing scheme (`sync_epoch_unix`,
 `stream_start_unix`, per-SDR `clock_source`/`time_source`), and
 per-SDR totals (samples, overflows, host drops, segments, fault).
 
+## 1a. `metadata.yml` for the processing tools (D-022)
+
+Next to `metadata.json`, every flight has a `metadata.yml` in the
+schema the SDR/data-processing team uses for its own captures, so
+their tools read a HERON flight with no conversion:
+
+```yaml
+band_configurations:
+  L5: {center_freq: 1176450000.0, inter_freq: 0.0}
+channel_configurations:
+  b210_1_L5_direct:
+    samp_rate: 22000000.0
+    bands: [L5]
+    sample_format: {bit_depth: 8, is_complex: true, is_integer: true,
+                    is_signed: true, is_i_lsb: true}
+collections:
+  20260917T120000Z_b210_1_L5_direct_00000:
+    channel_config: b210_1_L5_direct
+    filename: b210_1/L5_direct/20260917T120000Z_00000.sc8
+    notes: "HERON b210 serial ..., gain 45.0 dB, ... NOTE: 3 overflow indication(s) ..."
+```
+
+- `band_configurations` come from the `[bands]` table and the `band`
+  key of each channel in `onboard.toml`. `inter_freq` is the channel
+  tuning minus the band centre (0 when tuned on the carrier).
+- One `channel_configurations` entry per SDR channel, keyed
+  `<sdr_id>_<channel_id>`. `bit_depth` is 8 for `sc8`, 16 for `sc16`.
+- One `collections` entry per segment file, from its sidecar. The
+  `notes` text names the unit, antenna, gain, bandwidth, first-sample
+  time and time base, and carries a `NOTE:` when the segment had
+  overflows or host drops (the team's convention).
+- The file is written at start (no collections yet) and rewritten at
+  stop. After a power loss run
+  `heron-onboard rebuild-metadata <flight_dir>` to rebuild it (and the
+  `metadata.json` totals) from the sidecars.
+
+### Recorder console logs
+
+Each recorder's full console output (UHD messages, our JSON events,
+overflow `O` characters) is saved as
+`<flight_id>/<sdr_id>/<utc_start>_recorder_log.txt`, first line = the
+command line. Keep it with the data, as the team does with
+`*_log.txt`.
+
 ## 2. Time base (D-020, Q-013)
 
 - All four units lock to one 10 MHz reference, so their sample clocks

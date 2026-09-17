@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import IO
 
 from heron_common.protocol import SdrStatus
 
@@ -144,11 +145,19 @@ class RecorderProcess:
     """Launch, watch, and stop one recorder process."""
 
     def __init__(
-        self, sdr_id: str, argv: list[str], env_extra: dict[str, str] | None = None
+        self,
+        sdr_id: str,
+        argv: list[str],
+        env_extra: dict[str, str] | None = None,
+        log_path: Path | None = None,
     ) -> None:
         self.sdr_id = sdr_id
         self.argv = argv
         self._env_extra = env_extra or {}
+        # Every console line (UHD messages and our JSON events) goes to
+        # this file next to the data, like the SDR team's capture logs.
+        self.log_path = log_path
+        self._log_file: IO[str] | None = None
         self._proc: subprocess.Popen[str] | None = None
         self._reader: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -165,6 +174,15 @@ class RecorderProcess:
         env.setdefault("UHD_LOG_FASTPATH_DISABLE", "1")
         env.update(self._env_extra)
         log.info("[%s] launching: %s", self.sdr_id, " ".join(self.argv))
+        if self.log_path is not None:
+            try:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                self._log_file = self.log_path.open("a", encoding="utf-8")
+                self._log_file.write("# " + " ".join(self.argv) + "\n")
+                self._log_file.flush()
+            except OSError as exc:
+                log.warning("[%s] cannot open recorder log %s: %s", self.sdr_id, self.log_path, exc)
+                self._log_file = None
         try:
             self._proc = subprocess.Popen(
                 self.argv,
@@ -189,6 +207,12 @@ class RecorderProcess:
     def _read_stdout(self) -> None:
         assert self._proc is not None and self._proc.stdout is not None
         for line in self._proc.stdout:
+            if self._log_file is not None:
+                try:
+                    self._log_file.write(line)
+                    self._log_file.flush()
+                except OSError:
+                    self._log_file = None
             event = parse_status_line(line)
             if event is None:
                 text = line.rstrip()
@@ -206,6 +230,9 @@ class RecorderProcess:
             with self._lock:
                 self._status = apply_status(self._status, event)
         self._proc.stdout.close()
+        if self._log_file is not None:
+            self._log_file.close()
+            self._log_file = None
 
     def status(self) -> SdrStatus:
         """Return the latest status (thread safe)."""

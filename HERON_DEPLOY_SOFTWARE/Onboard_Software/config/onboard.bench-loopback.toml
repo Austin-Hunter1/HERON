@@ -28,6 +28,10 @@ min_free_pct = 1
 [capture]
 recorder_binary = "./recorder/build/heron_recorder"
 
+[bands]
+L1 = 1575.42e6
+L5 = 1176.45e6
+
 [[sdr]]
 id = "b210_1"
 model = "b210"
@@ -39,6 +43,7 @@ time_source = "none"
   [[sdr.channels]]
   id = "L5_direct"
   index = 0
+  band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
   bandwidth_hz = 20.322e6
@@ -46,6 +51,7 @@ time_source = "none"
   [[sdr.channels]]
   id = "L5_reflected"
   index = 1
+  band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
   bandwidth_hz = 20.322e6
@@ -61,6 +67,7 @@ time_source = "none"
   [[sdr.channels]]
   id = "L1_reflected"
   index = 0
+  band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
   bandwidth_hz = 20e6
