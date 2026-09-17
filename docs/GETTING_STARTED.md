@@ -16,31 +16,36 @@ precise drone positions (PPK) to map where each reflection came from.
 
 ## 2. The system in one paragraph
 
-An Intel NUC (NUC7i3DNB) rides on the drone. Two Ettus B210 SDRs
-(USB 3.0) and two Ettus B100 SDRs (USB 2.0) connect to the NUC and
-share a common oscillator so their sample streams stay coherent. The
-NUC records raw 8-bit IQ samples to a SATA SSD; the OS runs on a
-separate NVMe drive. The payload is independent of the Cube Orange
-flight controller. A ground station laptop talks to the NUC over a
-radio link (hardware not yet chosen): it shows live health data
-(recording state, SDR lock, overflows, disk space) and sends the
-start and stop commands. If the link drops, the payload keeps
-recording. A GNSS receiver on the laptop provides RTK correction
-data. After the flight, ground software processes the raw data.
+An Intel NUC (NUC7i3DNB) rides on the drone. Two Ettus B210 SDRs and
+two Ettus B200mini SDRs (all USB 3.0) connect to the NUC and share a
+common 10 MHz reference so their sample streams stay coherent. The
+NUC records raw IQ samples to a SATA SSD; the OS runs on a separate
+NVMe drive. The payload does not depend on the Cube Orange flight
+controller's state (it never checks flight mode), but it does use the
+Cube's telemetry link as its control channel: the NUC talks MAVLink
+to the Cube, which forwards HERON's messages to the ground. A ground
+station laptop reads that link: it shows live health data (recording
+state, SDR lock, overflows, disk space) and sends the start and stop
+commands. If the link drops, the payload keeps recording. A GNSS
+receiver on the laptop provides RTK correction data. After the
+flight, ground software processes the raw data.
 
 ## 3. Vocabulary
 
 - **GNSS** — Global Navigation Satellite System (GPS, Galileo, etc.).
 - **GNSS-R** — GNSS reflectometry: use of reflected GNSS signals to
   sense the surface.
-- **SDR** — Software-defined radio. The B210 converts radio signals to
-  digital samples.
+- **SDR** — Software-defined radio. The B210 and B200mini convert
+  radio signals to digital samples.
 - **IQ samples** — Pairs of numbers (in-phase, quadrature) that
   represent the raw radio signal.
 - **UHD** — USRP Hardware Driver. The Ettus software that controls the
-  B210.
+  B210 and B200mini.
 - **MAVLink** — The message protocol of the autopilot. Legacy SURGE
-  used it; the HERON payload does not connect to the autopilot.
+  used it to trigger recording from flight mode. The HERON payload
+  does not read flight mode, but it does use MAVLink as a bit-pipe:
+  its own messages travel inside MAVLink `TUNNEL` frames on the Cube's
+  telemetry link (D-016).
 - **RTK / PPK** — Real-time / post-processed kinematic GNSS. Both use
   base station correction data to give centimeter-level drone
   positions.
@@ -94,7 +99,7 @@ data. After the flight, ground software processes the raw data.
    dependencies of all three packages.
 4. Run the tests: `uv run pytest`.
 5. See the display without hardware: `uv run heron-base demo`.
-5. Read `docs/REQUIREMENTS.md` and `docs/DECISIONS.md` before you write
+6. Read `docs/REQUIREMENTS.md` and `docs/DECISIONS.md` before you write
    code.
 
 ### What is uv?

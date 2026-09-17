@@ -1,6 +1,6 @@
 # REQUIREMENTS — HERON Deploy Software
 
-Status: Draft 2, 2026-09-16. Owner: HERON team. This document is the
+Status: Draft 3, 2026-09-17. Owner: HERON team. This document is the
 source of truth for what the software must do. When a requirement here
 conflicts with code, the requirement wins until the team changes it in
 `DECISIONS.md`.
@@ -23,40 +23,48 @@ Words: **shall** = mandatory. **should** = strong preference.
 ### Capture
 
 - O1. The onboard software shall record raw IQ samples from all four
-  SDRs (2× B210, 2× B100 — D-008) to the SATA data SSD. It shall not
-  process science data in flight. (D-001.)
-- O2. All SDRs shall record from the shared common oscillator (D-014).
+  SDRs (2× B210, 2× B200mini — D-008, D-020) to the SATA data SSD. It
+  shall not process science data in flight. (D-001.)
+- O2. All SDRs shall record from the shared 10 MHz reference (D-014).
   The software shall verify reference lock where the hardware reports
-  it, and shall record the time-alignment data the team selects
-  (Q-004).
-- O3. Sample format shall be sc8 (8-bit complex) (D-009). Center
+  it, and shall align the two B210s to a shared PPS edge; the
+  B200mini's offset is found after the flight (D-020, Q-013).
+- O3. Sample file format shall be sc8 (8-bit complex) (D-009). Center
   frequencies, sample rates, gains, bandwidths, antenna ports, and
   channel counts shall come from a config file. The signal plan is
-  open (Q-001, Q-012); the code shall not fix it.
+  open (Q-001); the code shall not fix it.
 - O4. The capture path shall sustain the configured aggregate data
   rate without sample loss. The software shall detect, count, and log
   overflows and dropped samples per SDR.
 - O5. Each recording shall include metadata: config used, start time,
-  SDR serial numbers, and software version (git hash).
+  SDR serial numbers, and software version (git hash). It shall also
+  include a `metadata.yml` in the data-processing team's own schema,
+  so their tools read a HERON flight with no conversion (D-022).
 
 ### Control and monitoring
 
-- O6. The payload shall not depend on the flight controller. There is
-  no MAVLink link between the NUC and the Cube Orange (D-012).
+- O6. The payload shall not depend on the flight controller's state:
+  it shall not read flight mode or arm state, and no behavior of the
+  onboard software shall change because of them (D-012). The payload
+  link transport rides on the Cube's telemetry link as a bit-pipe
+  (MAVLink `TUNNEL` frames the Cube only routes, never interprets) —
+  this is a transport choice, not a flight-controller dependency
+  (D-016).
 - O7. The onboard software shall accept start and stop commands from
   the ground station over the payload link (D-010). The command
-  protocol shall be its own module, so the radio hardware (Q-006) can
-  change without code rewrites.
+  protocol shall be its own module, independent of the transport
+  (D-016), so the transport can change without code rewrites.
 - O8. The onboard software shall have an autonomous fallback so a
   flight without a working ground link still collects data (D-010).
-  Fallback behavior shall be configurable; details are Q-009.
+  Fallback behavior shall be configurable: a grace period after boot
+  is the default (D-017).
 - O9. If the ground link drops during recording, the payload shall
   keep recording until disk limits or a stop command (D-011).
 - O10. The onboard software shall stream live health telemetry to the
   ground station: recording state, per-SDR status and reference lock,
   overflow counts, data rate, disk free space, CPU load, and
   temperatures. The telemetry set and rate shall be configurable and
-  shall fit the link bandwidth (Q-006).
+  shall fit the link bandwidth (D-016, D-019).
 - O11. The onboard software shall monitor free disk space and shall
   stop recording, with a logged event and a telemetry alert, before
   the disk is full. The threshold shall be configurable.
@@ -119,6 +127,8 @@ Words: **shall** = mandatory. **should** = strong preference.
 
 ## 6. Open requirements
 
-See `DECISIONS.md` for the open-question list (signal plan, payload
-link hardware, time alignment, fallback trigger, RTK path, UHD
-version for the B100s).
+See `DECISIONS.md` for the open-question list: the signal plan
+(Q-001), the ground GNSS receiver model (Q-002), data offload (Q-003),
+the final payload computer (Q-005), the RTK correction path (Q-010),
+the B200mini post-flight time offset (Q-013), and the exact MAVLink
+port and baud on both ends (Q-014).

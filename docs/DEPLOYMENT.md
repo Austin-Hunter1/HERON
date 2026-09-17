@@ -56,8 +56,9 @@ payload computer. Steps marked TBD depend on open questions in
    `cp Onboard_Software/config/onboard.example.toml Onboard_Software/config/onboard.toml`
    Set: the four SDR serial numbers (from `uhd_find_devices`), the
    per-SDR `clock_source`/`time_source`, the Cube serial port under
-   `[link.mavlink]` (use a `/dev/serial/by-id/` path), data paths, and
-   disk thresholds. Then validate:
+   `[link.mavlink]` (use a `/dev/serial/by-id/` path), data paths,
+   disk thresholds, and the `[bands]` table plus each channel's `band`
+   (used to build `metadata.yml`, D-022). Then validate:
    `uv run heron-onboard check-config --config Onboard_Software/config/onboard.toml`
 
 ## 4. Prepare storage

@@ -11,7 +11,7 @@ not here, ask the team. Then record the answer here in the same change.
 | D-001 | 2026-09-16 | The onboard software records raw IQ only. No in-flight science processing. | Same concept as legacy SURGE. |
 | D-002 | 2026-09-16 | All SDRs record with synchronized references. | See D-009 for the method. |
 | D-003 | 2026-09-16 | ~~Recording trigger: AUTO flight mode via MAVLink.~~ **Superseded by D-010.** | |
-| D-004 | 2026-09-16 | The drone flight controller is a Cube Orange with ArduPilot. | The payload no longer connects to it (D-012). |
+| D-004 | 2026-09-16 | The drone flight controller is a Cube Orange with ArduPilot. | The payload does not depend on its state (D-012), but does use its telemetry link as the payload link transport (D-016). |
 | D-005 | 2026-09-16 | **Revised:** `Base_Software/` is the ground station laptop software: live health display, record start/stop control, and RTK GNSS data handling. `Onboard_Software/` is the NUC flight code. | Was "GNSS base station" only. |
 | D-006 | 2026-09-16 | Language: Python (uv-managed) for orchestration; keep the C++ UHD recorder for the capture path. | See `RECOMMENDATIONS.md`. |
 | D-007 | 2026-09-16 | Docs live in `docs/`; `CLAUDE.md` at the repo root. | |
@@ -19,7 +19,7 @@ not here, ask the team. Then record the answer here in the same change.
 | D-009 | 2026-09-16 | Recording sample format: 8-bit complex (sc8). | |
 | D-010 | 2026-09-16 | Recording control: ground station commands are primary. The payload also has an autonomous fallback so a flight without the link still collects data. Fallback details are Q-009. | Replaces D-003. |
 | D-011 | 2026-09-16 | If the ground link drops during recording, the payload keeps recording until disk limits or a stop command. | |
-| D-012 | 2026-09-16 | The payload (NUC + SDRs) is separated from the flight control schema (Cube Orange). No MAVLink trigger link between NUC and Cube. | See Q-008 for a possible shared radio. |
+| D-012 | 2026-09-16 | The payload (NUC + SDRs) is separated from the flight control schema (Cube Orange): the onboard software never reads flight mode or arm state, and no MAVLink link triggers recording. | D-016 later put the payload link transport on the Cube's telemetry link as a bit-pipe; that is a transport choice, not a dependency on flight-controller state, and does not change this decision. |
 | D-013 | 2026-09-16 | Payload computer: Intel NUC7i3DNB. OS on NVMe; IQ data on a SATA SSD. | |
 | D-014 | 2026-09-16 | The SDRs share a common oscillator (frequency reference). | Time alignment method is Q-004. |
 | D-015 | 2026-09-16 | A GNSS receiver connects to the ground station laptop and provides RTK correction data. | Receiver model and correction path are Q-002 / Q-010. |

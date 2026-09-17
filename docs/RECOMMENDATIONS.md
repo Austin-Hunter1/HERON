@@ -1,7 +1,10 @@
 # RECOMMENDATIONS — Platform and Tooling Choices
 
-Status: Draft 1, 2026-09-16. These are recommendations with reasons.
-The team confirms or changes them in `DECISIONS.md`.
+Status: Draft 2, 2026-09-17. These are recommendations with reasons.
+The team confirms or changes them in `DECISIONS.md`. Sections 1, 3,
+and 5 have been overtaken by decisions the team has since made
+(D-018, D-020, D-021); this draft updates them to match. Section 4
+(containers) is still open (Q-007).
 
 ## 1. Operating system: Ubuntu Server LTS, headless
 
@@ -9,11 +12,11 @@ Recommendation: **Ubuntu Server 24.04 LTS (or 22.04 LTS), minimal
 install, headless**, on the payload computer.
 
 Reasons: Ettus supports UHD best on Ubuntu LTS; the legacy SURGE stack
-ran on Linux; LTS gives 5 years of stability (but see Q-011 — the
-B100s likely need UHD 3.15 built from source, not the apt 4.x);
-Server (no desktop) leaves more RAM and CPU for capture on an 8 GB
-machine and removes GUI processes that can cause USB or scheduling
-jitter.
+ran on Linux; LTS gives 5 years of stability; the apt UHD 4.x package
+supports both the B210 and the B200mini (D-020), so the caution about
+building UHD 3.15 from source for a B100 no longer applies; Server (no
+desktop) leaves more RAM and CPU for capture on an 8 GB machine and
+removes GUI processes that can cause USB or scheduling jitter.
 
 ### Headless: pros and cons
 
@@ -46,15 +49,24 @@ desktop install.
 ## 2. Language: keep Python, keep the C++ capture path
 
 Recommendation: **Python 3.11+** for everything except the sample
-stream; **keep and adapt the legacy C++ UHD recorder**
-(`rx_multi_to_file`) for capture.
+stream; **C++ against the UHD API** for capture.
+
+Update, 2026-09-17 (D-018): the plan was to adapt the legacy recorder
+(`SURGE/NUC_scripts/SDR_backup_files/rx_multi_to_file.cpp`). That file
+depends on four CSU "UHD extensions" headers
+(`buffered_fstream.hpp`, `cbuff_handler.hpp`, `io_runner.hpp`,
+`mu_meta.hpp`) that are not in this repository, so it cannot build. The
+team wrote a new recorder (`Onboard_Software/recorder/heron_recorder.cpp`)
+against the plain UHD 4.x API instead, keeping the legacy structure
+(per-unit process, timed start, fixed-length segments). The reasons
+below for staying in C++ still hold.
 
 Reasons:
 
-- The performance-critical work is moving bytes from USB to SSD. The
-  legacy C++/UHD recorder already does this well; UHD is C++ at the
-  core. Python only supervises (start/stop, the ground link, disk checks),
-  which needs trivial CPU.
+- The performance-critical work is moving bytes from USB to SSD. UHD
+  is C++ at the core, so the recorder talks to it directly. Python
+  only supervises (start/stop, the ground link, disk checks), which
+  needs trivial CPU.
 - A full rewrite in C++ or Rust would not let you buy a smaller
   computer: the size driver is USB 3.0 bandwidth, SSD write speed,
   and RAM buffers, not interpreter speed.
@@ -71,10 +83,14 @@ not recommended now: it costs weeks and buys little.
 
 ## 3. Python packaging: uv
 
-Use `uv` (see the explainer in `GETTING_STARTED.md`). One
-`pyproject.toml` + `uv.lock` per software package
-(`Onboard_Software`, `Base_Software`) so the flight computer installs
-exactly what CI tested.
+Use `uv` (see the explainer in `GETTING_STARTED.md`). Built as one
+`uv` workspace at `HERON_DEPLOY_SOFTWARE/`, with a root
+`pyproject.toml` + `uv.lock` shared by three member packages
+(`Common_Software`, `Onboard_Software`, `Base_Software`) so the flight
+computer and the ground laptop each install exactly what CI tested,
+from one lock file. `Common_Software` holds the config loader and the
+payload-link protocol that both sides need; the other two hold
+nothing the other does not need.
 
 ## 4. Containers: Podman, and only off the critical path
 
@@ -93,8 +109,8 @@ Podman vs Docker:
 - Podman generates systemd units (Quadlet) natively, which fits our
   autostart design.
 
-Why not containerize the onboard capture: USB passthrough of two
-B210s, udev rules, real-time scheduling, and raw disk throughput all
+Why not containerize the onboard capture: USB passthrough of four
+SDRs, udev rules, real-time scheduling, and raw disk throughput all
 get harder inside a container, and add failure modes you must debug
 headless in a field. The payload gains nothing: the whole machine is
 already dedicated. Use containers where portability pays:
@@ -103,12 +119,13 @@ laptop, and the CI image that pins UHD for regression tests.
 
 ## 5. Smaller/cheaper computer path (Q-005)
 
-To shrink hardware later, the bottlenecks to verify are: two
+To shrink hardware later, the bottlenecks to verify are: at least two
 independent USB 3.0 controllers, sustained SSD writes at the
-configured rate with 2× margin, and UHD support. Candidates to bench
-(not endorsements): x86 mini-PCs (N100 class) and ARM boards with
-real USB 3.0 plus SATA/NVMe. Remember the four-SDR USB topology: two
-USB 3.0 controllers for the B210s plus two USB 2.0 ports for the
-B100s. Test with the endurance capture test in
-`TESTING.md` before any swap. The 8 GB NUC stays the baseline until a
-candidate passes.
+configured rate with 2× margin, and UHD 4.x support. Candidates to
+bench (not endorsements): x86 mini-PCs (N100 class) and ARM boards
+with real USB 3.0 plus SATA/NVMe. Remember the four-SDR USB topology:
+all four units (2× B210, 2× B200mini, D-020) are USB 3.0, so a
+replacement needs four USB 3.0 ports spread across at least two
+controllers. Test with the endurance capture test in `TESTING.md`
+before any swap. The 8 GB NUC stays the baseline until a candidate
+passes.

@@ -1,6 +1,6 @@
 # BENCH_DEBUG_SOP — Debug Problems on the Bench
 
-Status: Draft 1, 2026-09-16. Use this procedure when a bench test
+Status: Draft 2, 2026-09-17. Use this procedure when a bench test
 fails. Work from the wall to the software: power, USB, driver,
 config, code. Change one thing at a time. Log every change.
 
@@ -34,18 +34,30 @@ config, code. Change one thing at a time. Log every change.
 
 ## 4. No reference or PPS lock
 
-1. Check cables from the sync source to both B210 REF/PPS inputs.
-2. Confirm the config selects external reference and time sources.
+1. Check cables from the sync source (GPSDO) to each unit's REF input,
+   and to both B210 PPS inputs. The B200mini has one reference input
+   only (10 MHz REF); it has no PPS to check (D-020).
+2. Confirm the config selects `external` clock and time sources per
+   SDR (`sdr.clock_source`, `sdr.time_source`). The recorder refuses
+   to start without a reference lock, and logs "no PPS edge seen" if a
+   B210's PPS cable is missing or the GPSDO is not outputting PPS.
 3. Probe the reference with a scope if available (bench only).
 
 ## 5. Ground link problems
 
-1. Test the command/telemetry protocol over a wired or loopback
-   transport first, to separate protocol bugs from radio bugs.
-2. Then test over the real radio hardware (Q-006) at short range.
+1. Test the command/telemetry protocol over `udp` or `loopback`
+   transport first (`onboard.bench-loopback.toml` /
+   `base.bench-udp.toml`), to separate protocol bugs from MAVLink or
+   radio bugs.
+2. Then test over the real flight-controller link (D-016) at short
+   range: `heron-base send ping` and confirm an ack. No ack after a
+   few tries means the Cube is not forwarding `TUNNEL` frames — check
+   the NUC's heartbeat is reaching the Cube (`SERIALn_PROTOCOL = 2`)
+   and that the ground side is reading the same MAVLink stream
+   (Q-014).
 3. Confirm the link config (device path, addresses, rates) matches on
    both the payload and the ground laptop. Prefer stable
-   `/dev/serial/by-id/` paths for serial radios.
+   `/dev/serial/by-id/` paths for serial devices.
 4. Check antennas and cables before you suspect our code.
 
 ## 6. Software faults

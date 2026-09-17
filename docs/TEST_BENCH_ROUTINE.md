@@ -1,6 +1,6 @@
 # TEST_BENCH_ROUTINE — Standard Bench Test Sequence
 
-Status: Draft 1, 2026-09-16. Run the full routine (Sections 1-5) after
+Status: Draft 2, 2026-09-17. Run the full routine (Sections 1-5) after
 any software, config, OS, or hardware change. Run the short check
 (Section 6) before each field day. Record results in the bench log.
 
@@ -16,9 +16,11 @@ any software, config, OS, or hardware change. Run the short check
 ## 2. SDR enumeration and sync
 
 1. Run `uhd_find_devices`. Confirm all four SDR serial numbers
-   (2× B210, 2× B100) appear and match `HARDWARE.md` and the config.
+   (2× B210, 2× B200mini) appear and match `HARDWARE.md` and the
+   config.
 2. Run `uhd_usrp_probe` on each unit. Confirm no USB errors. Confirm
-   each B210 sits on a USB 3.0 controller (`lsusb -t`).
+   the four units sit on at least two different USB 3.0 controllers
+   (`lsusb -t`).
 3. Confirm each unit locks to the shared 10 MHz (the recorder refuses
    to start without `ref_locked`; the display shows `ref` per SDR).
    Confirm the two B210s see PPS (the recorder reports "no PPS edge
@@ -56,7 +58,8 @@ any software, config, OS, or hardware change. Run the short check
    recording (D-011), the display shows link LOST with telemetry age,
    and the link recovers when restored.
 6. Autonomous fallback test: boot the payload with no ground link.
-   Confirm the configured fallback behavior (Q-009) happens.
+   Confirm the configured fallback behavior happens after the grace
+   period (D-017).
 
 ## 5. Fault and endurance tests
 
@@ -72,7 +75,7 @@ any software, config, OS, or hardware change. Run the short check
 ## 6. Short pre-field check (15 minutes)
 
 1. Boot, SSH in, service active, disk mounted, free space OK.
-2. Both SDRs enumerate; reference locked.
+2. All four SDRs enumerate; reference locked.
 3. 60-second capture, zero overflows, files and metadata present.
 4. Ground link check: `Base_Software` connects, shows live health
    data, and a START/STOP cycle works.

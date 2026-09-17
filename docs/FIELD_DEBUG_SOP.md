@@ -1,6 +1,6 @@
 # FIELD_DEBUG_SOP — Debug Problems in the Field
 
-Status: Draft 1, 2026-09-16. The payload is headless in the field: no
+Status: Draft 2, 2026-09-17. The payload is headless in the field: no
 monitor, no keyboard. All access is over SSH from the field laptop.
 Goal: decide fast whether you can fly, fix, or stand down. Do not
 start bench-style deep debugging in the field.
@@ -10,7 +10,8 @@ start bench-style deep debugging in the field.
 1. Power the payload. Wait 2 minutes for boot.
 2. Join the payload network for SSH (method TBD; record the SSID and
    address here when decided). Note: SSH access and the payload
-   control link (Q-006) can be different paths.
+   control link are different paths — the control link rides on the
+   flight-controller telemetry link (D-016), not on the SSH network.
 3. SSH in: `ssh heron@heron-nuc.local` (or the fixed IP).
 4. If SSH fails after 5 minutes: power cycle once. If it fails again,
    see Section 5.
@@ -62,10 +63,10 @@ display. Over SSH on the payload, check by hand:
 
 ## 6. Field kit for debugging
 
-SSH-ready ground laptop with the repository cloned; payload radio
-link spares; GNSS receiver cables; spare USB 3.0 and USB 2.0 cables;
-spare SSD (if removable, Q-003); printed copy of this SOP and
-`USAGE.md`.
+SSH-ready ground laptop with the repository cloned; flight-controller
+telemetry radio spares; GNSS receiver cables; spare USB 3.0 cables
+(all four SDRs are USB 3.0); spare SSD (if removable, Q-003); printed
+copy of this SOP and `USAGE.md`.
 
 ## 7. Report
 

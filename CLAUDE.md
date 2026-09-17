@@ -9,9 +9,10 @@ Read the documents in `docs/` before you write code. Start with
 HERON is a graduate project at CU Boulder. The system uses GNSS
 reflectometry (GNSS-R) to measure surface water coverage of the ground.
 A drone carries the payload. The payload records raw GNSS signals from
-four software-defined radios (two Ettus B210, two Ettus B100). A ground
-station laptop monitors and controls the recording over a radio link.
-Ground software processes the recorded data after the flight.
+four software-defined radios (two Ettus B210, two Ettus B200mini). A
+ground station laptop monitors and controls the recording over the
+flight-controller telemetry link. Ground software processes the
+recorded data after the flight.
 
 ## Your role
 
@@ -105,6 +106,10 @@ You are a test engineer on this project. Obey these rules at all times:
 - Config files are TOML validated with pydantic. Templates:
   `Onboard_Software/config/onboard.example.toml`,
   `Base_Software/config/base.example.toml`.
+- Every flight also gets a `metadata.yml` in the data-processing
+  team's own schema, next to HERON's `metadata.json` (D-022). Each
+  recorder's console log is saved beside the data. Channels name a
+  GNSS band from a `[bands]` config table.
 
 ## Working rules for this repository
 

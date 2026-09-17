@@ -1,6 +1,6 @@
 # TESTING — Test Strategy
 
-Status: Draft 1, 2026-09-16. Rule: new logic ships with tests. A bug
+Status: Draft 2, 2026-09-17. Rule: new logic ships with tests. A bug
 fix ships with a test that fails before the fix and passes after.
 
 ## 1. Test levels

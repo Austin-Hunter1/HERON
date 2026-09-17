@@ -1,6 +1,6 @@
 # USAGE — Operate the System for a Flight
 
-Status: Draft 2, 2026-09-16. This is the operator procedure for a data
+Status: Draft 3, 2026-09-17. This is the operator procedure for a data
 collection flight. It assumes a deployed, bench-tested payload
 (`DEPLOYMENT.md`, `TEST_BENCH_ROUTINE.md`).
 
