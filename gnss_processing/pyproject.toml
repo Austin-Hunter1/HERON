@@ -1,0 +1,33 @@
+[project]
+name = "gnss-processing"
+version = "0.1.0"
+description = "GNSS Processing Tools for Python"
+authors = [
+    {name = "Brian Breitsch",email = "brian.breitsch@colorado.edu"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gnss-tools @ ./submodules/gnss-tools",
+    "h5py (>=3.15.1,<4.0.0)",
+    "pyyaml (>=6.0.3,<7.0.0)",
+    "tqdm (>=4.67.3,<5.0.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "numpy (>=1.26.0,<3.0.0)",
+    "dotenv (>=0.9.9,<0.10.0)"
+]
+
+[tool.poetry]
+packages = [{include = "utils"}]
+
+[tool.poetry.group.dev.dependencies]
+nbstripout = "^0.8.1"
+sympy = "^1.14.0"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.4.2"
+ipykernel = "^7.1.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

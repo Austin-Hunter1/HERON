@@ -4,3 +4,6 @@
 [submodule "HERON_WRITING"]
 	path = HERON_WRITING
 	url = https://github.com/Austin-Hunter1/HERON_WRITING.git
+[submodule "gnss_processing/submodules/gnss-tools"]
+	path = gnss_processing/submodules/gnss-tools
+	url = https://github.com/cu-sense-lab/gnss-tools.git

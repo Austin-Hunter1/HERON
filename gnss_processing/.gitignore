@@ -1,0 +1,14 @@
+**/__pycache__/**
+**/*.egg-info
+.vscode
+**/.ipynb_checkpoints/**
+.conda_env
+.venv
+.venv-linux
+.pytest_cache
+.env
+!.env.example
+poetry.lock
+
+# macOS AppleDouble sidecars
+._*
