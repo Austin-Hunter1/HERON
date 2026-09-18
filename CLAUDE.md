@@ -56,8 +56,14 @@ You are a test engineer on this project. Obey these rules at all times:
   - `Base_Software/` — Package `heron_base`: ground station laptop
     software: live health display (terminal UI or local web page),
     start/stop controls, GNSS logging and RTCM handling.
+- `gnss_processing/` — HERON's own working copy of gps-tracking-example:
+  the post-processing tools (raw-signal diagnostics, acquisition and
+  tracking, navigation), with HERON edits its README lists. It reads a
+  flight directory as one "experiment" through `metadata.yml` (D-022).
+  `gnss_processing/submodules/gnss-tools` is a git submodule.
 - `HERON_WRITING/` — Reports and papers (git submodule).
-- `gps-tracking-example/` — Reference GNSS tracking code (git submodule).
+- `gps-tracking-example/` — Upstream reference GNSS tracking code (git
+  submodule, read only; edit `gnss_processing/` instead).
 - `docs/` — Project documents. See the list in `docs/GETTING_STARTED.md`.
 
 ## Key documents

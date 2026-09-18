@@ -68,8 +68,14 @@ flight, ground software processes the raw data.
     recorder, the systemd unit, config templates.
   - `Base_Software/` — `heron_base`: the ground station laptop: health
     display, controls, GNSS/RTK handling.
+- `gnss_processing/` — The post-processing tools: HERON's own working
+  copy of gps-tracking-example (acquisition, tracking, navigation). It
+  reads each flight directory as one "experiment" through the
+  `metadata.yml` the payload writes (`DATA_FORMATS.md`). It has its own
+  `pyproject.toml` and a git submodule at `submodules/gnss-tools`.
 - `SURGE/` — Legacy code. Read it. Do not change it.
-- `HERON_WRITING/`, `gps-tracking-example/` — Git submodules.
+- `HERON_WRITING/`, `gps-tracking-example/` — Git submodules (reports;
+  the upstream reference code that `gnss_processing/` was copied from).
 
 ## 5. Document index
 

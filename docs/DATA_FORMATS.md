@@ -88,6 +88,13 @@ collections:
   stop. After a power loss run
   `heron-onboard rebuild-metadata <flight_dir>` to rebuild it (and the
   `metadata.json` totals) from the sidecars.
+- The consumer is `gnss_processing/` (its
+  `utils/collect_metadata_utils.py` parses this schema). It expects
+  `<COLLECTS_PATH>/<experiment>/metadata.yml` with `filename` relative
+  to that directory, which is exactly a HERON flight directory. Point
+  `COLLECTS_PATH` (in `gnss_processing/.env`) at the offloaded data
+  root, the directory that holds the flight directories: every flight
+  is then one experiment and every segment file one collect.
 
 ### Recorder console logs
 
