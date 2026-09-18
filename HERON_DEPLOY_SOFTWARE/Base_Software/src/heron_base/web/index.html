@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERON ground station</title>
+<!--
+  HERON ground station web display (D-023).
+  This page is self-contained: no CDN, no web font, no framework, so it
+  works on a field laptop with no internet. It polls /api/state and
+  posts to /api/command; see server.py for the API.
+-->
+<style>
+  :root {
+    --bg: #111418; --card: #1b2027; --line: #2b323c; --fg: #e6e9ee; --muted: #9aa4b2;
+    --ok: #1f7a35; --warn: #9a6b00; --bad: #9b1c1c; --idle: #4a5260; --mono: ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+  header { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; gap: 6px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 13px; font-family: var(--mono); }
+  #link { padding: 12px 16px; font-weight: 700; font-size: 18px; letter-spacing: .02em; background: #333; }
+  #link.CONNECTED { background: var(--ok); }
+  #link.DEGRADED { background: var(--warn); }
+  #link.LOST { background: var(--bad); }
+  #link.NO_DATA { background: var(--idle); }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; padding: 12px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: var(--mono); }
+  .state { font-size: 30px; font-weight: 800; margin: 2px 0 8px; }
+  .state.RECORDING { color: #8be08b; }
+  .state.FAULT { color: #ff8080; }
+  .bad { color: #ff8080; font-weight: 700; }
+  .warnt { color: #ffd166; }
+  .wide { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-family: var(--mono); }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-family: inherit; }
+  #events { height: 240px; overflow: auto; background: #0c0f12; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 13px/1.35 var(--mono); white-space: pre-wrap; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  button { font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: #2a323e; color: var(--fg); cursor: pointer; }
+  button.start { background: var(--ok); }
+  button.stop { background: var(--bad); }
+  input { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: #0c0f12; color: var(--fg); width: 14em; }
+  #cmdmsg, #pending { font-family: var(--mono); font-size: 13px; min-height: 1.3em; }
+  #pending { color: var(--warnt, #ffd166); }
+  ul.history { list-style: none; padding: 0; margin: 6px 0 0; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>HERON ground station</h1>
+  <div class="meta" id="meta">connecting…</div>
+</header>
+<div id="link">SERVER UNREACHABLE</div>
+<main>
+  <section class="card">
+    <h2>Payload</h2>
+    <div class="state" id="state">—</div>
+    <dl class="kv" id="payload"></dl>
+  </section>
+
+  <section class="card">
+    <h2>Controls</h2>
+    <div class="controls">
+      <input id="flight_id" placeholder="flight id (optional)" maxlength="64" autocomplete="off">
+      <button class="start" onclick="sendCommand('start')">START</button>
+      <button class="stop" onclick="sendCommand('stop')">STOP</button>
+      <button onclick="sendCommand('status')">STATUS</button>
+      <button onclick="sendCommand('ping')">PING</button>
+    </div>
+    <div id="cmdmsg"></div>
+    <div id="pending"></div>
+    <ul class="history" id="history"></ul>
+  </section>
+
+  <section class="card">
+    <h2>GNSS receiver</h2>
+    <dl class="kv" id="gnss"></dl>
+  </section>
+
+  <section class="card wide">
+    <h2>SDRs</h2>
+    <table>
+      <thead><tr><th>SDR</th><th>present</th><th>stream</th><th>ref</th><th>overflow</th><th>drops</th><th>seg</th><th>MB/s</th><th>fault</th></tr></thead>
+      <tbody id="sdrs"></tbody>
+    </table>
+  </section>
+
+  <section class="card wide">
+    <h2>Events</h2>
+    <div id="events"></div>
+  </section>
+</main>
+
+<script>
+  // Poll the server. The refresh period comes from the server's config.
+  const $ = (id) => document.getElementById(id);
+  let refreshMs = 500;
+
+  function esc(value) {
+    return String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+  function num(value, digits = 1) {
+    return value === null || value === undefined ? "-" : Number(value).toFixed(digits);
+  }
+  function row(label, value, cls = "") {
+    return `<dt>${esc(label)}</dt><dd class="${cls}">${value}</dd>`;
+  }
+
+  async function poll() {
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const snapshot = await response.json();
+      refreshMs = snapshot.refresh_ms || refreshMs;
+      render(snapshot);
+    } catch (error) {
+      const link = $("link");
+      link.className = "";
+      link.textContent = "SERVER UNREACHABLE — " + error.message;
+    } finally {
+      setTimeout(poll, refreshMs);
+    }
+  }
+
+  function render(s) {
+    const link = s.link;
+    const age = link.age_s === null || link.age_s === undefined ? "never" : num(link.age_s) + " s";
+    const el = $("link");
+    el.className = link.health.replace(" ", "_");
+    el.textContent = `LINK ${link.health}   ·   telemetry age ${age}   ·   frames ok/bad ${link.telemetry_count}/${link.bad_frames}`;
+    const stamp = new Date(s.server_time * 1000).toISOString().replace("T", " ").slice(0, 19);
+    $("meta").textContent = `${link.transport}  ·  ${stamp}Z`;
+    renderPayload(s.telemetry);
+    renderControls(s.pending, s.history);
+    renderGnss(s.gnss);
+    renderSdrs(s.telemetry);
+    renderEvents(s.events);
+  }
+
+  function renderPayload(t) {
+    const state = $("state");
+    if (!t) {
+      state.textContent = "no telemetry yet";
+      state.className = "state";
+      $("payload").innerHTML = "";
+      return;
+    }
+    state.textContent = t.state;
+    state.className = "state " + t.state;
+    const temps = Object.entries(t.temps_c || {}).map(([k, v]) => `${esc(k)}=${num(v, 0)}C`).join(" ") || "-";
+    const disk = `${num(t.disk_free_gb)} GB (${num(t.disk_free_pct, 0)}%)` + (t.disk_alert ? ' <span class="bad">LOW</span>' : "");
+    let html = "";
+    html += row("flight", esc(t.flight_id || "-"));
+    html += row("recording", num(t.recording_s, 0) + " s");
+    html += row("data rate", num(t.data_rate_mbps) + " MB/s");
+    html += row("disk free", disk);
+    html += row("cpu", num(t.cpu_pct, 0) + " %");
+    html += row("temps", temps);
+    html += row("uptime", num(t.uptime_s, 0) + " s");
+    html += row("version", esc(t.version));
+    html += row("last cmd seq", esc(t.last_cmd_seq ?? "-"));
+    if (t.fault) html += row("FAULT", esc(t.fault), "bad");
+    $("payload").innerHTML = html;
+  }
+
+  function renderControls(pending, history) {
+    $("pending").textContent = pending ? "pending: " + pending : "";
+    $("history").innerHTML = (history || []).slice().reverse().map((line) => `<li>${esc(line)}</li>`).join("");
+  }
+
+  function renderGnss(g) {
+    if (!g || !g.enabled) {
+      $("gnss").innerHTML = row("status", "disabled in config");
+      return;
+    }
+    const rtcm = Object.entries(g.rtcm_types || {}).map(([k, v]) => `${k}:${v}`).join(", ");
+    let html = "";
+    html += row("port", g.port_open ? "open" : `<span class="bad">closed</span> ${esc(g.error || "retrying")}`);
+    html += row("fix", esc(g.fix));
+    html += row("raw log", num(g.bytes_logged / 1e6, 2) + " MB");
+    html += row("RTCM frames", `${g.rtcm_frames} ${rtcm ? "[" + esc(rtcm) + "]" : ""}`);
+    if (g.log_path) html += row("file", esc(g.log_path));
+    $("gnss").innerHTML = html;
+  }
+
+  function renderSdrs(t) {
+    const body = $("sdrs");
+    if (!t) { body.innerHTML = ""; return; }
+    body.innerHTML = (t.sdrs || []).map((s) => {
+      const ref = s.ref_locked === null || s.ref_locked === undefined ? "-" : (s.ref_locked ? "LOCK" : '<span class="bad">NO LOCK</span>');
+      const overflow = s.overflows ? `<span class="bad">${s.overflows}</span>` : "0";
+      return `<tr><td>${esc(s.id)}</td><td>${s.present ? "yes" : '<span class="bad">NO</span>'}</td>` +
+        `<td>${s.streaming ? "RUN" : "-"}</td><td>${ref}</td><td>${overflow}</td><td>${s.host_drops}</td>` +
+        `<td>${s.segment}</td><td>${num(s.rate_mbps)}</td><td>${s.fault ? '<span class="bad">' + esc(s.fault) + "</span>" : ""}</td></tr>`;
+    }).join("");
+  }
+
+  function renderEvents(events) {
+    const box = $("events");
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+    box.textContent = (events || []).join("\n");
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  async function sendCommand(name) {
+    if ((name === "start" || name === "stop") && !confirm(`Send ${name.toUpperCase()} to the payload?`)) return;
+    const flightId = $("flight_id").value.trim();
+    const body = { name };
+    if (name === "start" && flightId) body.flight_id = flightId;
+    try {
+      const response = await fetch("/api/command", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      $("cmdmsg").textContent = (result.ok ? "sent: " : "refused: ") + result.message;
+    } catch (error) {
+      $("cmdmsg").textContent = "send failed: " + error.message;
+    }
+  }
+
+  poll();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Bench config: UDP on localhost against
+#   heron-onboard run --config Onboard_Software/config/onboard.bench-loopback.toml --fake-capture
+
+[general]
+log_level = "DEBUG"
+log_dir = "./heron_base_logs"
+
+[link]
+transport = "udp"
+
+[link.udp]
+local_host = "127.0.0.1"
+local_port = 14601
+remote_host = "127.0.0.1"
+remote_port = 14600
+
+[link_health]
+degraded_s = 3
+lost_s = 8
+
+[gnss]
+enabled = false
+
+[web]
+host = "127.0.0.1"
+port = 8765
+refresh_ms = 500
+open_browser = true

@@ -1,0 +1,30 @@
+# HERON onboard supervisor (REQUIREMENTS O12).
+# Install: sudo cp heron-onboard.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now heron-onboard
+# Logs:    journalctl -u heron-onboard -e   (and /media/DataStore/logs/heron-onboard.log)
+
+[Unit]
+Description=HERON payload supervisor
+# Start only after the data disk is mounted (see DEPLOYMENT.md, fstab).
+RequiresMountsFor=/media/DataStore
+After=network.target
+
+[Service]
+Type=simple
+User=heron
+Group=heron
+WorkingDirectory=/home/heron/HERON/HERON_DEPLOY_SOFTWARE
+Environment=HERON_VERSION=unknown
+ExecStart=/home/heron/.local/bin/uv run --project /home/heron/HERON/HERON_DEPLOY_SOFTWARE \
+    heron-onboard run --config /home/heron/HERON/HERON_DEPLOY_SOFTWARE/Onboard_Software/config/onboard.toml
+Restart=always
+RestartSec=5
+# Give the supervisor time to stop the recorders and write metadata.
+TimeoutStopSec=40
+KillSignal=SIGTERM
+# The recorder threads want real-time priority for the USB receive path.
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
