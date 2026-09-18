@@ -114,6 +114,9 @@ flight. Do not skip it after a reinstall, OS update, or hardware swap.
    hotspot UDP port or Mission Planner mirror, Q-014), the GNSS
    receiver port under `[gnss]`, and the correction sink (Q-010).
 3. Validate: `uv run heron-base check-config --config Base_Software/config/base.toml`
-4. Try the display with no hardware: `uv run heron-base demo`.
+4. Try the displays with no hardware: `uv run heron-base demo`
+   (terminal) and `uv run heron-base demo --web` (browser). Pick the
+   one the operator prefers; both show the same data. The web page
+   serves this laptop only unless `[web] host` is changed (D-023).
 5. Test the link against the bench payload
    (Section 4 of `TEST_BENCH_ROUTINE.md`).

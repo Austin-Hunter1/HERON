@@ -54,8 +54,24 @@ class GnssConfig(BaseModel):
 
 
 class DisplayConfig(BaseModel):
+    """The terminal display (``heron-base tui``)."""
+
     refresh_hz: float = Field(default=2.0, gt=0, le=20)
-    event_lines: int = Field(default=200, ge=10)
+    event_lines: int = Field(default=200, ge=10, description="Event lines kept for both displays")
+
+
+class WebConfig(BaseModel):
+    """The local web page display (``heron-base web``, D-023).
+
+    ``host`` is the bind address. The default serves this laptop only.
+    ``0.0.0.0`` lets any machine on the network see the page and send
+    START/STOP; there is no login.
+    """
+
+    host: str = "127.0.0.1"
+    port: int = Field(default=8765, ge=0, le=65535, description="0 = any free port (tests)")
+    refresh_ms: int = Field(default=500, ge=100, le=10000, description="Page poll period")
+    open_browser: bool = Field(default=True, description="Open the page at start")
 
 
 class BaseConfig(BaseModel):
@@ -64,6 +80,7 @@ class BaseConfig(BaseModel):
     link_health: LinkHealthConfig = Field(default_factory=LinkHealthConfig)
     gnss: GnssConfig = Field(default_factory=GnssConfig)
     display: DisplayConfig = Field(default_factory=DisplayConfig)
+    web: WebConfig = Field(default_factory=WebConfig)
 
 
 def load_base_config(path: Path) -> BaseConfig:

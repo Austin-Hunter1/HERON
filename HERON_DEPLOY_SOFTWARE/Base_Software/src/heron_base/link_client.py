@@ -113,6 +113,11 @@ class LinkClient:
 
     # ----- health --------------------------------------------------------------
 
+    @property
+    def transport_description(self) -> str:
+        """Short text of the transport in use, for the displays."""
+        return self._transport.describe()
+
     def telemetry_age(self, now: float | None = None) -> float | None:
         if self.last_rx is None:
             return None

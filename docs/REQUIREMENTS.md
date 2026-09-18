@@ -101,7 +101,9 @@ Words: **shall** = mandatory. **should** = strong preference.
   timestamps, so a flight can be reconstructed.
 - B6. The display technology (terminal UI, web page, or GUI) is a
   team choice; the display shall be a thin layer over a documented
-  telemetry interface, so it can change independently.
+  telemetry interface, so it can change independently. Two displays
+  exist over the same `LinkClient`: a terminal UI (D-021) and a local
+  web page (D-023).
 
 ## 4. Software quality requirements
 

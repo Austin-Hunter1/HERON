@@ -20,10 +20,13 @@ collection flight. It assumes a deployed, bench-tested payload
 
 1. Set up the ground station: laptop, the flight-controller ground
    link (Herelink or telemetry radio, D-016), and the GNSS receiver
-   with a clear sky view. Start the display:
-   `uv run heron-base tui --config Base_Software/config/base.toml`.
-   Confirm the GNSS panel shows a fix and RTCM frames counting up
-   (path per Q-010).
+   with a clear sky view. Start one display:
+   `uv run heron-base tui --config Base_Software/config/base.toml`
+   (terminal), or
+   `uv run heron-base web --config Base_Software/config/base.toml`
+   (web page in the browser; the command prints the URL). Both show
+   the same data and controls. Confirm the GNSS panel shows a fix and
+   RTCM frames counting up (path per Q-010).
 2. Mount the payload and antennas on the drone. Confirm each antenna
    connects to the correct SDR port (labels and `HARDWARE.md`).
 3. Power the payload. Wait for boot.
@@ -38,9 +41,10 @@ collection flight. It assumes a deployed, bench-tested payload
    does not depend on the flight controller.
 2. Start recording from the ground station at the agreed point (for
    example, after takeoff, before the survey lines): press `s` in the
-   display and confirm, or run `uv run heron-base send start
-   --flight-id <name>`. Confirm the ack is `ok`, the state changes to
-   RECORDING, and the data rate is normal.
+   terminal display and confirm, click START on the web page and
+   confirm, or run `uv run heron-base send start --flight-id <name>`.
+   Confirm the ack is `ok`, the state changes to RECORDING, and the
+   data rate is normal.
    Note: if no ground frame reached the payload within the grace
    period after boot (default 120 s), it is already recording on its
    own (D-017). A START then answers "already recording".
@@ -49,15 +53,16 @@ collection flight. It assumes a deployed, bench-tested payload
 4. If the link drops, do not panic: the payload keeps recording
    (D-011). Log the time. Recover the link if possible.
 5. Stop recording from the ground station after the survey lines:
-   press `x` and confirm, or `uv run heron-base send stop`. Confirm
-   the state returns to IDLE.
+   press `x` and confirm, click STOP and confirm, or
+   `uv run heron-base send stop`. Confirm the state returns to IDLE.
 
 ## 4. After landing
 
 1. Confirm the state is IDLE on the display (or over SSH).
 2. Shut the payload down cleanly over SSH: `sudo poweroff`. Do not
    pull power during a write.
-3. Quit the display (`q`). The ground station logs are in
+3. Quit the display (`q` in the terminal, Ctrl-C for the web server).
+   The ground station logs are in
    `heron_base_logs/flights/base_<stamp>.jsonl` (telemetry, commands,
    acks, events) and `heron_base_logs/gnss/gnss_<stamp>.ubx` (raw
    receiver stream). Copy both to the flight folder.

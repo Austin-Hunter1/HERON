@@ -54,8 +54,8 @@ You are a test engineer on this project. Obey these rules at all times:
     health monitoring), the C++ recorder in `recorder/`, the systemd
     unit, and the config templates.
   - `Base_Software/` — Package `heron_base`: ground station laptop
-    software: live health display (terminal UI), start/stop controls,
-    GNSS logging and RTCM handling.
+    software: live health display (terminal UI or local web page),
+    start/stop controls, GNSS logging and RTCM handling.
 - `HERON_WRITING/` — Reports and papers (git submodule).
 - `gps-tracking-example/` — Reference GNSS tracking code (git submodule).
 - `docs/` — Project documents. See the list in `docs/GETTING_STARTED.md`.
@@ -90,8 +90,10 @@ You are a test engineer on this project. Obey these rules at all times:
   `ping` (D-019). Fallback: after boot the payload waits a grace
   period for a ground frame, then records on its own (D-017). It keeps
   recording if the link drops (D-011).
-- The ground station laptop shows full live health telemetry in a
-  terminal UI and has start/stop controls (`Base_Software/`). A u-blox
+- The ground station laptop shows full live health telemetry with
+  start/stop controls in a terminal UI (`heron-base tui`) or a local
+  web page (`heron-base web`, D-023); both are thin layers over one
+  `LinkClient` (`Base_Software/`). A u-blox
   ZED-F9P (assumed, Q-002) on the laptop provides GNSS data; the base
   logs it raw and passes RTCM3 to a pluggable correction sink (Q-010).
 - Payload computer: Intel NUC7i3DNB, 8 GB RAM, OS on NVMe, IQ data on

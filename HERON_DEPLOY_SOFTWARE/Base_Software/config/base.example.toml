@@ -55,3 +55,9 @@ serial_baud = 57600
 [display]
 refresh_hz = 2
 event_lines = 200
+
+[web]
+host = "127.0.0.1"      # This laptop only. 0.0.0.0 lets anyone on the network start/stop recording.
+port = 8765
+refresh_ms = 500
+open_browser = true

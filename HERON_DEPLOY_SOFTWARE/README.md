@@ -41,7 +41,7 @@ Plus the C++ recorder in `Onboard_Software/recorder/` (payload only).
 ```bash
 cd HERON_DEPLOY_SOFTWARE
 uv sync --all-packages
-uv run pytest            # 98 tests, about 5 s (one headless TUI test)
+uv run pytest            # 101 tests, about 5 s (headless TUI and web tests)
 uv run ruff check .      # lint
 uv run mypy Common_Software/src Onboard_Software/src Base_Software/src
 ```
@@ -62,10 +62,12 @@ Base (ground laptop):
 ```bash
 uv run heron-base check-config --config Base_Software/config/base.toml
 uv run heron-base tui --config Base_Software/config/base.toml       # live display; keys: s start, x stop, t status, p ping, q quit
+uv run heron-base web --config Base_Software/config/base.toml       # same display as a local web page (prints the URL, opens the browser)
 uv run heron-base send start --config Base_Software/config/base.toml --flight-id lake_a_run1
 uv run heron-base send stop  --config Base_Software/config/base.toml
 uv run heron-base monitor --config Base_Software/config/base.toml   # one telemetry line per second
-uv run heron-base demo                                              # display against a fake payload, no hardware
+uv run heron-base demo                                              # terminal display against a fake payload, no hardware
+uv run heron-base demo --web                                        # web page against the fake payload
 ```
 
 Bench link test on one machine, no SDRs (two terminals):
@@ -85,7 +87,7 @@ Onboard_Software/         heron_onboard: supervisor, state_machine, capture/, di
   config/                 onboard.example.toml (template), onboard.bench-loopback.toml
   recorder/               heron_recorder.cpp, CMakeLists.txt, README.md
   systemd/                heron-onboard.service
-Base_Software/            heron_base: link_client, tui/, gnss/, flight_log
+Base_Software/            heron_base: link_client, tui/, web/, gnss/, flight_log
   config/                 base.example.toml, base.bench-udp.toml
 */tests/                  pytest suites (see docs/TESTING.md)
 ```
@@ -96,7 +98,7 @@ ports.
 
 ## Status
 
-- Python packages: complete for the first bench; 98 unit, loop, and
+- Python packages: complete for the first bench; 101 unit, loop, web, and
   headless-TUI tests pass; ruff and mypy clean. The onboard supervisor
   (fake capture) and the base CLI were run end to end over UDP on a
   Windows laptop on 2026-09-17.

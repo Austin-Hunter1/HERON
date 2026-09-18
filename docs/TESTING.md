@@ -80,9 +80,12 @@ fix ships with a test that fails before the fix and passes after.
   the whole supervisor loop over a loopback link.
 - `Base_Software/tests/`: link health thresholds, link client (ack
   matching, retries, abandon, flight log), NMEA GGA, RTCM3 splitting
-  and CRC-24Q, the GNSS data path, config templates, and a headless
-  Textual test of the display (telemetry shown, START dialog sends a
-  START the fake payload accepts).
+  and CRC-24Q, the GNSS data path, config templates, a headless
+  Textual test of the terminal display (telemetry shown, START dialog
+  sends a START the fake payload accepts), and an HTTP test of the web
+  display (page is self-contained, `/api/state` reflects the link,
+  `/api/command` starts and stops the fake payload, bad requests get
+  400/404).
 
 Run from `HERON_DEPLOY_SOFTWARE/`: `uv run pytest` (about 1 s),
 `uv run ruff check .`, `uv run mypy Common_Software/src

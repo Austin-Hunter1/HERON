@@ -20,3 +20,9 @@ lost_s = 8
 
 [gnss]
 enabled = false
+
+[web]
+host = "127.0.0.1"
+port = 8765
+refresh_ms = 500
+open_browser = true
