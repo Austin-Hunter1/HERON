@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-# MAVLink mission commands Copter actually flies
+# MAVLink mission commands for aurealia based on the stock values (i need to verify these)
 NAV_WAYPOINT = 16
 NAV_LOITER_TIME = 19
 NAV_RTL = 20
@@ -15,7 +15,7 @@ DO_CHANGE_SPEED = 178
 FRAME_GLOBAL = 0
 FRAME_RELATIVE_ALT = 3
 
-# Copter default EEPROM mission cap is often 100; Cube/H7 boards go higher.
+# CHECK WAYPOINT CAPACITY ON CUBE!!
 SOFT_WP_CAP = 100
 HARD_WP_CAP = 700
 
@@ -47,9 +47,6 @@ def qgc_wpl(plan: dict) -> str:
     Seq 0 is HOME (MP convention). Then TAKEOFF, cruise speed, optional pad
     delay, then for water surveys DO_SET_ROI (yaw at bounce) + WAYPOINT
     (Delay = loiter seconds), then clear ROI and RTL.
-
-    Copter holds at a waypoint using param1 Delay. Do not emit a second
-    LOITER_TIME item — that doubles the mission and looks wrong in MP.
     """
     meta = plan["meta"]
     h = float(meta["h_agl"])
@@ -60,10 +57,10 @@ def qgc_wpl(plan: dict) -> str:
     default_loiter = float(meta.get("loiter_s") or 0)
 
     lines = ["QGC WPL 110"]
-    # Home: global frame, not flown. MP reads this as home / RTL origin.
+    # Home: global frame, not flown. MP reads this as home / RTL origin so can takeoff ez
     lines.append(_row(0, 1, FRAME_GLOBAL, NAV_WAYPOINT, 0, 0, 0, 0, pad["lat"], pad["lon"], 0))
     lines.append(_row(1, 0, FRAME_RELATIVE_ALT, NAV_TAKEOFF, 0, 0, 0, 0, pad["lat"], pad["lon"], h))
-    # Type 1 = ground speed. Copter ignores type and uses param2 m/s.
+    # Type 1 = ground speed. Copter ignores type and uses param2 m/s. i think?
     lines.append(_row(2, 0, FRAME_RELATIVE_ALT, DO_CHANGE_SPEED, 1, speed, 0, 0, 0, 0, 0))
     idx = 3
     if hold_s >= 8:
@@ -89,7 +86,7 @@ def qgc_wpl(plan: dict) -> str:
         splash = _splash_ll(hov)
         if splash:
             slat, slon = splash
-            # Copter yaws at this lat/lon while flying; does not wait on heading.
+            # Copter yaws at this lat/lon while flying; does not wait on heading. need to verify this too, roi may not be best way to do this.
             lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, DO_SET_ROI, 0, 0, 0, 0, slat, slon, 0))
             idx += 1
             used_roi = True

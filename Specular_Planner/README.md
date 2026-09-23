@@ -2,8 +2,6 @@
 
 Local web app that plans a HERON GNSS-R flight over water. It places the drone so L5-band bounces (GPS L5, Galileo E5a, BeiDou-3 B2a) hit a chosen lake, river, or map box, then exports an ArduPilot `.waypoints` file.
 
-Almanacs here are for **planning** (where the splash lands). After a flight, use that day's broadcast `.nav` for height math.
-
 ## Requirements
 
 - Python 3.11+ (`python3 --version`)

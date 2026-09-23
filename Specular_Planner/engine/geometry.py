@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+# future: need to do ellipsoid and geoid offset dynamic!
 WGS84_A = 6378137.0
 WGS84_E2 = 6.69437999014e-3
 C = 299792458.0

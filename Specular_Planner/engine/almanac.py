@@ -13,9 +13,9 @@ OMEGA_E_DOT = 7.2921151467e-5
 GPS_EPOCH = datetime(1980, 1, 6, tzinfo=timezone.utc)
 LEAP_SECONDS = 18
 
-# GPS Block IIF + III that broadcast L5
+# GPS Block IIF + III that broadcast L5 - verified w Austin. Still should look at doing this dynamically.
 GPS_L5_PRNS = {1, 3, 4, 6, 8, 9, 10, 11, 13, 14, 18, 20, 21, 23, 24, 25, 26, 27, 28, 30, 32}
-SURGE_L5_PRNS = GPS_L5_PRNS  # alias; planner uses GPS_L5_PRNS
+SURGE_L5_PRNS = GPS_L5_PRNS  # alias; planner uses GPS_L5_PRNS - we dont use this tho
 
 
 @dataclass
@@ -100,7 +100,7 @@ def parse_yuma(path: Path) -> list[AlmanacSat]:
         )
     return sats
 
-
+# verified w hand calcs
 def _kepler(m: float, e: float) -> float:
     e_anom = m
     for _ in range(12):

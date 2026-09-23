@@ -83,8 +83,6 @@ def _swept(polys: list) -> dict | None:
 def swept_coverage(frames: list[dict]) -> dict:
     """
     One merged footprint per PRN on lake and off lake.
-    Consecutive ellipses are bridged by their convex hull so the patch is a
-    continuous smear, not a chain of time-step ovals.
     """
     tracks: dict[int, list[dict]] = {}
     n_lake = n_land = 0
