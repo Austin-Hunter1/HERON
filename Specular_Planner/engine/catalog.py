@@ -18,6 +18,7 @@ DAY_S = 24 * 3600
 UA = "Mozilla/5.0 (HERON specular planner; GNSS almanac fetch)"
 CTX = ssl.create_default_context()
 
+# NEED TO UPDATE SOURCES BASED ON AUSTIN's REFERENCE: CDDIS
 SOURCES = [
     {
         "id": "gps-yuma",
