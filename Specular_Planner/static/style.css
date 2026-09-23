@@ -124,15 +124,12 @@ body.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
 }
 
 .brand-mark {
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: var(--forest);
-  border-radius: 12px;
-  font: 700 20px/1 Georgia, serif;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: block;
+  object-fit: contain;
+  border-radius: 10px;
 }
 
 .brand-copy { min-width: 0; }
@@ -148,14 +145,6 @@ body.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
   border-radius: 999px;
   font: 650 9px/1.2 var(--mono);
   letter-spacing: 0.08em;
-}
-
-.planner-intro {
-  margin: 0 0 22px;
-  max-width: 34ch;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 .form-section {
@@ -195,6 +184,7 @@ body.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
 }
 
 .compact-grid { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line); }
+.aim-el-field { grid-column: 1 / -1; }
 
 input[type="datetime-local"],
 input[type="number"] {
@@ -429,7 +419,31 @@ table.grid th:first-child { text-align: left; }
 #hudPhase { display: block; color: #fff; font-size: 15px; font-weight: 680; text-transform: capitalize; }
 .live-indicator { display: flex; align-items: center; gap: 5px; color: #b9d4d0; font-size: 9px; }
 .live-indicator i { width: 6px; height: 6px; background: #64cfb8; border-radius: 50%; box-shadow: 0 0 0 3px rgba(100, 207, 184, 0.13); }
-#tileLock { margin: -2px 0 11px; padding: 8px; color: #ffe0b7; background: rgba(255, 255, 255, 0.06); border-radius: 7px; font: 10px/1.4 var(--mono); white-space: pre-line; }
+#tileLock {
+  margin: -2px 0 11px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+}
+.hud-el-sat {
+  padding: 8px 10px 6px;
+  color: #ffe0b7;
+  font: 700 12px/1.2 var(--mono);
+}
+.hud-el-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.hud-el-cell {
+  padding: 8px 10px 9px;
+  background: rgba(9, 38, 39, 0.55);
+}
+.hud-el-cell .k { display: block; margin-bottom: 3px; color: #8fb4af; font-size: 8px; font-weight: 650; }
+.hud-el-cell .v { color: #fff; font: 700 15px/1.15 var(--mono); font-variant-numeric: tabular-nums; }
+.hud-el-empty { padding: 9px 10px; color: #9fc2bd; font-size: 11px; }
 .hud-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; overflow: hidden; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; }
 .hud-cell { min-width: 0; padding: 9px; background: rgba(9, 38, 39, 0.68); }
 .hud-cell-wide { grid-column: 1 / -1; }
@@ -444,22 +458,59 @@ table.grid th:first-child { text-align: left; }
   z-index: 600;
   left: calc(50% + 195px);
   bottom: 22px;
-  width: min(620px, calc(100vw - 460px));
+  width: min(640px, calc(100vw - 460px));
   min-width: 300px;
-  padding: 10px 16px 10px 10px;
+  padding: 11px 12px 11px 10px;
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
   color: #eaf5f2;
   background: rgba(18, 59, 60, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 13px;
+  border-radius: 16px;
   box-shadow: 0 14px 34px rgba(9, 35, 37, 0.28);
   transform: translateX(-50%);
 }
 
 .transport-main { flex: 1; min-width: 0; }
-#btnPlay { flex: 0 0 40px; width: 40px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; color: var(--forest); background: #fff; border: 0; border-radius: 9px; }
+.transport-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  min-width: 0;
+}
+#playElapsed {
+  flex: 0 0 auto;
+  color: #fff;
+  font: 650 11px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+#playPhase {
+  flex: 0 1 auto;
+  max-width: 42%;
+  padding: 3px 7px;
+  overflow: hidden;
+  color: #e7f7f3;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font: 650 9px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#playClock {
+  margin-left: auto;
+  overflow: hidden;
+  color: #d5e6e3;
+  font: 10px/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#playClock em { margin-right: 7px; color: #8fb4af; font-style: normal; }
+#btnPlay { flex: 0 0 40px; width: 40px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; color: var(--forest); background: #fff; border: 0; border-radius: 11px; }
 #btnPlay:hover { background: #eaf5f2; }
 #btnPlay.playing { color: #fff; background: var(--coral); }
 #btnPlay svg { width: 15px; height: 15px; fill: currentColor; }
@@ -467,8 +518,61 @@ table.grid th:first-child { text-align: left; }
 #btnPlay .ico-pause { display: none; }
 #btnPlay.playing .ico-play { display: none; }
 #btnPlay.playing .ico-pause { display: block; }
-#sliderLabel { margin-bottom: 5px; color: #b8d0cc; font: 9px/1.3 var(--mono); }
-#sliderWrap input[type="range"] { width: 100%; height: 4px; margin: 0; accent-color: #6ed6c2; cursor: pointer; }
+#sliderWrap input[type="range"] { width: 100%; height: 5px; margin: 0; accent-color: #6ed6c2; cursor: pointer; }
+.play-speed { position: relative; flex: 0 0 auto; }
+#playSpeedBtn {
+  min-width: 64px;
+  height: 36px;
+  padding: 0 9px 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #eaf5f2;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  font: 650 11px/1 var(--mono);
+  cursor: pointer;
+}
+#playSpeedBtn svg {
+  width: 9px;
+  height: 7px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 160ms ease;
+}
+#playSpeedBtn:hover { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.play-speed.open #playSpeedBtn { color: var(--forest); background: #fff; border-color: #fff; }
+.play-speed.open #playSpeedBtn svg { transform: rotate(180deg); }
+.play-speed-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 76px;
+  padding: 4px;
+  background: rgba(18, 59, 60, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(9, 35, 37, 0.35);
+}
+.play-speed-menu button {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  color: #d5e6e3;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font: 650 11px/1 var(--mono);
+  text-align: left;
+  cursor: pointer;
+}
+.play-speed-menu button:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.play-speed-menu button.on { color: var(--forest); background: #fff; }
 
 .leaflet-container { cursor: default; }
 body.survey .leaflet-container { cursor: pointer; }
@@ -479,13 +583,11 @@ body.survey .leaflet-container { cursor: pointer; }
 
 .seg-lab,
 .prn-lab,
-.tile-lock-lab,
 .pad-lab,
 .wp-label { box-shadow: 0 2px 8px rgba(9, 35, 37, 0.18); }
 .seg-lab { padding: 3px 6px; color: #fff; background: var(--coral); border: 0; border-radius: 5px; font: 700 9px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .prn-lab { padding: 2px 5px; color: #dff8f3; background: var(--forest); border: 1px solid #71cbbb; border-radius: 5px; font: 700 9px/1.1 var(--mono); white-space: nowrap; }
 .prn-lab.hit { color: #fff; background: var(--coral); border-color: #f4a17f; }
-.tile-lock-lab { padding: 4px 7px; color: #fff; background: var(--coral); border: 0; border-radius: 6px; font: 700 10px/1.2 var(--mono); white-space: nowrap; }
 .pad-lab,
 .wp-label { padding: 3px 6px; color: #fff; background: var(--forest); border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 5px; font: 700 9px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; white-space: nowrap; }
 .pad-lab { color: #fff; background: var(--coral); border-color: #fff0e8; }
@@ -560,7 +662,6 @@ body.sidebar-collapsed #fileSheet { left: 22px; }
 
 @media (max-width: 520px) {
   .sidebar { padding: 18px; }
-  .planner-intro { max-width: none; }
   #hud { width: 206px; padding: 11px; }
   .hud-cell { padding: 7px; }
   .hud-cell .v { font-size: 13px; }

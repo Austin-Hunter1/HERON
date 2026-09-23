@@ -7,22 +7,20 @@
   <title>HERON Mission Planner</title>
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=aim39" />
 </head>
 <body class="click-wps">
   <main id="map" aria-label="Interactive mission planning map"></main>
 
   <aside id="sidebar" class="sidebar" aria-label="Mission planner">
     <header class="planner-header">
-      <div class="brand-mark" aria-hidden="true">H</div>
+      <img class="brand-mark" src="/static/heron-logo.avif" alt="Project HERON" width="48" height="48" />
       <div class="brand-copy">
         <p class="eyebrow">Project HERON</p>
-        <h1>Mission planner</h1>
+        <h1>Mission Planner</h1>
       </div>
       <span class="environment-badge">GNSS-R</span>
     </header>
-
-    <p class="planner-intro">Build a flight around the water surface and satellite geometry you want to observe.</p>
 
     <form id="form">
       <section class="form-section" aria-labelledby="flight-heading">
@@ -42,7 +40,7 @@
 
         <div class="field-grid">
           <label class="field"><span>Speed</span><div class="input-unit"><input type="number" id="speed" min="2" max="25" step="0.5" value="8" /><em>m/s</em></div></label>
-          <label class="field"><span>Hover</span><div class="input-unit"><input type="number" id="loiter" min="3" max="1200" value="30" /><em>sec/WP</em></div></label>
+          <label class="field"><span>Hover</span><div class="input-unit"><input type="number" id="loiter" min="0" max="1200" step="1" value="30" /><em>sec/WP</em></div></label>
           <label class="field"><span>Altitude</span><div class="input-unit"><input type="number" id="h_agl" min="30" max="122" value="120" /><em>m AGL</em></div></label>
           <label class="field" id="windowField"><span>Search window</span><div class="input-unit"><input type="number" id="duration" min="10" max="180" value="40" /><em>min</em></div></label>
           <label class="field"><span>Elevation mask</span><div class="input-unit"><input type="number" id="mask" min="10" max="40" value="20" /><em>degrees</em></div></label>
@@ -100,13 +98,20 @@
           </div>
 
           <div id="surveyTools" class="hidden">
-            <p class="tool-guidance">For a river, choose a start and end. For a lake, choose the surface once.</p>
+            <p class="tool-guidance">For a river, choose a start and end. For a lake, choose the surface once. The drone tracks the satellite closest to the aim elevation.</p>
             <div class="tool-actions"><span id="nSurveyPicks" class="selection-count">No water selected</span><button type="button" id="btnClearSurvey">Clear</button></div>
           </div>
 
-          <div id="tileTools" class="hidden field-grid compact-grid">
-            <label class="field"><span>Tile spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" placeholder="Auto" /><em>m</em></div></label>
-            <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+          <div id="tileTools" class="hidden">
+            <div class="field-grid compact-grid">
+              <label class="field aim-el-field">
+                <span>Aim elevation</span>
+                <div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div>
+                <small>Locks onto the satellite closest to this elevation.</small>
+              </label>
+              <label class="field"><span>Tile spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" placeholder="Auto" /><em>m</em></div></label>
+              <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+            </div>
           </div>
         </div>
       </section>
@@ -114,7 +119,7 @@
       <button type="submit" id="go"><span>Build mission</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 7l5 5-5 5"/></svg></button>
     </form>
 
-    <div id="status" role="status" aria-live="polite"><span class="status-dot"></span><span>Loading planner…</span></div>
+    <div id="status" class="hidden" role="status" aria-live="polite"></div>
     <div id="summary" class="hidden"></div>
 
     <div id="layers" class="hidden result-panel">
@@ -161,7 +166,25 @@
       <svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.4c0-.7.8-1.1 1.4-.7l10 6.1c.6.4.6 1.3 0 1.6l-10 6.1c-.6.4-1.4 0-1.4-.7V5.4z"/></svg>
       <svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2"/></svg>
     </button>
-    <div class="transport-main"><div id="sliderLabel"></div><input type="range" id="slider" min="0" max="1" value="0" aria-label="Mission playback position" /></div>
+    <div class="transport-main">
+      <div id="sliderLabel" class="transport-meta">
+        <span id="playElapsed">+0s</span>
+        <span id="playPhase">Standby</span>
+        <span id="playClock"><em>—</em></span>
+      </div>
+      <input type="range" id="slider" min="0" max="1" value="0" aria-label="Mission playback position" />
+    </div>
+    <div id="playRates" class="play-speed">
+      <button type="button" id="playSpeedBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Playback speed">
+        <span id="playSpeedVal">20×</span>
+        <svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 1.5 6 6l4.5-4.5"/></svg>
+      </button>
+      <div id="playSpeedMenu" class="play-speed-menu hidden" role="listbox" aria-label="Playback speed">
+        <button type="button" role="option" data-rate="1">1×</button>
+        <button type="button" role="option" data-rate="4">4×</button>
+        <button type="button" role="option" data-rate="20" class="on" aria-selected="true">20×</button>
+      </div>
+    </div>
   </div>
 
   <div id="fileScrim" class="hidden" role="dialog" aria-modal="true" aria-labelledby="fileTitle">
@@ -172,6 +195,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=aim39"></script>
 </body>
 </html>

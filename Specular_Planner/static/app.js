@@ -127,12 +127,14 @@ map.getPane("archive").style.pointerEvents = "none";
 let padMarker = null;
 let droneMarker = null;
 let lastPlan = null;
+let planGen = 0;
 let targets = [];
 let drawing = false;
 let draft = [];
 let playing = false;
 let playTimer = null;
 let playT = 0;
+let playRate = 20;
 let missionMode = "click";
 let surveyStart = null;
 let surveyEnd = null;
@@ -288,6 +290,14 @@ function paintSats(rows, liveSet) {
   const seen = new Set();
   rows.forEach((row) => {
     if (!row || !row.sid) return;
+    if (!prnEnabled(row.sid)) {
+      const rec = satMarks.get(row.sid);
+      if (rec) {
+        dropSatRec(rec);
+        satMarks.delete(row.sid);
+      }
+      return;
+    }
     seen.add(row.sid);
     const isLive = live.has(row.sid);
     const lons = offs.map((off) => row.lon + off).filter((lon) => lngVisible(lon));
@@ -405,6 +415,8 @@ function syncBounceLayers() {
     setGroupOnMap(bouncePrn[prn].lake, lakeOn && on);
     setGroupOnMap(bouncePrn[prn].land, landOn && on);
   }
+  if (lastPlan) renderMixed(lastPlan, playT);
+  else if (lastSatRows.length) paintSats(lastSatRows, lastSatLive);
 }
 
 function addCoveragePoly(group, geom, color, onWater) {
@@ -449,12 +461,14 @@ function paintFlightBounces(plan) {
   }
   document.getElementById("nLake").textContent = `(${(cov.counts && cov.counts.lake) || 0})`;
   document.getElementById("nLand").textContent = `(${(cov.counts && cov.counts.land) || 0})`;
+  const picked = pickedSids(plan);
   const box = document.getElementById("prnToggles");
   box.innerHTML = prns
     .map((p) => {
       const n = bouncePrn[p].nLake + bouncePrn[p].nLand;
+      const on = !picked || picked.has(p);
       return `<label class="prn-chip" style="border-color:${sidColor(p)};color:${sidColor(p)}">
-        <input type="checkbox" data-prn="${p}" checked /> ${p} <span>(${n})</span>
+        <input type="checkbox" data-prn="${p}" ${on ? "checked" : ""} /> ${p} <span>(${n})</span>
       </label>`;
     })
     .join("");
@@ -462,21 +476,37 @@ function paintFlightBounces(plan) {
   syncBounceLayers();
 }
 
-function aimLockText(s) {
-  if (!s) return "";
-  if (s.live_offset) {
-    if (!s.aim_sid) return "no sat above mask — grid not offset";
-    const last = s.last_sid && s.last_sid !== s.aim_sid
-      ? `  →  ${s.last_sid} el ${Math.round(s.last_el)}°`
-      : `  →  el ${Math.round(s.last_el != null ? s.last_el : s.aim_el)}°`;
-    const n = s.n_cells != null ? `${s.n_cells} tiles` : "";
-    const km = s.stretch_m != null ? `${Math.round(s.stretch_m)} m stretch` : "";
-    const extra = [n, km].filter(Boolean).join(" · ");
-    return `LIVE OFFSET  ${s.aim_sid} el ${Math.round(s.aim_el)}°${last}\naz/el recomputed at each WP${extra ? "\n" + extra : ""}`;
+function pickedSids(plan) {
+  const m = plan.meta || {};
+  if (m.mode !== "survey" && m.mode !== "areas") return null;
+  const s = m.survey || {};
+  const ids = [...(s.sids || [])];
+  if (s.aim_sid) ids.push(s.aim_sid);
+  if (s.last_sid) ids.push(s.last_sid);
+  const set = new Set(ids.filter(Boolean));
+  return set.size ? set : null;
+}
+
+function degTxt(v) {
+  return v == null || !Number.isFinite(Number(v)) ? "—" : `${Math.round(Number(v))}°`;
+}
+
+function aimLockHtml(s) {
+  if (!s || !s.aim_sid) {
+    return `<div class="hud-el-empty">No satellite above mask</div>`;
   }
-  if (!s.aim_sid) return "no sat above mask — grid not offset";
-  const when = (s.aim_utc || "").replace("T", " ").slice(0, 16);
-  return `GRID LOCK  ${s.aim_sid}  el ${Math.round(s.aim_el)}°  az ${Math.round(s.aim_az)}°\nwhole lake uses this sat at ${when} UTC`;
+  const sid =
+    s.last_sid && s.last_sid !== s.aim_sid
+      ? `${escHtml(s.aim_sid)} → ${escHtml(s.last_sid)}`
+      : escHtml(s.aim_sid);
+  const endEl = s.last_el != null ? s.last_el : s.aim_el;
+  return `<div class="hud-el">
+    <div class="hud-el-sat">${sid}</div>
+    <div class="hud-el-pair">
+      <div class="hud-el-cell"><span class="k">Start elevation</span><span class="v">${degTxt(s.aim_el)}</span></div>
+      <div class="hud-el-cell"><span class="k">End elevation</span><span class="v">${degTxt(endEl)}</span></div>
+    </div>
+  </div>`;
 }
 
 function paintSurveyLock(plan) {
@@ -487,12 +517,12 @@ function paintSurveyLock(plan) {
   const s = m.survey || {};
   if (m.mode !== "survey" && m.mode !== "areas") {
     lock.classList.add("hidden");
-    lock.textContent = "";
+    lock.innerHTML = "";
     syncSatRays();
     return;
   }
   lock.classList.remove("hidden");
-  lock.textContent = aimLockText(s);
+  lock.innerHTML = aimLockHtml(s);
   const hovers = plan.hovers || [];
   const step = hovers.length > 80 ? Math.ceil(hovers.length / 80) : 1;
   hovers.forEach((h, i) => {
@@ -523,26 +553,18 @@ function paintSurveyLock(plan) {
     const latlngs = s.stretch.coordinates.map((p) => [p[1], p[0]]);
     addWrappedCopies(surveyRayLayer, latlngs, { color: "#ffe66a", weight: 2, opacity: 0.55, interactive: false });
   }
-  const c = s.centroid;
-  if (c && s.aim_sid) {
-    const lab = s.live_offset
-      ? `LIVE ${s.aim_sid} @ ${Math.round(s.aim_el)}°`
-      : `GRID = ${s.aim_sid} @ ${Math.round(s.aim_el)}°`;
-    L.marker([c.lat, c.lon], {
-      icon: L.divIcon({
-        className: "",
-        html: `<div class="tile-lock-lab">${lab}</div>`,
-        iconSize: [180, 20],
-        iconAnchor: [90, 10],
-      }),
-      interactive: false,
-    }).addTo(splashLayer);
-  }
   syncSatRays();
 }
 
 function setStatus(msg, err) {
   const el = document.getElementById("status");
+  if (!msg) {
+    el.textContent = "";
+    el.classList.add("hidden");
+    el.classList.remove("err");
+    return;
+  }
+  el.classList.remove("hidden");
   el.textContent = msg;
   el.classList.toggle("err", !!err);
 }
@@ -684,6 +706,19 @@ function prevWp(plan, phase) {
 }
 
 function headingToWp(plan, lat, lon, phase, fallback) {
+  const hovers = plan.hovers || [];
+  const m = /^(to|hover)_(\d+)$/.exec(String(phase || ""));
+  if (m) {
+    const hov = hovers[Number(m[2]) - 1];
+    if (hov && hov.splash_lat != null && hov.splash_lon != null) {
+      const lookSplash = courseHdg(lat, lon, hov.splash_lat, hov.splash_lon);
+      if (lookSplash != null) return lookSplash;
+    }
+  }
+  if ((phase === "climb" || phase === "hold") && hovers[0] && hovers[0].splash_lat != null) {
+    const look = courseHdg(lat, lon, hovers[0].splash_lat, hovers[0].splash_lon);
+    if (look != null) return look;
+  }
   const dest = aimWp(plan, phase);
   if (!dest) return fallback ?? 0;
   const look = courseHdg(lat, lon, dest.lat, dest.lon);
@@ -840,8 +875,8 @@ function paintDraft() {
   );
 }
 
-function finishDraft() {
-  if (draft.length < 2) return;
+function commitAreaDraft() {
+  if (draft.length < 2) return false;
   let ring;
   if (draft.length === 2) ring = boxRing(draft[0], draft[1]);
   else {
@@ -853,13 +888,16 @@ function finishDraft() {
   targets.push({ name: `area ${targets.length + 1}`, coordinates: ring });
   stopAreaDraw();
   paintTargets();
-  setStatus(`${targets.length} measure area(s). Tiling the box…`);
+  return true;
+}
+
+function finishDraft() {
+  if (!commitAreaDraft()) return;
   computePlan();
 }
 
 document.getElementById("btnDraw").onclick = () => {
   startAreaDraw();
-  setStatus("Click two corners for a box, or more for a polygon.");
 };
 document.getElementById("btnFinish").onclick = finishDraft;
 document.getElementById("btnUndo").onclick = () => {
@@ -872,7 +910,6 @@ document.getElementById("btnClear").onclick = () => {
   stopAreaDraw();
   paintTargets();
   startAreaDraw();
-  setStatus("Areas cleared. Click two corners for a box.");
 };
 
 map.on("click", (e) => {
@@ -884,7 +921,6 @@ map.on("click", (e) => {
     L.DomEvent.stop(e);
     clickWps.push({ lat: e.latlng.lat, lon: e.latlng.lng });
     paintClickWps();
-    setStatus(`${clickWps.length} waypoint(s).`);
     return;
   }
   if (missionMode === "areas") {
@@ -995,7 +1031,77 @@ function paintClickWps() {
   });
 }
 
+function resetMission() {
+  planGen += 1;
+  stopPlay();
+  lastPlan = null;
+  playT = 0;
+  dispHdg = null;
+  lastYawAt = 0;
+  lastTableAt = 0;
+  lastTrailAt = 0;
+  lastSatLive = new Set();
+  for (const k of Object.keys(trails)) delete trails[k];
+  trailLayer.clearLayers();
+  clearSpecParts();
+  splashLayer.clearLayers();
+  surveyRayLayer.clearLayers();
+  wpLayer.clearLayers();
+  lastPathPts = [];
+  setMissionPath([]);
+  for (const prn of Object.keys(bouncePrn)) {
+    setGroupOnMap(bouncePrn[prn].lake, false);
+    setGroupOnMap(bouncePrn[prn].land, false);
+    bouncePrn[prn].lake.clearLayers();
+    bouncePrn[prn].land.clearLayers();
+    delete bouncePrn[prn];
+  }
+  clickWps = [];
+  targets = [];
+  surveyStart = null;
+  surveyEnd = null;
+  surveySelLayer.clearLayers();
+  surveyPickLayer.clearLayers();
+  clickWpLayer.clearLayers();
+  targetLayer.clearLayers();
+  stopAreaDraw();
+  paintClickWps();
+  paintSurveyPicks();
+  paintTargets();
+  document.getElementById("layers").classList.add("hidden");
+  document.getElementById("prnToggles").innerHTML = "";
+  document.getElementById("nLake").textContent = "";
+  document.getElementById("nLand").textContent = "";
+  document.getElementById("summary").classList.add("hidden");
+  document.getElementById("summary").innerHTML = "";
+  document.getElementById("tableWrap").classList.add("hidden");
+  document.getElementById("tbody").innerHTML = "";
+  document.getElementById("exports").classList.add("hidden");
+  document.getElementById("exports").innerHTML = "";
+  document.getElementById("sliderWrap").classList.add("hidden");
+  document.getElementById("tileLock").classList.add("hidden");
+  document.getElementById("tileLock").innerHTML = "";
+  document.getElementById("hudPhase").textContent = "Standby";
+  document.getElementById("hudAgl").textContent = "—";
+  document.getElementById("hudAglFt").textContent = "";
+  document.getElementById("hudMsl").textContent = "—";
+  document.getElementById("hudSpd").textContent = "—";
+  document.getElementById("hudSpdKt").textContent = "";
+  document.getElementById("hudVs").textContent = "—";
+  document.getElementById("hudHdg").textContent = "—";
+  document.getElementById("hudPos").textContent = "—";
+  document.getElementById("hudSat").textContent = "Waiting for mission data";
+  document.getElementById("go").disabled = false;
+  if (padMarker) {
+    const ll = padMarker.getLatLng();
+    setDrone(ll.lat, ll.lng, 180);
+  }
+  fetchSky();
+  setStatus("");
+}
+
 function setMode(m) {
+  if (m !== missionMode) resetMission();
   missionMode = m;
   const modeStates = [
     ["modeClick", m === "click"],
@@ -1025,11 +1131,10 @@ function setMode(m) {
   if (m !== "areas") stopAreaDraw();
   if (m === "survey") {
     paintSurveyPicks();
-    setStatus("Choose a river stretch or select a lake on the map.");
   } else if (m === "areas") {
     startAreaDraw();
-    setStatus("Draw the survey boundary on the map.");
-  } else setStatus("Place your waypoints on the map, then build the mission.");
+  }
+  setStatus("");
 }
 
 function layerIsLine(layer) {
@@ -1087,7 +1192,6 @@ function pickWater(latlng) {
       surveyStart = { lat: latlng.lat, lon: latlng.lng, layer: found };
       surveyEnd = null;
       paintSurveyPicks();
-      setStatus("Start set. Click where the river stretch should end.");
       return;
     }
     surveyEnd = { lat: latlng.lat, lon: latlng.lng };
@@ -1102,6 +1206,7 @@ function pickWater(latlng) {
 }
 
 async function computePlan() {
+  const gen = ++planGen;
   if (missionMode === "survey" && !surveyStart) {
     setStatus("Select a waterbody first.", true);
     return;
@@ -1114,9 +1219,12 @@ async function computePlan() {
     setStatus("Add at least one waypoint.", true);
     return;
   }
-  if (missionMode === "areas" && !targets.length) {
-    setStatus("Click two corners for a box, then Finish.", true);
-    return;
+  if (missionMode === "areas") {
+    commitAreaDraft();
+    if (!targets.length) {
+      setStatus("Draw an area on the map first.", true);
+      return;
+    }
   }
   if (!selectedConsts().length) {
     setStatus("Turn on at least one constellation.", true);
@@ -1147,6 +1255,10 @@ async function computePlan() {
       mode: missionMode,
     };
     if (missionMode === "survey" || missionMode === "areas") {
+      const tel = Number(document.getElementById("target_el").value);
+      if (Number.isFinite(tel)) body.target_el = tel;
+    }
+    if (missionMode === "survey" || missionMode === "areas") {
       if (missionMode === "survey") {
         body.click_lat = surveyStart.lat;
         body.click_lon = surveyStart.lon;
@@ -1172,11 +1284,13 @@ async function computePlan() {
       throw new Error("Planner error (not JSON). " + text.replace(/<[^>]+>/g, " ").slice(0, 160));
     }
     if (!r.ok) throw new Error(data.error || text.slice(0, 160));
+    if (gen !== planGen) return;
     showPlan(data);
   } catch (e) {
+    if (gen !== planGen) return;
     setStatus(String(e), true);
   } finally {
-    btn.disabled = false;
+    if (gen === planGen) btn.disabled = false;
   }
 }
 
@@ -1265,6 +1379,7 @@ function pushTrail(prn, lat, lon) {
 function drawTrails() {
   trailLayer.clearLayers();
   for (const prn of Object.keys(trails)) {
+    if (!prnEnabled(prn)) continue;
     const pts = trails[prn];
     if (pts.length < 2) continue;
     addShortPolyline(trailLayer, pts, { color: "#7ee0ff", weight: 2, opacity: 0.45, interactive: false });
@@ -1394,8 +1509,14 @@ function renderMixed(plan, tSec) {
   if (!f) return;
   const slider = document.getElementById("slider");
   if (document.activeElement !== slider) slider.value = String(f.t);
-  document.getElementById("sliderLabel").textContent =
-    `+${Math.round(f.t)}s  ${phaseLabel(f.phase)}  ${f.iso.replace("T", " ").slice(0, 19)} UTC`;
+  document.getElementById("playElapsed").textContent = `+${Math.round(f.t)}s`;
+  document.getElementById("playPhase").textContent = phaseLabel(f.phase);
+  const iso = f.iso || "";
+  const day = iso.slice(0, 10);
+  const clock = iso.slice(11, 19);
+  document.getElementById("playClock").innerHTML = day && clock
+    ? `<em>${escHtml(day)}</em>${escHtml(clock)} UTC`
+    : "<em>—</em>";
 
   const want = headingToWp(plan, f.drone.lat, f.drone.lon, f.phase, f.drone.hdg);
   const hdg = smoothHdg(want);
@@ -1412,6 +1533,7 @@ function renderMixed(plan, tSec) {
   const hits = [];
   const live = new Set();
   for (const s of f.speculars) {
+    if (!prnEnabled(s.prn)) continue;
     const picked = !!(s.in_target || s.aimed);
     const wet = !!s.on_water;
     const hit = picked || wet;
@@ -1497,7 +1619,7 @@ function startPlay(plan) {
     if (!playing) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    playT += dt * 20;
+    playT += dt * playRate;
     if (playT >= lastT) {
       playT = lastT;
       stopPlay();
@@ -1540,7 +1662,7 @@ async function loadDefaults() {
   document.getElementById("loiter").value = d.loiter_s;
   document.getElementById("mask").value = d.elev_mask;
   setMode("click");
-  setStatus("Ready.");
+  setStatus("");
   fetchSky();
 }
 
@@ -1577,34 +1699,6 @@ function paintSummary(plan) {
   const distTxt = dist >= 1000 ? (dist / 1000).toFixed(2) : String(Math.round(dist));
   const distUnit = dist >= 1000 ? "km" : "m";
   const prns = m.l5_prns_on_water || [];
-  const notes = [];
-  if (m.mode === "survey" || (m.mode === "areas" && m.survey)) {
-    const s = m.survey || {};
-    if (s.name) notes.push(escHtml(s.name));
-    if (s.aim_sid) {
-      notes.push(
-        `Grid lock ${escHtml(s.aim_sid)} · el ${s.aim_el ?? "—"}° · az ${s.aim_az ?? "—"}°`
-      );
-    }
-    if (s.tile_m != null) notes.push(`Tile ${s.tile_m} m`);
-    notes.push(
-      s.coarsened
-        ? `Opened spacing so ≤${s.max_wp} WP`
-        : "Tile ≤ first Fresnel so patches overlap"
-    );
-  } else if (m.mode !== "click" && m.mode !== "manual") {
-    if (m.hold_s) notes.push(`Pad hold ${Math.round(m.hold_s)} s`);
-    if (m.almanac_age_days != null) notes.push(`Almanac ${m.almanac_age_days} d`);
-    const hits = Object.entries(m.target_hits || {})
-      .map(([k, v]) => `${k} ${v}`)
-      .join(" · ");
-    if (hits) notes.push(`Splash in area: ${escHtml(hits)}`);
-    if (m.fallback_hovers && m.fallback_hovers.length) {
-      notes.push(`No sat lock: ${escHtml(m.fallback_hovers.join(", "))}`);
-    } else {
-      notes.push("WPs ordered by bounce in the box");
-    }
-  }
   sum.innerHTML = `
     <div class="sum-top">
       <div class="sum-mode">${mode}</div>
@@ -1615,10 +1709,9 @@ function paintSummary(plan) {
       ${statCell("Duration", mins, "min")}
       ${statCell("Distance", distTxt, distUnit)}
       ${statCell("Speed", m.speed_mps ?? "—", "m/s")}
-      ${statCell("Hover", m.loiter_s ?? "—", "s / WP")}
+      ${statCell("Hover", Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
       ${statCell("L5 on water", prns.length)}
     </div>
-    ${notes.length ? `<div class="sum-note">${notes.join("<br>")}</div>` : ""}
     <div class="sum-sats">
       <div class="sum-sats-label">L5 on water</div>
       <div class="sum-chips">${satChips(prns)}</div>
@@ -1694,21 +1787,12 @@ function showPlan(plan) {
 
   const ex = document.getElementById("exports");
   ex.classList.remove("hidden");
-  const miss = (plan.exports && plan.exports.mission) || {};
   const fname = (plan.exports && plan.exports.filename) || "HERON.waypoints";
-  const ok = miss.ok !== false;
-  const warn = (miss.warnings || []).join(" · ");
-  const err = (miss.errors || []).join(" · ");
-  const n = miss.n_nav != null ? `${miss.n_nav} WPs` : "";
   ex.innerHTML = `
     <div class="export-k">ArduPilot / Mission Planner</div>
     <a class="export-btn" href="${plan.exports.waypoints}" download="${escHtml(fname)}">Download .waypoints</a>
-    <a href="${plan.exports.runcard}" download>Run card</a>
-    <div class="export-note ${ok ? "ok" : "bad"}">${ok ? `Validated · ${n}` : "File failed checks"}</div>
-    ${err ? `<div class="export-note bad">${escHtml(err)}</div>` : ""}
-    ${warn ? `<div class="export-note">${escHtml(warn)}</div>` : ""}
-    <div class="export-hint">Copter → Flight Plan → Load WP File. Relative alt. WP_YAW_BEHAVIOR = Face Next Waypoint.</div>`;
-  setStatus(ok ? "Mission ready. File is Mission Planner Copter format." : "Mission ready, but the WP file failed checks.", !ok);
+    <a href="${plan.exports.runcard}" download>Run card</a>`;
+  setStatus("");
 }
 
 document.getElementById("form").addEventListener("submit", async (ev) => {
@@ -1726,7 +1810,6 @@ document.getElementById("btnUndoWp").onclick = () => {
 document.getElementById("btnClearWp").onclick = () => {
   clickWps = [];
   paintClickWps();
-  setStatus("Waypoints cleared.");
 };
 document.getElementById("btnClearSurvey").onclick = () => {
   surveyStart = null;
@@ -1734,7 +1817,6 @@ document.getElementById("btnClearSurvey").onclick = () => {
   surveySelLayer.clearLayers();
   surveyPickLayer.clearLayers();
   paintSurveyPicks();
-  setStatus("Stretch cleared. River: click start, then end.");
 };
 
 loadDefaults().catch((e) => setStatus(String(e), true));
@@ -1800,6 +1882,33 @@ document.getElementById("prnNone").onclick = () => {
   });
   syncBounceLayers();
 };
+function setPlaySpeedOpen(open) {
+  const box = document.getElementById("playRates");
+  box.classList.toggle("open", open);
+  document.getElementById("playSpeedMenu").classList.toggle("hidden", !open);
+  document.getElementById("playSpeedBtn").setAttribute("aria-expanded", String(open));
+}
+document.getElementById("playSpeedBtn").onclick = (ev) => {
+  ev.stopPropagation();
+  setPlaySpeedOpen(!document.getElementById("playRates").classList.contains("open"));
+};
+document.getElementById("playSpeedMenu").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-rate]");
+  if (!btn) return;
+  playRate = Number(btn.dataset.rate) || 20;
+  document.querySelectorAll("#playSpeedMenu button").forEach((el) => {
+    const on = el === btn;
+    el.classList.toggle("on", on);
+    el.setAttribute("aria-selected", String(on));
+  });
+  document.getElementById("playSpeedVal").textContent = `${playRate}×`;
+  setPlaySpeedOpen(false);
+});
+document.addEventListener("click", (ev) => {
+  const box = document.getElementById("playRates");
+  if (!box || box.contains(ev.target)) return;
+  setPlaySpeedOpen(false);
+});
 
 (function almanacUi() {
   const box = document.getElementById("almBox");
