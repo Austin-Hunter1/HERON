@@ -17,8 +17,9 @@ precise drone positions (PPK) to map where each reflection came from.
 ## 2. The system in one paragraph
 
 An Intel NUC (NUC7i3DNB) rides on the drone. Two Ettus B210 SDRs and
-two Ettus B200mini SDRs (all USB 3.0) connect to the NUC and share a
-common 10 MHz reference so their sample streams stay coherent. The
+two Ettus B200 SDRs (all USB 3.0) connect to the NUC and share a
+common 10 MHz reference and PPS, so their sample streams stay coherent
+and start on the same second. The
 NUC records raw IQ samples to a SATA SSD; the OS runs on a separate
 NVMe drive. The payload does not depend on the Cube Orange flight
 controller's state (it never checks flight mode), but it does use the
@@ -35,12 +36,12 @@ flight, ground software processes the raw data.
 - **GNSS** — Global Navigation Satellite System (GPS, Galileo, etc.).
 - **GNSS-R** — GNSS reflectometry: use of reflected GNSS signals to
   sense the surface.
-- **SDR** — Software-defined radio. The B210 and B200mini convert
+- **SDR** — Software-defined radio. The B210 and B200 convert
   radio signals to digital samples.
 - **IQ samples** — Pairs of numbers (in-phase, quadrature) that
   represent the raw radio signal.
 - **UHD** — USRP Hardware Driver. The Ettus software that controls the
-  B210 and B200mini.
+  B210 and B200.
 - **MAVLink** — The message protocol of the autopilot. Legacy SURGE
   used it to trigger recording from flight mode. The HERON payload
   does not read flight mode, but it does use MAVLink as a bit-pipe:

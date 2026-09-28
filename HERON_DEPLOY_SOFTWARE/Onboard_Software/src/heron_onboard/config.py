@@ -115,7 +115,7 @@ class SdrConfig(BaseModel):
     )
     time_source: Literal["none", "external", "gpsdo"] = Field(
         default="none",
-        description="PPS input. B210: external. B200mini has one reference input, so: none (D-020)",
+        description="PPS input. B210 and B200: external (D-024). none = no PPS cable (bench only)",
     )
     channels: list[ChannelConfig] = Field(min_length=1, max_length=2)
 

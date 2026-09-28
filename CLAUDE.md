@@ -9,7 +9,7 @@ Read the documents in `docs/` before you write code. Start with
 HERON is a graduate project at CU Boulder. The system uses GNSS
 reflectometry (GNSS-R) to measure surface water coverage of the ground.
 A drone carries the payload. The payload records raw GNSS signals from
-four software-defined radios (two Ettus B210, two Ettus B200mini). A
+four software-defined radios (two Ettus B210, two Ettus B200). A
 ground station laptop monitors and controls the recording over the
 flight-controller telemetry link. Ground software processes the
 recorded data after the flight.
@@ -76,17 +76,16 @@ You are a test engineer on this project. Obey these rules at all times:
 - `docs/RECOMMENDATIONS.md` — OS, language, packaging, and container
   choices, with reasons.
 
-## Technical baseline (updated 2026-09-17)
+## Technical baseline (updated 2026-09-24)
 
 - The onboard software records raw IQ samples only. It does not process
   data in flight.
-- SDRs: two Ettus B210 and two Ettus B200mini (B206mini possible), all
-  USB 3.0, all on UHD 4.x (D-020). The software records all four.
-  Sample format is sc8 (8-bit complex).
-- Sync: a GPSDO gives 10 MHz to all four units and PPS to the B210s.
-  The B200mini has one reference input, so it has no PPS; its sample
-  offset is constant and is found after the flight (Q-013). Clock and
-  time sources are per SDR in config.
+- SDRs: two Ettus B210 and two Ettus B200, all USB 3.0, all on UHD
+  4.x (D-020, D-024). The software records all four. Sample format is
+  sc8 (8-bit complex).
+- Sync: a GPSDO gives 10 MHz and PPS to all four units (D-024). Every
+  recorder sets its device time at the same PPS edge. Clock and time
+  sources are per SDR in config.
 - The payload does not use the flight controller's state (D-012). It
   does use the flight-controller telemetry link as its transport
   (D-016): the NUC is a MAVLink component on a Cube serial port and

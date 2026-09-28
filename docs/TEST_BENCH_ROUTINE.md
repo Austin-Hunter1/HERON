@@ -16,14 +16,14 @@ any software, config, OS, or hardware change. Run the short check
 ## 2. SDR enumeration and sync
 
 1. Run `uhd_find_devices`. Confirm all four SDR serial numbers
-   (2× B210, 2× B200mini) appear and match `HARDWARE.md` and the
+   (2× B210, 2× B200) appear and match `HARDWARE.md` and the
    config.
 2. Run `uhd_usrp_probe` on each unit. Confirm no USB errors. Confirm
    the four units sit on at least two different USB 3.0 controllers
    (`lsusb -t`).
 3. Confirm each unit locks to the shared 10 MHz (the recorder refuses
    to start without `ref_locked`; the display shows `ref` per SDR).
-   Confirm the two B210s see PPS (the recorder reports "no PPS edge
+   Confirm all four units see PPS (the recorder reports "no PPS edge
    seen" otherwise). If sync hardware is not yet fitted, set
    `clock_source = "internal"` and `time_source = "none"` in a bench
    config and record that this step is waived.

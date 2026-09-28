@@ -110,7 +110,11 @@ def _collection_notes(sdr: SdrConfig, ch: ChannelConfig, sc: dict[str, Any]) -> 
     rate = float(sc.get("sample_rate_hz", sdr.sample_rate_hz))
     n = int(sc.get("num_samples", 0))
     duration = n / rate if rate > 0 else 0.0
-    timebase = "PPS-aligned UTC" if sdr.pps_aligned else "host clock, not PPS-aligned (see Q-013)"
+    timebase = (
+        "PPS-aligned UTC"
+        if sdr.pps_aligned
+        else "host clock, not PPS-aligned (offset found after the flight)"
+    )
     label = ch.antenna_label or ch.antenna
     bw_mhz = float(sc.get("bandwidth_hz", ch.bandwidth_hz)) / 1e6
     partial = "" if sc.get("complete", True) else " (partial, last of the recording)"

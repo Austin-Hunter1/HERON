@@ -12,7 +12,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# UHD 4.x supports the B210 and the B200mini/B206mini (D-020).
+# UHD 4.x supports the B210 and the B200 (D-024).
 find_package(UHD 4.0 REQUIRED)
 find_package(Boost 1.65 REQUIRED COMPONENTS program_options)
 find_package(Threads REQUIRED)

@@ -31,7 +31,7 @@ Plus the C++ recorder in `Onboard_Software/recorder/` (payload only).
 
 | Dependency | Version | Purpose | Install |
 | --- | --- | --- | --- |
-| UHD | 4.x (`libuhd-dev`, `uhd-host`) | USRP driver for B210 and B200mini | `sudo apt install uhd-host libuhd-dev` then `sudo uhd_images_downloader` |
+| UHD | 4.x (`libuhd-dev`, `uhd-host`) | USRP driver for B210 and B200 | `sudo apt install uhd-host libuhd-dev` then `sudo uhd_images_downloader` |
 | CMake, g++ | CMake 3.16+, C++17 compiler | build the recorder | `sudo apt install build-essential cmake` |
 | Boost | 1.65+ (`program_options`) | recorder command line | `sudo apt install libboost-program-options-dev` |
 | systemd | (OS) | autostart and restart | in the OS |

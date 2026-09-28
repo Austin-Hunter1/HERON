@@ -23,7 +23,7 @@ payload computer. Steps marked TBD depend on open questions in
 
 1. Install UHD 4.x, the build tools, and Boost:
    `sudo apt install -y uhd-host libuhd-dev build-essential cmake git libboost-program-options-dev`
-   UHD 4.x supports the B210 and the B200mini (D-020). Check with
+   UHD 4.x supports the B210 and the B200 (D-024). Check with
    `uhd_config_info --version`.
 2. Download the FPGA images: `sudo uhd_images_downloader`
 3. Add the udev rules so the `heron` user can open the SDRs without

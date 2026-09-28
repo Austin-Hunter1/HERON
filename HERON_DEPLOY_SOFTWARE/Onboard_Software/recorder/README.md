@@ -15,7 +15,7 @@ sudo apt install -y build-essential cmake libuhd-dev uhd-host libboost-program-o
 sudo uhd_images_downloader
 ```
 
-UHD 4.x from apt supports the B210 and the B200mini/B206mini (D-020).
+UHD 4.x from apt supports the B210 and the B200 (D-024).
 Check the version: `uhd_config_info --version` (4.1 or newer).
 
 ## Build and install

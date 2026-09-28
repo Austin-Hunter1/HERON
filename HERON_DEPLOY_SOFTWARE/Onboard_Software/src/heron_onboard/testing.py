@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
-    """A valid config with one B210 (2 ch) and one B200mini (1 ch).
+    """A valid config with one B210 (2 ch) and one B200 (1 ch).
 
     ``overrides`` merge into the top-level tables, for example
     ``control={"link_grace_s": 5}``.
@@ -48,8 +48,8 @@ def minimal_config_dict(tmp_path: Path, **overrides: dict) -> dict:
                 ],
             },
             {
-                "id": "b200mini_1",
-                "model": "b200mini",
+                "id": "b200_1",
+                "model": "b200",
                 "serial": "S2",
                 "sample_rate_hz": 10e6,
                 "clock_source": "internal",

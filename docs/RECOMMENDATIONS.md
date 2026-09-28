@@ -13,7 +13,7 @@ install, headless**, on the payload computer.
 
 Reasons: Ettus supports UHD best on Ubuntu LTS; the legacy SURGE stack
 ran on Linux; LTS gives 5 years of stability; the apt UHD 4.x package
-supports both the B210 and the B200mini (D-020), so the caution about
+supports both the B210 and the B200 (D-020, D-024), so the caution about
 building UHD 3.15 from source for a B100 no longer applies; Server (no
 desktop) leaves more RAM and CPU for capture on an 8 GB machine and
 removes GUI processes that can cause USB or scheduling jitter.
@@ -124,7 +124,7 @@ independent USB 3.0 controllers, sustained SSD writes at the
 configured rate with 2× margin, and UHD 4.x support. Candidates to
 bench (not endorsements): x86 mini-PCs (N100 class) and ARM boards
 with real USB 3.0 plus SATA/NVMe. Remember the four-SDR USB topology:
-all four units (2× B210, 2× B200mini, D-020) are USB 3.0, so a
+all four units (2× B210, 2× B200, D-024) are USB 3.0, so a
 replacement needs four USB 3.0 ports spread across at least two
 controllers. Test with the endurance capture test in `TESTING.md`
 before any swap. The 8 GB NUC stays the baseline until a candidate

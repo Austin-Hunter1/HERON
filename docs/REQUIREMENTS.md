@@ -23,12 +23,11 @@ Words: **shall** = mandatory. **should** = strong preference.
 ### Capture
 
 - O1. The onboard software shall record raw IQ samples from all four
-  SDRs (2× B210, 2× B200mini — D-008, D-020) to the SATA data SSD. It
+  SDRs (2× B210, 2× B200 — D-008, D-020, D-024) to the SATA data SSD. It
   shall not process science data in flight. (D-001.)
 - O2. All SDRs shall record from the shared 10 MHz reference (D-014).
   The software shall verify reference lock where the hardware reports
-  it, and shall align the two B210s to a shared PPS edge; the
-  B200mini's offset is found after the flight (D-020, Q-013).
+  it, and shall align all four units to a shared PPS edge (D-024).
 - O3. Sample file format shall be sc8 (8-bit complex) (D-009). Center
   frequencies, sample rates, gains, bandwidths, antenna ports, and
   channel counts shall come from a config file. The signal plan is
@@ -132,5 +131,4 @@ Words: **shall** = mandatory. **should** = strong preference.
 See `DECISIONS.md` for the open-question list: the signal plan
 (Q-001), the ground GNSS receiver model (Q-002), data offload (Q-003),
 the final payload computer (Q-005), the RTK correction path (Q-010),
-the B200mini post-flight time offset (Q-013), and the exact MAVLink
-port and baud on both ends (Q-014).
+and the exact MAVLink port and baud on both ends (Q-014).

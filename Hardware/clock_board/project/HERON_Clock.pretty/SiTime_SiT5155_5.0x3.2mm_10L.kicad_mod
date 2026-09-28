@@ -1,0 +1,181 @@
+(footprint "SiTime_SiT5155_5.0x3.2mm_10L"
+  (version 20221018)
+  (generator pcbnew)
+  (layer "F.Cu")
+  (descr "SiTime 10-lead 5.0x3.2x0.95 mm ceramic QFN (SiT5155/SiT5356 family). Land pattern from SiT5155 datasheet Rev 1.05 p.34")
+  (tags "SiTime Super-TCXO 5032 10L CQFN")
+  (attr smd)
+  (fp_text reference "REF**"
+    (at 0 -3.6)
+    (layer "F.SilkS")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "841ed17e-3a84-4f81-9d89-e32da609b1af"))
+  (fp_text value "SiT5155"
+    (at 0 3.6)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "03cb7706-230c-4d07-80b1-096d479b1eac"))
+  (fp_text user "${REFERENCE}"
+    (at 0 0 90)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.6 0.6)
+        (thickness 0.09)))
+    (tstamp "9d92b10e-097d-4844-ae41-1ababe2e1ca3"))
+  (fp_line
+    (start -1.1 -2.5)
+    (end 1.6 -2.5)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "d0cc7380-ebc8-44ff-baa5-bb527945158c"))
+  (fp_line
+    (start 1.6 -2.5)
+    (end 1.6 2.5)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "d2d883be-269c-4c95-8ac3-2575e2b529e0"))
+  (fp_line
+    (start 1.6 2.5)
+    (end -1.6 2.5)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "f1c6917a-732c-4afb-8faa-db01acf90198"))
+  (fp_line
+    (start -1.6 2.5)
+    (end -1.6 -2)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "30b8632c-0846-4238-86b4-8c52add992f2"))
+  (fp_line
+    (start -1.6 -2)
+    (end -1.1 -2.5)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "48c9b6a4-c062-443e-8d2d-a2513c614086"))
+  (fp_line
+    (start -1.85 -1.3)
+    (end -1.85 -1.1)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "20f297e0-8724-4004-8403-feb8ef962eda"))
+  (fp_line
+    (start 1.85 -1.3)
+    (end 1.85 -1.1)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "cb231bc8-b413-4b0e-a85b-75b085a88ae7"))
+  (fp_line
+    (start -1.85 1.3)
+    (end -1.85 1.1)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "eb5e926d-fadc-468d-b72f-6217cb4fade6"))
+  (fp_line
+    (start 1.85 1.3)
+    (end 1.85 1.1)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "afe2663c-90a4-4e6d-bd27-00d247d4a031"))
+  (fp_circle
+    (center -2.2 -2.9)
+    (end -2.05 -2.9)
+    (stroke
+      (width 0.3)
+      (type solid))
+    (fill solid)
+    (layer "F.SilkS")
+    (tstamp "5e8405f2-46b7-46c5-b442-8fdb491449c0"))
+  (fp_rect
+    (start -2 -2.9)
+    (end 2 2.9)
+    (stroke
+      (width 0.05)
+      (type solid))
+    (fill none)
+    (layer "F.CrtYd")
+    (tstamp "8f9acd76-ffce-46b8-9a03-ce3c4d9901df"))
+  (pad "1" smd roundrect
+    (at -1.175 -2.025)
+    (size 1.05 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "52b9f2ee-7540-4688-b94e-33b3a6198976"))
+  (pad "10" smd roundrect
+    (at 0 -2.025)
+    (size 0.7 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "7cf61632-7492-4d24-8d73-ef589b50b675"))
+  (pad "9" smd roundrect
+    (at 1.175 -2.025)
+    (size 1.05 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "b8432052-1d06-4ffd-919d-3b9657eb5c6b"))
+  (pad "2" smd roundrect
+    (at -1.025 -0.6)
+    (size 1.35 0.7)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "8f3fb37f-2bd8-43dd-8945-d4a1740ab5ef"))
+  (pad "8" smd roundrect
+    (at 1.025 -0.6)
+    (size 1.35 0.7)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "ccdc39c0-5066-4a4c-a691-531b64cddbe2"))
+  (pad "3" smd roundrect
+    (at -1.025 0.6)
+    (size 1.35 0.7)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "e1fc779d-aa05-4009-a2d8-d0e0bc55bb8f"))
+  (pad "7" smd roundrect
+    (at 1.025 0.6)
+    (size 1.35 0.7)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "7603c494-daad-4156-86b3-2c2b862a3ee1"))
+  (pad "4" smd roundrect
+    (at -1.175 2.025)
+    (size 1.05 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "efadcffa-783c-41ee-98c8-6f49df9fd03f"))
+  (pad "5" smd roundrect
+    (at 0 2.025)
+    (size 0.7 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "abe70830-9241-44fc-888b-4ed588efdd5e"))
+  (pad "6" smd roundrect
+    (at 1.175 2.025)
+    (size 1.05 1.15)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "452448d5-c4e1-4b24-9430-3c29fd446851")))

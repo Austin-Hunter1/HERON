@@ -57,8 +57,8 @@ time_source = "none"
   bandwidth_hz = 20.322e6
 
 [[sdr]]
-id = "b200mini_1"
-model = "b200mini"
+id = "b200_1"
+model = "b200"
 serial = "FAKE2"
 sample_rate_hz = 22e6
 clock_source = "internal"

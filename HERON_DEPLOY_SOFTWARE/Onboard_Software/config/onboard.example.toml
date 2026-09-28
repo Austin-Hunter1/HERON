@@ -1,7 +1,7 @@
 # HERON onboard config template.
 # Copy to onboard.toml on the payload and edit the machine values
 # (serial numbers, ports, paths). Every key here is validated at start.
-# Sizing: 2x B210 @ 22 Msps x 2 ch + 2x B200mini @ 22 Msps x 1 ch
+# Sizing: 2x B210 @ 22 Msps x 2 ch + 2x B200 @ 22 Msps x 1 ch
 #         = 6 channels x 44 MB/s = 264 MB/s at sc8. Check with
 #         `heron-onboard check-config`.
 
@@ -76,10 +76,11 @@ temp_labels = ["coretemp", "nvme", "acpitz"]
 L1 = 1575.42e6
 L5 = 1176.45e6
 
-# ---- SDR units (D-008, D-020). Signal plan is placeholder (Q-001). ----
+# ---- SDR units (D-008, D-020, D-024). Signal plan is placeholder (Q-001). ----
 # clock_source: 10 MHz reference input. All four units take the GPSDO 10 MHz.
-# time_source:  PPS input. The B210 has separate REF and PPS inputs: "external".
-#               The B200mini has ONE reference input (10 MHz only): "none".
+# time_source:  PPS input. The B210 and the B200 both have separate REF and PPS
+#               inputs, and all four take the GPSDO PPS: "external" (D-024).
+#               Use "none" only for a unit with no PPS cable (bench).
 
 [[sdr]]
 id = "b210_1"
@@ -140,13 +141,13 @@ time_source = "external"
   antenna_label = "A2 down LHCP"
 
 [[sdr]]
-id = "b200mini_1"
-model = "b200mini"
+id = "b200_1"
+model = "b200"
 serial = "CHANGE_ME_3"
 device_args = "recv_buff_size=2e7,num_recv_frames=256"
 sample_rate_hz = 22e6
 clock_source = "external"
-time_source = "none"
+time_source = "external"
 
   [[sdr.channels]]
   id = "L5_reflected_R"
@@ -159,13 +160,13 @@ time_source = "none"
   antenna_label = "A3 down RHCP"
 
 [[sdr]]
-id = "b200mini_2"
-model = "b200mini"
+id = "b200_2"
+model = "b200"
 serial = "CHANGE_ME_4"
 device_args = "recv_buff_size=2e7,num_recv_frames=256"
 sample_rate_hz = 22e6
 clock_source = "external"
-time_source = "none"
+time_source = "external"
 
   [[sdr.channels]]
   id = "L1_reflected_R"

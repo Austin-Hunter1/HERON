@@ -144,7 +144,7 @@ def test_all_recorders_dead_gives_fault(tmp_path):
     advance(sup, ground, clock, 1.0)
     assert sup.controller.state == State.RECORDING  # One of two still runs (O15).
     assert any(s.fault == "usb gone" for s in ground.telemetry[-1].sdrs)
-    backend.fail("b200mini_1", "usb gone too")
+    backend.fail("b200_1", "usb gone too")
     advance(sup, ground, clock, 1.0)
     assert sup.controller.state == State.FAULT
     assert ground.telemetry[-1].fault and "usb gone" in ground.telemetry[-1].fault

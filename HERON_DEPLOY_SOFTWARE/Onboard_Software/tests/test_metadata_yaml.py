@@ -51,7 +51,7 @@ def test_yaml_matches_team_schema(config, tmp_path: Path):
     flight = tmp_path / "f1"
     _sidecar(flight, "b210_1", "L5_direct", 0, "P")
     _sidecar(flight, "b210_1", "L5_direct", 1, "P", overflows_in_segment=3, complete=False)
-    _sidecar(flight, "b200mini_1", "L1_refl", 0, "P", center_freq_hz=1575.42e6, sample_rate_hz=10e6)
+    _sidecar(flight, "b200_1", "L1_refl", 0, "P", center_freq_hz=1575.42e6, sample_rate_hz=10e6)
     path = write_metadata_yaml(flight, config, "P")
     assert path.name == METADATA_YAML_FILENAME
     doc = yaml.safe_load(path.read_text())
@@ -81,7 +81,7 @@ def test_empty_flight_gives_valid_yaml_without_collections(config, tmp_path: Pat
     flight = tmp_path / "f2"
     flight.mkdir()
     doc = yaml.safe_load(write_metadata_yaml(flight, config, "P").read_text())
-    assert doc["collections"] == {} and "b200mini_1_L1_refl" in doc["channel_configurations"]
+    assert doc["collections"] == {} and "b200_1_L1_refl" in doc["channel_configurations"]
 
 
 def test_scan_skips_bad_and_foreign_json(config, tmp_path: Path):

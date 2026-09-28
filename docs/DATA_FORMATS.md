@@ -104,21 +104,19 @@ overflow `O` characters) is saved as
 command line. Keep it with the data, as the team does with
 `*_log.txt`.
 
-## 2. Time base (D-020, Q-013)
+## 2. Time base (D-020, D-024)
 
 - All four units lock to one 10 MHz reference, so their sample clocks
   do not drift against each other.
-- The B210s also take PPS. Every B210 recorder sets its device time to
-  `sync_epoch_unix + 1` at the PPS edge of that second and starts
-  streaming at `stream_start_unix`. Their `first_sample_device_time`
-  values are therefore on one UTC time base, to within one sample
-  clock.
-- The B200minis have no PPS. Their recorders set device time from the
-  host clock and start at the same `stream_start_unix`. Their offset
-  to the B210 streams is a **constant** (shared 10 MHz) known to
-  host-clock accuracy (milliseconds). Find the exact value once per
-  flight after the fact (Q-013), for example by correlating a direct
-  channel against a B210 direct channel.
+- All four units also take PPS (D-024). Every recorder sets its device
+  time to `sync_epoch_unix + 1` at the PPS edge of that second and
+  starts streaming at `stream_start_unix`. Their
+  `first_sample_device_time` values are therefore on one UTC time
+  base, to within one sample clock.
+- A unit with `time_source = none` (for example a bench config with
+  no sync hardware) sets its device time from the host clock. Its
+  offset to the PPS units is then known to host-clock accuracy
+  (milliseconds) only, and the metadata marks it "not PPS-aligned".
 - The host clock only needs to be within ±0.5 s of UTC for the
   absolute labels to be right. Relative alignment among PPS units does
   not depend on the host clock at all.

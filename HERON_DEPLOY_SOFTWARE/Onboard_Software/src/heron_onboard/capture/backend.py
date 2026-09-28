@@ -61,11 +61,12 @@ class RecorderBackend(CaptureBackend):
         """Launch every recorder with the same sync epoch and start time.
 
         Units with a PPS time source align their device clocks at
-        ``sync_epoch`` (the same PPS edge). Units without PPS (the
-        B200minis, D-020) set their clock from the host time. All units
+        ``sync_epoch`` (the same PPS edge). Units without PPS
+        (``time_source = none``, for example on the bench) set their
+        clock from the host time. All units
         start streaming at the same ``start_time``, so the non-PPS
         units are within host-clock accuracy (milliseconds) of the PPS
-        units; their exact offset is found after the flight (Q-013).
+        units; their exact offset must be found after the flight.
         """
         sync_epoch = float(math.ceil(now + self._capture.sync_lead_s))
         start_time = sync_epoch + self._capture.start_lead_s

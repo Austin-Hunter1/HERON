@@ -60,7 +60,7 @@ def build_metadata(
                 "at the PPS edge of that second. A recorder without PPS sets its clock from the "
                 "host time (milliseconds). All recorders start streaming at stream_start_unix. "
                 "Segment sidecar files carry the device time of their first sample. Units "
-                "without PPS need a post-flight offset estimate (Q-013)."
+                "without PPS need a post-flight offset estimate."
             ),
         },
         "format": {
