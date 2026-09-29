@@ -58,7 +58,8 @@ python app.py
 
 Switching Route / Area / Water clears the current mission.
 
-## Aircraft connection and control
+## Aircraft connection and control - WIP (9/29/26)
+THIS IS A BIG WIP STILL, UNFINISHED -jack
 
 The **Aircraft** panel extends the existing planner with telemetry, mission upload
 and download verification, guarded launch, and Return home. Existing file exports
