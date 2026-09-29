@@ -37,7 +37,7 @@ Q-001. `heron-onboard check-config` prints this sum for a config.
 | B200 size and mass | The B200 board (about 97 × 155 mm) is larger and heavier than the B200mini it replaces | Mounting, payload mass, and USB power draw: **TBD — check on the bench** |
 | UHD support | UHD 4.x (apt on Ubuntu 22.04/24.04) runs all four | Q-011 closed |
 | Sample format | sc8 (8-bit complex) files (D-009); sc16 on the USB wire by default | `capture.cpu_format`, `capture.wire_format` |
-| Sync | HERON clock board (D-025): SiT5155 Super-TCXO 10 MHz and buffered GNSS PPS to all four units (D-014, D-024, D-025) | Design files: `Hardware/clock_board/`. 4× 10 MHz SMA (≈ +7 dBm sine) and 4× PPS SMA (3.3 V). PPS source (GNSS receiver model): **TBD**. 5 V in on JST-GH. |
+| Sync | HERON clock board (D-025, D-026): SiT5155 Super-TCXO 10 MHz (fixed frequency, factory-set, no I2C) and buffered GNSS PPS to all four units (D-014, D-024, D-025) | Design files: `Hardware/clock_board/`. 4× 10 MHz SMA (≈ +7 dBm sine) and 4× PPS SMA (3.3 V). PPS source (GNSS receiver model): **TBD**. 5 V in on JST-GH. |
 | Time alignment | All four units: PPS-aligned to the same UTC second (D-024) | See `DATA_FORMATS.md` |
 | Legacy settings | 22 Msps, sc8, L5 1176.45 MHz, gain 45, BW 20.322 MHz | `SURGE/NUC_scripts/SDR_backup_files/b210_split_settings-balloon.xml` |
 

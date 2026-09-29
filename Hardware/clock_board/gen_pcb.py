@@ -287,7 +287,9 @@ def build():
     place("R4", 43.675, 36.6, 90, False) # 1G pull-up
     place("C10", 48.4, 27.4, 0, False)
     place("C11", 48.6, 29.6, 0, False)
-    place("C8", 34.0, 28.6, 0, False)
+    # C8 (100 nF) sits directly above U3 pin 9 (VDD). The SiT5155 datasheet
+    # (Layout Guidelines, p.35) wants this capacitor 1-2 mm from the VDD pin.
+    place("C8", 34.5, 29.2, 0, False)
     place("C9", 31.0, 31.5, 270, False)
     place("R2", 32.5, 35.2, 0, False)
     place("C29", 51.0, 40.05, 0, False)

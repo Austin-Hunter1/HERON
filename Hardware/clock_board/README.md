@@ -4,6 +4,8 @@ This board gives a common 10 MHz reference and a common PPS to the four
 SDRs (2× Ettus B210, 2× Ettus B200). See D-025 in `docs/DECISIONS.md`.
 
 - 10 MHz source: SiTime SiT5155 Super-TCXO, ±0.5 ppm (free-running, not GPS-locked).
+  It is the fixed-frequency TCXO version (SiT5155AI-FK-33E0-10.000000). SiTime sets it at the
+  factory. It has no I2C, and the board has no I2C connection (D-026).
 - PPS source: an external GNSS receiver. The board buffers its PPS to four outputs.
 - 4-layer, 84 × 56 mm, 1.6 mm, four M3 holes. KiCad 7 files (open in KiCad 7, 8 or 9).
 
@@ -97,11 +99,21 @@ overwrites the schematic and the PCB.
 
 | Check | Result |
 | --- | --- |
-| KiCad DRC (KiCad 7.0.11) | 0 errors, 0 unconnected pads. 24 warnings: silkscreen lines of stock footprints over pads (the fab clips them). |
+| KiCad DRC (KiCad 7.0.11) | 0 errors, 0 unconnected pads. 24 warnings: silkscreen lines of stock footprints over pads (the fab clips them). Re-run 2026-09-28 after the U3 layout change: same result. |
+| U3 layout vs. SiT5155 datasheet (p.35) | 2026-09-28: C8 (100 nF) pad centre is 1.7 mm from pin 9 (VDD), pad gap 0.8 mm. C9 (10 µF) is within 6 mm. Six GND vias at U3: one under the body, one at C8, four at the GND/NC pads (pins 2, 3, 4, 7). No trace of another net runs under U3. |
 | Netlist connectivity (`check_net.py`) | All nets have ≥ 2 nodes, except the intentional NC pins (U1.4, U2.4, U5.1). |
 | ERC | Not run: the KiCad 7 CLI has no ERC. **Run ERC in KiCad before you order.** |
 | IC pinouts | Checked against datasheets: SiT5155 (Table 13 + p.34), LMK1C1104 (PW), TPS7A2033 (DBV), SN74LVC1G17 (DBV), SN74LVC125A (PW), TPD1E05U06 (DPY). |
 | Hardware test | Not done. |
+
+## Layout rules for U3 (SiT5155)
+
+Keep these when you move parts near U3 (datasheet Rev 1.05, p.9 note 9 and p.35):
+
+- C8 (100 nF) stays within 1–2 mm of pin 9 (VDD). The supply goes into C8 first, then into pin 9.
+- C9 (10 µF) stays within 50 mm (2 in) of U3.
+- NC pins connect to GND. Keep several GND vias at the GND/NC pads. Do not put vias inside the pads.
+- Do not route traces of other nets under U3.
 
 ## Open items
 

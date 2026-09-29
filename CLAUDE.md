@@ -61,6 +61,11 @@ You are a test engineer on this project. Obey these rules at all times:
   tracking, navigation), with HERON edits its README lists. It reads a
   flight directory as one "experiment" through `metadata.yml` (D-022).
   `gnss_processing/submodules/gnss-tools` is a git submodule.
+- `Hardware/` — HERON hardware design files.
+  - `clock_board/` — The 10 MHz + PPS distribution board (D-025,
+    D-026). Python generators make the KiCad 7 files; see its
+    `README.md` before you edit the board.
+  - `datasheets/` — Datasheets for parts on HERON boards.
 - `HERON_WRITING/` — Reports and papers (git submodule).
 - `gps-tracking-example/` — Upstream reference GNSS tracking code (git
   submodule, read only; edit `gnss_processing/` instead).
@@ -76,16 +81,23 @@ You are a test engineer on this project. Obey these rules at all times:
 - `docs/RECOMMENDATIONS.md` — OS, language, packaging, and container
   choices, with reasons.
 
-## Technical baseline (updated 2026-09-24)
+## Technical baseline (updated 2026-09-28)
 
 - The onboard software records raw IQ samples only. It does not process
   data in flight.
 - SDRs: two Ettus B210 and two Ettus B200, all USB 3.0, all on UHD
   4.x (D-020, D-024). The software records all four. Sample format is
   sc8 (8-bit complex).
-- Sync: a GPSDO gives 10 MHz and PPS to all four units (D-024). Every
-  recorder sets its device time at the same PPS edge. Clock and time
-  sources are per SDR in config.
+- Sync: the HERON clock board (`Hardware/clock_board/`, D-025) gives
+  10 MHz and PPS to all four units (`clock_source = external`,
+  `time_source = external`). The 10 MHz comes from a SiTime SiT5155
+  Super-TCXO (SiT5155AI-FK-33E0-10.000000, ±0.5 ppm). It is
+  free-running and not GPS-disciplined, so the four SDRs are coherent
+  with each other but not with GPS time. The TCXO is factory-set and
+  has no I2C control (D-026). The board buffers the PPS from an
+  external GNSS receiver (model TBD). Every recorder sets its device
+  time at the same PPS edge. Clock and time sources are per SDR in
+  config.
 - The payload does not use the flight controller's state (D-012). It
   does use the flight-controller telemetry link as its transport
   (D-016): the NUC is a MAVLink component on a Cube serial port and

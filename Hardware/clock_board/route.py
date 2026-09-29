@@ -66,19 +66,30 @@ def run(g):
     T(clk, [(47.0, 37.8), (47.0, 26.75), (44.325, 26.75)], WP, IN2)
 
     # ============================================================ TCXO U3
+    # The supply comes from the In2 via into C8 first and then into pin 9,
+    # so C8 is between the supply and the TCXO. C8 pad 1 is directly above
+    # pin 9 (pad centres about 1.7 mm apart, gap between pads about 0.8 mm).
     V(osc, (32.5, 28.6))
-    T(osc, [pad("U3", 9), (33.52, 29.87), pad("C8", 1), (32.5, 28.6)], 0.4)
+    T(osc, [(32.5, 28.6), (33.1, 29.2), pad("C8", 1)], 0.4)
+    T(osc, [pad("C8", 1), (34.02, 30.4), pad("U3", 9)], 0.4)
     T(osc, [(32.5, 28.6), (31.0, 30.1), pad("C9", 1)], 0.4)
-    gv("C8", 2, 0.8, 0)
+    gnd = "GND"
+    # C8 ground: short loop to U3 pin 8 (NC, tied to GND) and to its own via.
+    T(gnd, [pad("C8", 2), (35.9, 29.2), pad("U3", 8)], 0.4)
+    V(gnd, (35.9, 28.45)); T(gnd, [(35.9, 29.2), (35.9, 28.45)], 0.4)
     gv("C9", 2, 0, 1.05)
     # GND pins: tie all NC/GND pads together, vias under and beside the part
-    gnd = "GND"
     T(gnd, [pad("U3", 8), pad("U3", 2)], 0.3)
     T(gnd, [pad("U3", 7), pad("U3", 3)], 0.3)
     T(gnd, [pad("U3", 10), pad("U3", 5)], 0.3)
     T(gnd, [pad("U3", 5), pad("U3", 4)], 0.3)
     V(gnd, (36.5, 32.0))
     V(gnd, (39.7, 33.4)); T(gnd, [pad("U3", 4), (39.7, 33.4)], 0.4)
+    # More GND vias at the GND/NC pads (datasheet Layout Guidelines, p.35:
+    # "multiple vias under the GND pin"). The vias are just outside the body
+    # edge, not in the pads, so solder does not wick into them during reflow.
+    for p, dy in (("2", 1.425), ("3", 1.425), ("7", -1.425)):
+        gv("U3", p, 0, dy)
     # OE pull-up, test point
     T(N("OSC_OE"), [pad("U3", 1), (34.475, 34.2), (33.475, 35.2), pad("R2", 2)], WS)
     T(N("OSC_OE"), [pad("R2", 2), (34.2, 36.4), pad("TP5", 1)], WS)
