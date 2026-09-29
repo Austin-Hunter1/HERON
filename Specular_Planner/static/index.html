@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css?v=aim39" />
+  <link rel="stylesheet" href="/static/flight.css?v=2" />
 </head>
 <body class="click-wps">
   <main id="map" aria-label="Interactive mission planning map"></main>
@@ -41,7 +42,7 @@
         <div class="field-grid">
           <label class="field"><span>Speed</span><div class="input-unit"><input type="number" id="speed" min="2" max="25" step="0.5" value="8" /><em>m/s</em></div></label>
           <label class="field"><span>Hover</span><div class="input-unit"><input type="number" id="loiter" min="0" max="1200" step="1" value="30" /><em>sec/WP</em></div></label>
-          <label class="field"><span>Altitude</span><div class="input-unit"><input type="number" id="h_agl" min="30" max="122" value="120" /><em>m AGL</em></div></label>
+          <label class="field"><span>Above Home</span><div class="input-unit"><input type="number" id="h_agl" min="2" max="122" value="60" /><em>m</em></div></label>
           <label class="field" id="windowField"><span>Search window</span><div class="input-unit"><input type="number" id="duration" min="10" max="180" value="40" /><em>min</em></div></label>
           <label class="field"><span>Elevation mask</span><div class="input-unit"><input type="number" id="mask" min="10" max="40" value="20" /><em>degrees</em></div></label>
         </div>
@@ -138,7 +139,98 @@
       </table>
     </div>
     <div id="exports" class="hidden"></div>
+    <p class="flight-alt-note">Flight export uses altitude above Home. Geometry previews assume level terrain; they do not provide terrain clearance.</p>
   </aside>
+
+  <button id="flightPanelToggle" type="button" aria-expanded="true" aria-controls="flightPanel">Hide aircraft panel</button>
+  <button id="flightQuickRtl" type="button" class="hidden" disabled>Return home</button>
+  <nav id="flightStatusBar" aria-label="Live aircraft status" class="hidden">
+    <div class="flight-brand"><span class="brand-symbol">H</span><span>HERON<small>FLIGHT DECK</small></span></div>
+    <button id="flightReadiness" type="button" title="View launch checks"><i></i><span id="liveReady">Waiting for aircraft</span></button>
+    <div class="status-cell"><span data-icon="mode"></span><div><small>FLIGHT MODE</small><strong id="statusMode">—</strong></div></div>
+    <div class="status-cell"><span data-icon="satellite"></span><div><small>GPS</small><strong id="statusGps">—</strong></div></div>
+    <div class="status-cell"><span data-icon="battery"></span><div><small>BATTERY</small><strong id="statusBattery">—</strong></div></div>
+    <div class="status-cell"><span data-icon="link"></span><div><small>HEARTBEAT</small><strong id="statusLink">—</strong></div></div>
+    <button id="flightMessagesToggle" type="button" aria-expanded="false" aria-controls="flightMessages"><span data-icon="message"></span>Messages <span id="flightMessageCount">0</span></button>
+  </nav>
+  <aside id="flightMessages" class="hidden" aria-label="Aircraft message center">
+    <header><div><small>AIRCRAFT ACTIVITY</small><h2>Messages</h2></div><button id="flightMessagesClose" type="button" aria-label="Close messages"><span data-icon="close"></span></button></header>
+    <label>Filter messages<input id="flightMessageFilter" type="search" placeholder="Search aircraft messages…" /></label>
+    <p id="flightMessagesEmpty">No aircraft messages yet.</p><ol id="flightMessageLog"></ol>
+  </aside>
+  <section id="flightPanel" aria-label="Aircraft connection and control">
+    <header class="flight-header">
+      <div><span class="hud-eyebrow">Aircraft</span><h2 id="flightTitle">Connect & fly</h2></div>
+      <span id="flightBadge" class="flight-badge">Disconnected</span>
+    </header>
+    <div id="flightInstruments" class="hidden">
+      <div class="instrument-caption"><span>ATTITUDE / HEADING</span><span id="instrumentSource">WAITING</span></div>
+      <div id="attitudeDisplay" class="attitude-display unavailable" role="img" aria-label="Attitude unavailable">
+        <div class="attitude-world" id="attitudeWorld"><div class="horizon-line"></div><div class="pitch-ladder"><span>20 ━━━ 20</span><span>10 ━━ 10</span><span class="ladder-zero"></span><span>10 ━━ 10</span><span>20 ━━━ 20</span></div></div>
+        <svg class="bank-scale" viewBox="0 0 320 190" aria-hidden="true"><path d="M85 40 A100 100 0 0 1 235 40 M93 34 l7 8 M117 20 l4 9 M140 14 l2 10 M180 14 l-2 10 M203 20 l-4 9 M227 34 l-7 8"/><path class="bank-index" d="M155 12 L160 22 L165 12 Z"/></svg>
+        <svg class="aircraft-reticle" viewBox="0 0 320 190" aria-hidden="true"><path d="M103 96 h34 l9 9 M217 96 h-34 l-9 9 M155 96 h10"/><circle cx="160" cy="96" r="3"/></svg>
+        <span class="attitude-unavailable">ATTITUDE UNAVAILABLE</span>
+        <div class="attitude-footer"><span>ROLL / PITCH</span><strong id="liveAttitude">—</strong></div>
+      </div>
+      <div class="heading-instrument"><div id="headingTape" aria-hidden="true"></div><span class="heading-pointer"></span><strong id="liveHeading">—</strong><small>HEADING</small></div>
+    </div>
+    <details id="flightConnection" open>
+      <summary>Connection settings</summary>
+      <div class="flight-settings">
+        <label>Connection<select id="flightTransport">
+          <option value="demo">Simulated aircraft</option>
+          <option value="serial">USB / ELRS serial</option>
+          <option value="udp">ELRS Wi-Fi / UDP</option>
+          <option value="herelink_hotspot">HereLink hotspot</option>
+          <option value="herelink_client">HereLink USB / shared Wi-Fi</option>
+          <option value="tcp">ArduPilot SITL / TCP</option>
+        </select></label>
+        <div id="flightSerial" class="hidden">
+          <label>Serial port<select id="flightDevice"></select></label>
+          <div class="flight-row"><label>Baud<select id="flightBaud"><option>115200</option><option>57600</option><option>230400</option><option>460800</option><option>921600</option></select></label><button id="flightPorts" type="button">Refresh ports</button></div>
+          <small>Flight controller USB: usually 115200. ELRS module USB: 460800.</small>
+        </div>
+        <div id="flightNetwork" class="flight-row hidden">
+          <label><span id="flightHostLabel">Listen address</span><input id="flightHost" value="0.0.0.0" /></label>
+          <label>Port<input id="flightPort" type="number" value="14550" min="1024" max="65535" /></label>
+        </div>
+        <label id="flightSysRow" class="hidden">Aircraft system ID<input id="flightSystem" type="number" min="1" max="254" value="1" /></label>
+        <p id="flightTransportNote">Demo only. No hardware connection; flight and dwell times are accelerated.</p>
+        <div class="flight-row"><button id="flightConnect" type="button">Connect</button><button id="flightDisconnect" type="button" disabled>Disconnect</button></div>
+      </div>
+    </details>
+    <div id="flightMetrics" class="flight-metrics">
+      <div><span>Mode</span><strong id="liveMode">—</strong></div>
+      <div><span>Battery</span><strong id="liveBattery">—</strong></div>
+      <div class="primary-metric"><span>ALTITUDE · ABOVE HOME</span><strong id="liveAlt">—</strong></div>
+      <div><span>GPS</span><strong id="liveGps">—</strong></div>
+      <div class="primary-metric"><span>GROUND SPEED</span><strong id="liveSpeed">—</strong></div>
+      <div><span>Mission item</span><strong id="liveMission">—</strong></div>
+      <div><span>Vertical speed</span><strong id="liveClimb">—</strong></div>
+      <div><span>Distance to Home</span><strong id="liveHomeDistance">—</strong></div>
+      <div><span>State</span><strong id="liveLanded">—</strong></div>
+    </div>
+    <p id="livePosition" class="flight-position">No aircraft position</p>
+    <div class="flight-row map-tools"><button id="flightCenter" type="button" disabled><span data-icon="locate"></span>Locate</button><button id="flightFollow" type="button" aria-pressed="false" disabled><span data-icon="follow"></span>Follow</button><button id="flightTrack" type="button" aria-pressed="true"><span data-icon="route"></span>Trail</button></div>
+    <button id="flightUseHome" type="button" disabled>Use aircraft Home as pad</button>
+    <details id="flightPreflight"><summary id="flightCheckSummary">Launch checks</summary><ul id="flightChecks"></ul><button id="flightRefresh" type="button" disabled>Refresh aircraft checks</button></details>
+    <p id="flightPlanNote">Build a mission to upload it.</p>
+    <div id="flightMessage" role="status" aria-live="polite">Connect an aircraft or try the demo.</div>
+    <div class="flight-actions">
+      <button id="flightUpload" type="button" disabled><span data-icon="upload"></span>Upload & verify</button>
+      <button id="flightLaunch" type="button" disabled><span data-icon="takeoff"></span>Launch mission</button>
+    </div>
+    <button id="flightRtl" type="button" disabled><span data-icon="home"></span>Return home / interrupt launch</button>
+    <small id="flightLinkNote">Return home needs a working link. Onboard failsafes and your RC override remain responsible if the link is lost.</small>
+    <details><summary>Aircraft messages</summary><ol id="flightEvents"></ol></details>
+  </section>
+
+  <dialog id="flightConfirm" aria-labelledby="flightConfirmTitle">
+    <h2 id="flightConfirmTitle">Launch this mission?</h2>
+    <p id="flightConfirmText"></p>
+    <p>The aircraft will arm, take off, fly the uploaded route, and return home. Confirm the launch area is clear and the RC override is available.</p>
+    <div class="flight-row"><button id="flightCancelLaunch" type="button">Cancel</button><button id="flightConfirmLaunch" type="button">Confirm launch</button></div>
+  </dialog>
 
   <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Hide mission planner" aria-expanded="true">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
@@ -196,5 +288,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js?v=aim39"></script>
+  <script src="/static/flight.js?v=2"></script>
 </body>
 </html>

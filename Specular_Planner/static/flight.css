@@ -1,0 +1,148 @@
+#flightPanel { position: absolute; z-index: 510; top: 58px; right: 12px; width: 340px; max-height: calc(100vh - 70px); overflow: auto; padding: 20px; background: var(--paper); border: 1px solid white; border-radius: 18px; box-shadow: var(--shadow); }
+#flightPanelToggle, #flightQuickRtl { position: absolute; z-index: 620; top: 12px; right: 12px; box-shadow: var(--shadow); }
+#flightQuickRtl { right: 178px; background: #fff3ec; border-color: #d8663a; color: #a74325; }
+#hud { top: 58px; }
+body.flight-panel-open #hud { display: none; }
+.flight-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.flight-header h2 { margin: 2px 0; font-size: 21px; }
+.flight-badge { padding: 5px 8px; border-radius: 20px; background: #e8ece9; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.flight-badge.connected { background: var(--teal-soft); color: var(--teal-dark); }
+.flight-badge.demo { background: #fff0c8; color: #705014; }
+.flight-badge.stale { background: #ffe4dd; color: #963929; }
+#flightPanel details { border-top: 1px solid var(--line); padding: 10px 0; }
+#flightPanel summary { cursor: pointer; font-weight: 600; font-size: 12px; }
+.flight-settings { display: grid; gap: 10px; padding-top: 12px; }
+#flightPanel label { display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
+#flightPanel select, #flightPanel input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--ink); background: white; font: inherit; font-size: 13px; }
+.flight-row { display: flex; gap: 8px; align-items: end; }
+.flight-row > * { flex: 1; min-width: 0; }
+#flightPanel button { font-size: 12px; }
+#flightPanel small, .flight-alt-note { color: var(--muted); font-size: 11px; }
+#flightTransportNote, #flightPlanNote { font-size: 12px; color: var(--muted); }
+.flight-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 8px; padding: 14px 0 8px; border-top: 1px solid var(--line); }
+.flight-metrics span { display: block; color: var(--muted); font-size: 10px; }
+.flight-metrics strong { font-family: var(--mono); font-size: 14px; }
+.flight-position { font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+#flightPreflight { margin-top: 12px; }
+#flightChecks { padding: 0; list-style: none; }
+#flightChecks li { font-size: 11px; margin: 7px 0; padding-left: 18px; position: relative; }
+#flightChecks li::before { content: '○'; position: absolute; left: 0; color: var(--danger); }
+#flightChecks li.pass::before { content: '✓'; color: var(--teal); }
+#flightMessage { border-radius: 9px; padding: 10px; font-size: 12px; background: var(--surface-soft); overflow-wrap: anywhere; }
+#flightMessage.error { background: #fff0ec; color: #993a2e; }
+.flight-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+#flightLaunch:not(:disabled), #flightConfirmLaunch:not(:disabled) { background: var(--teal); color: white; border-color: var(--teal); }
+#flightRtl { width: 100%; margin: 8px 0; border-color: #d8663a; color: #a74325; background: #fff3ec; font-weight: 650; }
+#flightRtl:disabled { opacity: 0.5; }
+#flightLinkNote { display: block; margin: 4px 0 12px; }
+#flightEvents { padding-left: 20px; max-height: 160px; overflow: auto; font: 11px/1.6 var(--mono); }
+#flightConfirm { max-width: 440px; width: calc(100vw - 32px); padding: 24px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); }
+#flightConfirm::backdrop { background: #12262788; }
+#flightConfirm h2 { margin-top: 0; }
+#flightConfirm p { font-size: 14px; }
+.aircraft-marker { background: #fff; border: 3px solid #087b71; border-radius: 50%; width: 22px; height: 22px; box-shadow: 0 1px 10px #0006; }
+.aircraft-marker.demo { border-color: #c18c14; }
+.aircraft-marker.stale { border-color: #aa4335; opacity: 0.5; }
+body.aircraft-connected #hud { display: none; }
+body.flight-panel-open #sliderWrap { left: 436px; right: 364px; width: auto; min-width: 0; transform: none; }
+body.sidebar-collapsed.flight-panel-open #sliderWrap { left: 40px; }
+@media (max-width: 1050px) { #flightPanel { width: 300px; } body.flight-panel-open #sliderWrap { right: 320px; } }
+@media (max-width: 820px) { #flightPanel { width: min(340px, calc(100vw - 24px)); } body.flight-panel-open #sliderWrap { display: none; } }
+
+/* Connected flight deck. The planning workspace keeps its existing design. */
+html:has(body.aircraft-connected), body.aircraft-connected { overflow: clip; }
+body.aircraft-connected { position: fixed; inset: 0; }
+[data-icon] { display: inline-flex; flex: 0 0 auto; width: 19px; height: 19px; vertical-align: middle; }
+[data-icon] svg { width: 100%; height: 100%; }
+#flightStatusBar { position: absolute; z-index: 610; inset: 12px 12px auto 12px; min-height: 62px; display: flex; align-items: center; gap: 22px; padding: 10px 18px; border: 1px solid #ffffff22; border-radius: 14px; background: #101b24f5; color: #edf5f8; box-shadow: 0 8px 32px #0004; backdrop-filter: blur(16px); }
+#flightStatusBar.hidden, #flightInstruments.hidden, #flightMessages.hidden { display: none; }
+.flight-brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 750; letter-spacing: 2px; }
+.brand-symbol { display: grid; place-items: center; width: 32px; height: 34px; border: 1px solid #6be1c0; color: #6be1c0; border-radius: 9px; font-size: 22px; }
+.flight-brand small { display: block; margin-top: 3px; font-size: 8px; font-weight: 500; letter-spacing: 1.8px; color: #93a8b5; }
+#flightStatusBar button { color: #dfeaf0; border: 1px solid #ffffff1c; background: #ffffff06; min-height: 38px; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 12px; }
+#flightStatusBar button:hover { background: #ffffff14; }
+#flightReadiness i { width: 7px; height: 7px; border-radius: 50%; background: #ffc872; box-shadow: 0 0 12px #ffc87244; }
+#flightReadiness[data-state="ready"] i { background: #65e4bd; }
+#flightReadiness[data-state="lost"] i { background: #ff857a; }
+#flightReadiness[data-state="armed"] i { background: #ffbd6c; }
+.status-cell { display: flex; align-items: center; gap: 9px; }
+.status-cell > [data-icon] { color: #92aab8; width: 22px; height: 22px; }
+.status-cell small { display: block; color: #8fa5b3; font-size: 8px; letter-spacing: 1px; margin-bottom: 4px; }
+.status-cell strong { font: 600 13px var(--mono); white-space: nowrap; }
+#flightMessagesToggle { margin-left: auto; }
+#flightMessageCount { padding: 2px 6px; background: #263d4b; border-radius: 5px; font: 11px var(--mono); }
+.low-battery { color: #ff907d; }
+body.aircraft-connected #flightPanel { top: 128px; right: 12px; width: 344px; max-height: calc(100dvh - 140px); padding: 17px; color: #e6eef3; background: #14212df5; border: 1px solid #ffffff20; border-radius: 15px; box-shadow: 0 12px 40px #0005; scrollbar-width: thin; scrollbar-color: #496071 transparent; backdrop-filter: blur(16px); }
+body.aircraft-connected #flightPanelToggle, body.aircraft-connected #flightQuickRtl { top: 86px; background: #14212df5; color: #dceaf1; border: 1px solid #ffffff28; font-size: 11px; }
+body.aircraft-connected #flightQuickRtl { color: #ffbb8f; }
+body.aircraft-connected .flight-header { margin-bottom: 15px; }
+body.aircraft-connected .flight-header h2 { font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
+body.aircraft-connected .flight-header .hud-eyebrow { color: #8ea7b5; font-size: 9px; }
+body.aircraft-connected .flight-badge { background: #294038; color: #85efca; font-size: 9px; letter-spacing: .6px; }
+body.aircraft-connected .flight-badge.demo { background: #493d25; color: #f4d18b; }
+body.aircraft-connected .flight-badge.stale { background: #5a2e30; color: #ffaaa0; }
+.instrument-caption { display: flex; justify-content: space-between; font: 8px var(--mono); letter-spacing: 1px; color: #8fa9b8; margin-bottom: 9px; }
+#instrumentSource { color: #a7c9d8; letter-spacing: .3px; }
+.attitude-display { height: 178px; overflow: hidden; position: relative; border-radius: 10px 10px 0 0; border: 1px solid #ffffff25; background: #253540; isolation: isolate; }
+.attitude-world { position: absolute; width: 800px; height: 800px; left: calc(50% - 400px); top: calc(50% - 400px); background: linear-gradient(#226b97 0%, #438caf 49.85%, #c4e7ed 49.9%, #c4e7ed 50.1%, #977448 50.15%, #453d31 100%); transition: transform .35s linear; }
+.horizon-line { position: absolute; top: 50%; width: 100%; border-top: 2px solid #f1f5ec; }
+.pitch-ladder { position: absolute; inset: calc(50% - 50px) 0 auto; display: grid; gap: 6px; justify-content: center; text-align: center; color: #f4fbff; font: 10px/14px var(--mono); text-shadow: 0 1px 3px #000; }
+.pitch-ladder span { height: 14px; }
+.pitch-ladder .ladder-zero { height: 14px; }
+.bank-scale, .aircraft-reticle { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: #eff7fa; stroke-width: 1.5; }
+.bank-scale .bank-index { fill: #f7f5ec; }
+.aircraft-reticle { stroke: #ffe49a; stroke-width: 3; filter: drop-shadow(0 1px 1px #000); }
+.attitude-footer { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #101b2466; font: 10px var(--mono); }
+.attitude-footer span { font-size: 8px; letter-spacing: 1px; color: #d0dce2; }
+.attitude-unavailable { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; background: #17232ee8; color: #b1c0ca; font: 10px var(--mono); letter-spacing: 1px; }
+.unavailable .attitude-unavailable { display: flex; }
+.unavailable .bank-scale, .unavailable .aircraft-reticle { visibility: hidden; }
+.heading-instrument { height: 63px; overflow: hidden; position: relative; background: #0d1720; border: 1px solid #ffffff1c; border-top: 0; border-radius: 0 0 10px 10px; }
+#headingTape { position: absolute; left: 50%; top: 9px; transition: transform .35s linear; }
+#headingTape span { position: absolute; transform: translateX(-50%); font: 9px var(--mono); color: #a3b8c6; padding-top: 7px; }
+#headingTape span::before { content: ''; position: absolute; top: 0; left: 50%; height: 4px; border-left: 1px solid #8199a9; }
+.heading-pointer { position: absolute; top: 0; left: calc(50% - 4px); border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid #8ae5d0; }
+.heading-instrument > strong { position: absolute; top: 29px; left: 50%; transform: translateX(-50%); color: #e5fff7; font: 600 16px var(--mono); }
+.heading-instrument > small { position: absolute; bottom: 8px; right: 10px; color: #7d95a5; font-size: 8px; letter-spacing: 1px; }
+body.aircraft-connected .flight-metrics { border-top: 0; grid-template-columns: repeat(6, 1fr); gap: 0; padding: 9px 0; }
+body.aircraft-connected .flight-metrics > div { grid-column: span 2; padding: 9px 5px; border-bottom: 1px solid #ffffff0d; }
+body.aircraft-connected .flight-metrics .primary-metric { grid-column: span 3; order: -1; padding: 9px 5px; }
+body.aircraft-connected .flight-metrics .primary-metric strong { font-size: 27px; letter-spacing: -1px; font-weight: 500; }
+body.aircraft-connected .flight-metrics span { color: #93a9b7; font-size: 9px; margin-bottom: 5px; }
+body.aircraft-connected .flight-metrics strong { font-size: 12px; font-weight: 500; }
+body.aircraft-connected #flightPanel details { border-color: #ffffff18; padding: 12px 0; }
+body.aircraft-connected #flightConnection { margin-top: 12px; }
+body.aircraft-connected #flightPanel label, body.aircraft-connected #flightPanel small, body.aircraft-connected #flightPlanNote, body.aircraft-connected #flightTransportNote, body.aircraft-connected .flight-position { color: #9cafbb; }
+body.aircraft-connected #flightPanel input, body.aircraft-connected #flightPanel select { color: #dfeaf0; background: #0f1b25; border-color: #ffffff26; }
+body.aircraft-connected #flightPanel button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 36px; background: #213442; color: #dce9f0; border: 1px solid #ffffff20; border-radius: 8px; font-size: 11px; }
+body.aircraft-connected #flightPanel button:hover:not(:disabled) { background: #2d4555; border-color: #82d7c2; }
+body.aircraft-connected #flightPanel button:disabled { opacity: .4; }
+body.aircraft-connected #flightPanel button[aria-pressed="true"] { color: #8befd1; background: #21473f; border-color: #4c9c87; }
+body.aircraft-connected #flightUseHome { width: 100%; margin: 8px 0 0; }
+body.aircraft-connected #flightMessage { background: #0d1b26; color: #b7d1df; border-left: 2px solid #5d9aac; font-size: 11px; line-height: 1.5; }
+body.aircraft-connected #flightMessage.error { color: #ffb6a8; border-color: #f18b74; background: #3b2729; }
+body.aircraft-connected #flightLaunch:not(:disabled) { background: #76e2bd; color: #102c24; border-color: #76e2bd; font-weight: 700; }
+body.aircraft-connected #flightRtl { color: #ffc09b; background: #3c302b; border-color: #89604a; }
+body.aircraft-connected #flightChecks li { color: #b4c5cf; line-height: 1.45; }
+body.aircraft-connected #flightChecks li::before { color: #dcb372; }
+body.aircraft-connected #flightChecks li.pass::before { color: #77dfbc; }
+body.aircraft-connected #flightLinkNote { font-size: 10px; line-height: 1.5; }
+body.aircraft-connected #flightEvents { color: #a8c0cf; }
+#flightMessages { position: absolute; z-index: 650; top: 86px; right: 370px; width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 110px); overflow: auto; padding: 20px; background: #14212dfc; color: #e4eef4; border: 1px solid #ffffff25; border-radius: 14px; box-shadow: 0 16px 48px #0006; }
+#flightMessages header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+#flightMessages header small { color: #94aebd; font-size: 9px; letter-spacing: 1.5px; }
+#flightMessages h2 { margin: 4px 0 0; font-size: 23px; font-weight: 550; }
+#flightMessagesClose { background: #ffffff08; color: #b3c7d3; border-color: #ffffff22; padding: 8px; }
+#flightMessages label { display: grid; gap: 7px; color: #9db2bf; font-size: 10px; }
+#flightMessageFilter { width: 100%; padding: 10px 12px; background: #0a1721; border: 1px solid #ffffff20; border-radius: 8px; color: #e3eef4; font: 12px inherit; }
+#flightMessageLog { padding: 0; list-style: none; margin: 14px 0 0; }
+#flightMessageLog li { display: grid; gap: 6px; border-top: 1px solid #ffffff12; padding: 13px 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+#flightMessageLog time { font: 9px var(--mono); color: #7e9aa9; }
+#flightMessagesEmpty { color: #95acba; font-size: 12px; }
+body.aircraft-connected .leaflet-top { top: 82px; }
+body.aircraft-connected #sidebar { top: 86px; max-height: calc(100dvh - 98px); }
+@media (max-width: 1100px) { #flightStatusBar { gap: 13px; padding: 10px 12px; } .flight-brand { display: none; } #flightReadiness { max-width: 155px; } }
+@media (max-width: 760px) { #flightStatusBar { flex-wrap: wrap; gap: 10px 18px; } #flightStatusBar .status-cell { gap: 6px; } #flightStatusBar .status-cell > [data-icon] { display: none; } #flightStatusBar .status-cell small { font-size: 7px; } #flightStatusBar .status-cell strong { font-size: 11px; } #flightMessagesToggle { margin-left: 0; } body.aircraft-connected #flightPanelToggle, body.aircraft-connected #flightQuickRtl { top: 131px; } body.aircraft-connected #flightPanel { top: 174px; width: min(344px, calc(100vw - 24px)); max-height: calc(100dvh - 186px); } #flightMessages { right: 12px; top: 175px; max-height: calc(100dvh - 190px); } }
+@media (prefers-reduced-motion: reduce) { .attitude-world, #headingTape { transition: none; } }
+@media (min-width: 601px) and (max-width: 760px) { body.aircraft-connected #flightPanelToggle, body.aircraft-connected #flightQuickRtl { top: 86px; } body.aircraft-connected #flightPanel { top: 128px; max-height: calc(100dvh - 140px); } }
+@media (max-width: 820px) { body.aircraft-connected #sidebar { top: auto; max-height: 62vh; } }

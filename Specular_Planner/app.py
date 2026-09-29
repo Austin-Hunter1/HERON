@@ -12,6 +12,8 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from engine.export import qgc_wpl, run_card, validate_wpl
+from engine.flight import FlightService
+from engine.flight_api import flight_api
 from engine.planner import (
     DEFAULT_H_AGL,
     DEFAULT_HOVER,
@@ -43,6 +45,8 @@ STATIC = ROOT / "static"
 OUTPUT = ROOT / "output"
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
+flight = FlightService()
+app.register_blueprint(flight_api(flight))
 
 _SATS = None
 _LAKE = None
@@ -197,6 +201,7 @@ def api_plan():
     card_name = f"HERON_{stamp}_runcard.txt"
     wpl = qgc_wpl(result)
     check = validate_wpl(wpl, result)
+    result["flight_plan_id"] = flight.register_plan(wpl, result["meta"])
     (OUTPUT / wp_name).write_text(wpl)
     (OUTPUT / card_name).write_text(run_card(result))
     (OUTPUT / f"HERON_{stamp}.json").write_text(json.dumps(result["meta"], indent=2))
