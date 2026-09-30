@@ -4,13 +4,44 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#132a2d" />
-  <title>HERON Mission Planner</title>
+  <title>HERON Ground Control</title>
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css?v=aim39" />
-  <link rel="stylesheet" href="/static/flight.css?v=2" />
+  <link rel="stylesheet" href="/static/flight.css?v=11" />
 </head>
-<body class="click-wps">
+<body class="click-wps" data-view="plan">
+  <header id="appbar">
+    <div class="ab-brand">
+      <img src="/static/heron-logo.avif" alt="" width="30" height="30" />
+      <div><b>HERON</b><small>Ground Control</small></div>
+    </div>
+    <nav class="ab-tabs" role="tablist" aria-label="Workspace">
+      <button type="button" role="tab" id="tabPlan" data-view="plan" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Plan</button>
+      <button type="button" role="tab" id="tabSim" data-view="sim" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>Simulate<i class="tab-dot" id="dotSim"></i></button>
+      <button type="button" role="tab" id="tabFly" data-view="fly" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="m7 7 3.5 3.5M17 7l-3.5 3.5M7 17l3.5-3.5M17 17l-3.5-3.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Fly<i class="tab-dot" id="dotFly"></i></button>
+    </nav>
+
+    <div id="abStatus" class="ab-status hidden" aria-label="Vehicle status">
+      <div class="ind"><small>Mode</small><b id="abMode">—</b></div>
+      <div class="ind"><small>GPS</small><b id="abGps">—</b></div>
+      <div class="ind"><small>Battery</small><b id="abBatt">—</b></div>
+      <div class="ind"><small>Link</small><b id="abLink">—</b></div>
+      <button id="abReady" type="button" class="ready-pill" title="Show launch checks"><i></i><span id="abReadyText">—</span></button>
+    </div>
+
+    <div id="abConnFly" class="ab-conn">
+      <select id="connPort" aria-label="Connection"><option value="auto">AUTO</option></select>
+      <select id="connBaud" aria-label="Baud rate"><option>115200</option><option>57600</option><option>230400</option><option>460800</option><option>921600</option></select>
+      <button id="connSettings" type="button" class="icon-btn" aria-label="Link settings" aria-expanded="false" aria-controls="connPopover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      <button id="connButton" type="button" class="conn-btn">Connect</button>
+    </div>
+    <div id="abConnSim" class="ab-conn hidden">
+      <span class="sim-flag">Simulation</span>
+      <button id="simButton" type="button" class="conn-btn">Start simulator</button>
+    </div>
+  </header>
+
   <main id="map" aria-label="Interactive mission planning map"></main>
 
   <aside id="sidebar" class="sidebar" aria-label="Mission planner">
@@ -142,94 +173,131 @@
     <p class="flight-alt-note">Flight export uses altitude above Home. Geometry previews assume level terrain; they do not provide terrain clearance.</p>
   </aside>
 
-  <button id="flightPanelToggle" type="button" aria-expanded="true" aria-controls="flightPanel">Hide aircraft panel</button>
-  <button id="flightQuickRtl" type="button" class="hidden" disabled>Return home</button>
-  <nav id="flightStatusBar" aria-label="Live aircraft status" class="hidden">
-    <div class="flight-brand"><span class="brand-symbol">H</span><span>HERON<small>FLIGHT DECK</small></span></div>
-    <button id="flightReadiness" type="button" title="View launch checks"><i></i><span id="liveReady">Waiting for aircraft</span></button>
-    <div class="status-cell"><span data-icon="mode"></span><div><small>FLIGHT MODE</small><strong id="statusMode">—</strong></div></div>
-    <div class="status-cell"><span data-icon="satellite"></span><div><small>GPS</small><strong id="statusGps">—</strong></div></div>
-    <div class="status-cell"><span data-icon="battery"></span><div><small>BATTERY</small><strong id="statusBattery">—</strong></div></div>
-    <div class="status-cell"><span data-icon="link"></span><div><small>HEARTBEAT</small><strong id="statusLink">—</strong></div></div>
-    <button id="flightMessagesToggle" type="button" aria-expanded="false" aria-controls="flightMessages"><span data-icon="message"></span>Messages <span id="flightMessageCount">0</span></button>
-  </nav>
-  <aside id="flightMessages" class="hidden" aria-label="Aircraft message center">
-    <header><div><small>AIRCRAFT ACTIVITY</small><h2>Messages</h2></div><button id="flightMessagesClose" type="button" aria-label="Close messages"><span data-icon="close"></span></button></header>
-    <label>Filter messages<input id="flightMessageFilter" type="search" placeholder="Search aircraft messages…" /></label>
-    <p id="flightMessagesEmpty">No aircraft messages yet.</p><ol id="flightMessageLog"></ol>
-  </aside>
-  <section id="flightPanel" aria-label="Aircraft connection and control">
-    <header class="flight-header">
-      <div><span class="hud-eyebrow">Aircraft</span><h2 id="flightTitle">Connect & fly</h2></div>
-      <span id="flightBadge" class="flight-badge">Disconnected</span>
-    </header>
-    <div id="flightInstruments" class="hidden">
-      <div class="instrument-caption"><span>ATTITUDE / HEADING</span><span id="instrumentSource">WAITING</span></div>
-      <div id="attitudeDisplay" class="attitude-display unavailable" role="img" aria-label="Attitude unavailable">
-        <div class="attitude-world" id="attitudeWorld"><div class="horizon-line"></div><div class="pitch-ladder"><span>20 ━━━ 20</span><span>10 ━━ 10</span><span class="ladder-zero"></span><span>10 ━━ 10</span><span>20 ━━━ 20</span></div></div>
-        <svg class="bank-scale" viewBox="0 0 320 190" aria-hidden="true"><path d="M85 40 A100 100 0 0 1 235 40 M93 34 l7 8 M117 20 l4 9 M140 14 l2 10 M180 14 l-2 10 M203 20 l-4 9 M227 34 l-7 8"/><path class="bank-index" d="M155 12 L160 22 L165 12 Z"/></svg>
-        <svg class="aircraft-reticle" viewBox="0 0 320 190" aria-hidden="true"><path d="M103 96 h34 l9 9 M217 96 h-34 l-9 9 M155 96 h10"/><circle cx="160" cy="96" r="3"/></svg>
-        <span class="attitude-unavailable">ATTITUDE UNAVAILABLE</span>
-        <div class="attitude-footer"><span>ROLL / PITCH</span><strong id="liveAttitude">—</strong></div>
-      </div>
-      <div class="heading-instrument"><div id="headingTape" aria-hidden="true"></div><span class="heading-pointer"></span><strong id="liveHeading">—</strong><small>HEADING</small></div>
-    </div>
-    <details id="flightConnection" open>
-      <summary>Connection settings</summary>
-      <div class="flight-settings">
-        <label>Connection<select id="flightTransport">
-          <option value="demo">Simulated aircraft</option>
-          <option value="serial">USB / ELRS serial</option>
-          <option value="udp">ELRS Wi-Fi / UDP</option>
-          <option value="herelink_hotspot">HereLink hotspot</option>
-          <option value="herelink_client">HereLink USB / shared Wi-Fi</option>
-          <option value="tcp">ArduPilot SITL / TCP</option>
-        </select></label>
-        <div id="flightSerial" class="hidden">
-          <label>Serial port<select id="flightDevice"></select></label>
-          <div class="flight-row"><label>Baud<select id="flightBaud"><option>115200</option><option>57600</option><option>230400</option><option>460800</option><option>921600</option></select></label><button id="flightPorts" type="button">Refresh ports</button></div>
-          <small>Flight controller USB: usually 115200. ELRS module USB: 460800.</small>
+  <section id="deck" aria-label="Flight deck">
+    <div id="deckEmpty" class="deck-empty">
+      <div class="empty-card">
+        <div id="emptyRadar" class="radar" aria-hidden="true"><i></i><b></b></div>
+        <p id="emptyKicker" class="empty-kicker">Fly</p>
+        <h2 id="emptyTitle">Looking for your aircraft</h2>
+        <p id="emptyText">Plug the flight controller into USB. HERON connects on its own.</p>
+        <div class="empty-actions">
+          <button id="emptyPrimary" type="button" class="btn-primary">Connect</button>
+          <button id="emptySecondary" type="button" class="btn-quiet">Other connections</button>
         </div>
-        <div id="flightNetwork" class="flight-row hidden">
-          <label><span id="flightHostLabel">Listen address</span><input id="flightHost" value="0.0.0.0" /></label>
-          <label>Port<input id="flightPort" type="number" value="14550" min="1024" max="65535" /></label>
-        </div>
-        <label id="flightSysRow" class="hidden">Aircraft system ID<input id="flightSystem" type="number" min="1" max="254" value="1" /></label>
-        <p id="flightTransportNote">Demo only. No hardware connection; flight and dwell times are accelerated.</p>
-        <div class="flight-row"><button id="flightConnect" type="button">Connect</button><button id="flightDisconnect" type="button" disabled>Disconnect</button></div>
+        <p id="emptyHint" class="empty-hint"></p>
       </div>
-    </details>
-    <div id="flightMetrics" class="flight-metrics">
-      <div><span>Mode</span><strong id="liveMode">—</strong></div>
-      <div><span>Battery</span><strong id="liveBattery">—</strong></div>
-      <div class="primary-metric"><span>ALTITUDE · ABOVE HOME</span><strong id="liveAlt">—</strong></div>
-      <div><span>GPS</span><strong id="liveGps">—</strong></div>
-      <div class="primary-metric"><span>GROUND SPEED</span><strong id="liveSpeed">—</strong></div>
-      <div><span>Mission item</span><strong id="liveMission">—</strong></div>
-      <div><span>Vertical speed</span><strong id="liveClimb">—</strong></div>
-      <div><span>Distance to Home</span><strong id="liveHomeDistance">—</strong></div>
-      <div><span>State</span><strong id="liveLanded">—</strong></div>
     </div>
-    <p id="livePosition" class="flight-position">No aircraft position</p>
-    <div class="flight-row map-tools"><button id="flightCenter" type="button" disabled><span data-icon="locate"></span>Locate</button><button id="flightFollow" type="button" aria-pressed="false" disabled><span data-icon="follow"></span>Follow</button><button id="flightTrack" type="button" aria-pressed="true"><span data-icon="route"></span>Trail</button></div>
-    <button id="flightUseHome" type="button" disabled>Use aircraft Home as pad</button>
-    <details id="flightPreflight"><summary id="flightCheckSummary">Launch checks</summary><ul id="flightChecks"></ul><button id="flightRefresh" type="button" disabled>Refresh aircraft checks</button></details>
-    <p id="flightPlanNote">Build a mission to upload it.</p>
-    <div id="flightMessage" role="status" aria-live="polite">Connect an aircraft or try the demo.</div>
-    <div class="flight-actions">
-      <button id="flightUpload" type="button" disabled><span data-icon="upload"></span>Upload & verify</button>
-      <button id="flightLaunch" type="button" disabled><span data-icon="takeoff"></span>Launch mission</button>
+
+    <aside id="deckMission" class="deck-card deck-mission" aria-label="Mission">
+      <header class="card-head">
+        <span class="card-kicker">Mission</span>
+        <span id="missionBadge" class="pill">No mission</span>
+      </header>
+      <div id="missionSource" class="seg hidden" role="group" aria-label="Mission to fly">
+        <button type="button" data-source="plan" aria-pressed="true">HERON plan</button>
+        <button type="button" data-source="aircraft" aria-pressed="false">On drone</button>
+      </div>
+      <h3 id="missionName">Nothing loaded</h3>
+      <p id="flightPlanNote" class="card-note">Build a mission on the Plan page, or read the one already on the drone.</p>
+      <div id="missionProgress" class="progress hidden" role="status">
+        <div class="progress-row"><b id="missionProgressText">Taking off</b><span id="missionProgressEta"></span></div>
+        <div class="progress-track"><i id="missionProgressBar"></i></div>
+      </div>
+      <div class="mission-io">
+        <button id="missionRead" type="button" class="io-btn" title="Download the mission stored on the drone, like Read WPs in Mission Planner"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Read from drone</button>
+        <button id="flightUpload" type="button" class="io-btn" title="Send the HERON plan to the drone and read it back to verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>Write to drone</button>
+      </div>
+      <ol class="steps" aria-label="Launch steps">
+        <li id="stepUpload"><div class="step-row"><span class="step-n">1</span><span><b id="stepUploadTitle">Mission on drone</b><small id="stepUploadText">Write or read a mission</small></span></div></li>
+        <li id="stepChecks"><button id="flightChecksOpen" type="button" class="step-btn" aria-expanded="false" aria-controls="flightPreflight"><span class="step-n">2</span><span><b id="flightCheckSummary">Launch checks</b><small>Aircraft and fence</small></span></button></li>
+      </ol>
+      <div id="flightPreflight" class="checks hidden"><p class="checks-note">Switch off checks you don't need. Locked checks always apply.</p><ul id="flightChecks"></ul><button id="flightRefresh" type="button" class="btn-quiet">Refresh checks</button></div>
+      <div id="flightMessage" class="card-msg" role="status" aria-live="polite"></div>
+      <div class="card-foot">
+        <button id="flightUseHome" type="button" class="btn-quiet">Use aircraft Home as pad</button>
+        <button id="missionToPlan" type="button" class="btn-quiet">Edit in Plan</button>
+      </div>
+    </aside>
+
+    <aside id="deckInstruments" class="deck-instruments" aria-label="Instruments">
+      <div class="deck-card pfd-card"><canvas id="pfd" role="img" aria-label="Primary flight display"></canvas></div>
+      <div class="deck-card nav-card">
+        <canvas id="hsi" role="img" aria-label="Compass"></canvas>
+        <dl class="tele">
+          <div title="Compass heading the nose points to (ArduPilot AHRS)"><dt>Heading</dt><dd id="tHdg">—</dd></div>
+          <div title="GPS course over ground, shown once the aircraft is moving"><dt>GPS course</dt><dd id="tCog">—</dd></div>
+          <div><dt>Ground speed</dt><dd id="tSpeed">—</dd></div>
+          <div><dt>Altitude</dt><dd id="tAlt">—</dd></div>
+          <div><dt>Climb</dt><dd id="tClimb">—</dd></div>
+          <div><dt>To Home</dt><dd id="tHome">—</dd></div>
+          <div><dt>Waypoint</dt><dd id="tWp">—</dd></div>
+          <div><dt>State</dt><dd id="tLanded">—</dd></div>
+        </dl>
+      </div>
+    </aside>
+
+    <div class="deck-maptools" role="toolbar" aria-label="Map">
+      <button id="flightCenter" type="button" class="tool-btn" title="Center on aircraft" aria-label="Center on aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg></button>
+      <button id="flightFollow" type="button" class="tool-btn" aria-pressed="false" title="Follow aircraft" aria-label="Follow aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 17-7-4-7 4z"/></svg></button>
+      <button id="flightTrack" type="button" class="tool-btn" aria-pressed="true" title="Show flight trail" aria-label="Show flight trail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19c4 0 3-7 8-7s4-7 8-7"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="5" r="1.5"/></svg></button>
     </div>
-    <button id="flightRtl" type="button" disabled><span data-icon="home"></span>Return home / interrupt launch</button>
-    <small id="flightLinkNote">Return home needs a working link. Onboard failsafes and your RC override remain responsible if the link is lost.</small>
-    <details><summary>Aircraft messages</summary><ol id="flightEvents"></ol></details>
+
+    <div class="deck-actions">
+      <button id="flightLaunch" type="button" class="fly-btn hidden"><span class="fly-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></span><span><b>Fly mission</b><small id="flyHint">Auto takeoff, fly every waypoint, return home</small></span><svg class="fly-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+      <button id="flightRtl" type="button" class="rtl-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 10v10h12V10M10 20v-6h4v6"/></svg>Return home</button>
+    </div>
+
+    <section id="deckLog" class="deck-log deck-card" aria-label="Messages">
+      <header class="log-head">
+        <b>Messages</b>
+        <div class="log-filter" role="group" aria-label="Message source">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="ardupilot" aria-pressed="false">ArduPilot</button>
+          <button type="button" data-filter="heron" aria-pressed="false">HERON</button>
+        </div>
+        <span id="flightMessageCount" class="count">0</span>
+        <button id="logToggle" type="button" class="log-toggle" aria-expanded="true" aria-controls="flightEvents" aria-label="Collapse messages"><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6 6 1.5 10.5 6"/></svg></button>
+      </header>
+      <p id="logLatest" class="log-latest">No aircraft messages yet</p>
+      <ol id="flightEvents" class="log-list"></ol>
+    </section>
   </section>
 
-  <dialog id="flightConfirm" aria-labelledby="flightConfirmTitle">
-    <h2 id="flightConfirmTitle">Launch this mission?</h2>
+  <div id="connPopover" class="popover hidden" role="dialog" aria-label="Link settings">
+    <label class="switch-row"><span><b>Auto-connect</b><small>Connect as soon as a flight controller appears on USB</small></span><input id="connAuto" type="checkbox" checked /></label>
+    <div class="pop-grid">
+      <label><span id="flightHostLabel">Address</span><input id="flightHost" value="0.0.0.0" /></label>
+      <label><span>Port</span><input id="flightPort" type="number" value="14550" min="1024" max="65535" /></label>
+      <label><span>System ID</span><input id="flightSystem" type="number" min="1" max="254" value="1" /></label>
+    </div>
+    <p id="flightTransportNote" class="pop-note">Address and port apply to network links. USB uses the port and baud in the bar.</p>
+  </div>
+
+  <dialog id="flightConfirm" aria-labelledby="flightConfirmTitle" aria-describedby="flightConfirmText">
+    <p class="confirm-kicker" id="confirmKicker">Fly mission</p>
+    <h2 id="flightConfirmTitle">Are you sure you want to fly?</h2>
     <p id="flightConfirmText"></p>
-    <p>The aircraft will arm, take off, fly the uploaded route, and return home. Confirm the launch area is clear and the RC override is available.</p>
-    <div class="flight-row"><button id="flightCancelLaunch" type="button">Cancel</button><button id="flightConfirmLaunch" type="button">Confirm launch</button></div>
+    <dl class="confirm-stats">
+      <div><dt>Waypoints</dt><dd id="cWp">—</dd></div>
+      <div><dt>Max altitude</dt><dd id="cAlt">—</dd></div>
+      <div><dt>Route</dt><dd id="cLen">—</dd></div>
+      <div><dt>Est. time</dt><dd id="cTime">—</dd></div>
+    </dl>
+    <ol class="confirm-steps">
+      <li>Arm motors in GUIDED</li>
+      <li id="cTakeoff">Take off</li>
+      <li id="cFly">Fly every waypoint in AUTO</li>
+      <li>Return home and land (RTL)</li>
+    </ol>
+    <p class="confirm-warn">Clear the launch area and keep your RC transmitter in hand. <b>Return home</b> and your RC mode switch override the mission at any time.</p>
+    <div class="dialog-row">
+      <button id="flightCancelLaunch" type="button" class="btn-quiet">Cancel</button>
+      <button id="flightConfirmLaunch" type="button" class="hold-btn" aria-describedby="holdHelp">
+        <svg class="hold-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="hold-track" cx="22" cy="22" r="19"/><circle id="holdRing" class="hold-prog" cx="22" cy="22" r="19"/></svg>
+        <span id="holdLabel">Hold to fly</span>
+      </button>
+    </div>
+    <p id="holdHelp" class="hold-help">Press and hold for 3 seconds (mouse, touch, Space or Enter). Let go to cancel.</p>
   </dialog>
 
   <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Hide mission planner" aria-expanded="true">
@@ -287,7 +355,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=aim39"></script>
-  <script src="/static/flight.js?v=2"></script>
+  <script src="/static/app.js?v=aim40"></script>
+  <script src="/static/instruments.js?v=2"></script>
+  <script src="/static/flight.js?v=12"></script>
 </body>
 </html>

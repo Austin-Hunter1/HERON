@@ -4,11 +4,11 @@ from urllib.parse import urlsplit
 
 from flask import Blueprint, jsonify, request
 
-from engine.flight import FlightError
+from engine.flight import FlightError, serial_port_records
 
 
-def flight_api(service):
-    bp = Blueprint("flight", __name__, url_prefix="/api/flight")
+def flight_api(service, name="flight", prefix="/api/flight"):
+    bp = Blueprint(name, __name__, url_prefix=prefix)
     token = secrets.token_urlsafe(32)
 
     @bp.before_request
@@ -42,8 +42,7 @@ def flight_api(service):
     @bp.get("/ports")
     def ports():
         try:
-            from serial.tools import list_ports
-            return jsonify(ports=[{"device": p.device, "description": p.description} for p in list_ports.comports()])
+            return jsonify(ports=serial_port_records())
         except ImportError:
             return jsonify(ports=[], error="Install requirements.txt to use USB or ELRS serial.")
 
@@ -58,6 +57,15 @@ def flight_api(service):
     @bp.post("/disconnect")
     def disconnect():
         return jsonify(service.disconnect())
+
+    @bp.post("/auto")
+    def auto():
+        return jsonify(service.set_auto((request.get_json() or {}).get("enabled", True)))
+
+    @bp.post("/checks")
+    def checks():
+        data = request.get_json() or {}
+        return jsonify(service.set_check(str(data.get("key", "")), bool(data.get("enabled", True))))
 
     @bp.post("/rtl")
     def rtl():

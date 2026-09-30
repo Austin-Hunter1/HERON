@@ -13,7 +13,7 @@ from unittest.mock import patch
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mav
 from engine.flight import DEMO_PARAMS, FlightError, MavlinkLink, compare_items, flight_items
-from engine.export import qgc_wpl
+from engine.export import items_wpl, qgc_wpl
 from test_flight import mission
 
 
@@ -196,6 +196,14 @@ class WireTests(unittest.TestCase):
         self.assertGreater(self.peer.heartbeats, 0)
         self.link.mode(6, None)
         self.assertEqual(self.link.snapshot()["mode_id"], 6)
+
+    def test_mission_read_from_aircraft_is_flyable(self):
+        self.link.upload(self.items, self.cancel)
+        readback = self.link.download(self.cancel)
+        onboard = flight_items(items_wpl(readback))
+        compare_items(onboard, readback)
+        compare_items(onboard, self.link.download(self.cancel))
+        self.assertEqual([i["command"] for i in onboard], [i["command"] for i in self.items])
 
     def test_legacy_upload_requests_supported(self):
         self.peer.legacy_request = True

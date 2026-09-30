@@ -913,6 +913,7 @@ document.getElementById("btnClear").onclick = () => {
 };
 
 map.on("click", (e) => {
+  if (document.body.dataset.view !== "plan") return;
   if (missionMode === "survey") {
     pickWater(e.latlng);
     return;
@@ -933,7 +934,7 @@ map.on("click", (e) => {
   }
 });
 map.on("dblclick", (e) => {
-  if (missionMode !== "areas" || !drawing) return;
+  if (document.body.dataset.view !== "plan" || missionMode !== "areas" || !drawing) return;
   L.DomEvent.stop(e);
   if (draft.length >= 3) draft.pop();
   finishDraft();

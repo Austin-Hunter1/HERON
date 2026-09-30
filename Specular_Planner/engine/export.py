@@ -100,6 +100,17 @@ def qgc_wpl(plan: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def items_wpl(items: list[dict]) -> str:
+    """WPL 110 text for mission items read from an aircraft. Row 0 is Home."""
+    lines = ["QGC WPL 110"]
+    for i, it in enumerate(items):
+        # MISSION_ITEM_INT reports the _INT frame variants; WPL files use the plain ones.
+        frame = FRAME_GLOBAL if i == 0 else {5: FRAME_GLOBAL, 6: FRAME_RELATIVE_ALT}.get(int(it["frame"]), int(it["frame"]))
+        lines.append(_row(i, 1 if i == 0 else 0, frame, int(it["command"]), it["p1"], it["p2"], it["p3"], it["p4"],
+                          it["lat"], it["lon"], it["alt"]))
+    return "\n".join(lines) + "\n"
+
+
 def parse_wpl(text: str) -> list[dict]:
     lines = [ln.strip() for ln in text.replace("\r\n", "\n").split("\n") if ln.strip()]
     if not lines:

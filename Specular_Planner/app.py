@@ -12,7 +12,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from engine.export import qgc_wpl, run_card, validate_wpl
-from engine.flight import FlightService
+from engine.flight import DEFAULT_SKIPPED_CHECKS, LIVE_TRANSPORTS, FlightService
 from engine.flight_api import flight_api
 from engine.planner import (
     DEFAULT_H_AGL,
@@ -45,8 +45,10 @@ STATIC = ROOT / "static"
 OUTPUT = ROOT / "output"
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
-flight = FlightService()
+flight = FlightService(LIVE_TRANSPORTS, DATA / "launch_checks_fly.json", DEFAULT_SKIPPED_CHECKS)
+sim = FlightService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_CHECKS)
 app.register_blueprint(flight_api(flight))
+app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
 
 _SATS = None
 _LAKE = None
@@ -202,9 +204,11 @@ def api_plan():
     wpl = qgc_wpl(result)
     check = validate_wpl(wpl, result)
     result["flight_plan_id"] = flight.register_plan(wpl, result["meta"])
-    (OUTPUT / wp_name).write_text(wpl)
-    (OUTPUT / card_name).write_text(run_card(result))
-    (OUTPUT / f"HERON_{stamp}.json").write_text(json.dumps(result["meta"], indent=2))
+    sim.register_plan(wpl, result["meta"], result["flight_plan_id"])
+    # Explicit UTF-8 bytes: Windows text mode is cp1252 (no arrows) and rewrites \n, breaking upload verification.
+    (OUTPUT / wp_name).write_bytes(wpl.encode("utf-8"))
+    (OUTPUT / card_name).write_bytes(run_card(result).encode("utf-8"))
+    (OUTPUT / f"HERON_{stamp}.json").write_bytes(json.dumps(result["meta"], indent=2).encode("utf-8"))
     result["exports"] = {
         "waypoints": f"/api/export/{wp_name}",
         "runcard": f"/api/export/{card_name}",
@@ -338,6 +342,7 @@ def start_almanac_watch() -> None:
 
 def main():
     start_almanac_watch()
+    flight.start_auto_connect()
     print("Specular planner  http://127.0.0.1:5055")
     app.run(host="127.0.0.1", port=5055, debug=False)
 
