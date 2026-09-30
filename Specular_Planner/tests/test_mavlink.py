@@ -182,6 +182,7 @@ class WireTests(unittest.TestCase):
         self.assertTrue(s["params_fresh"])
         self.assertTrue(s["ekf_ok"])
         self.assertEqual(s["battery_pct"], 92)
+        self.assertEqual(s["battery_current"], 1.0)
         self.link.upload(self.items, self.cancel)
         compare_items(self.items, self.link.download(self.cancel))
         self.link.mode(4, self.cancel)

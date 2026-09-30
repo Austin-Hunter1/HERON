@@ -411,6 +411,8 @@
     const pct = connected && tel.fresh?.battery && tel.battery_pct >= 0 ? tel.battery_pct : null;
     batt.textContent = pct == null ? "—" : `${pct}%${finite(tel.battery_voltage) ? ` · ${tel.battery_voltage.toFixed(1)} V` : ""}`;
     batt.className = pct == null ? "" : pct < 30 ? "bad" : pct < 50 ? "warn" : "good";
+    const amps = pct != null && finite(tel.battery_current) ? tel.battery_current : null;
+    el("abCurrent").textContent = amps == null ? "—" : `${amps.toFixed(1)} A`;
     const link = el("abLink");
     link.textContent = !connected ? "LOST" : name === "sim" ? "SIM" : `${Number(tel.heartbeat_age || 0).toFixed(1)} s`;
     link.className = connected ? "good" : "bad";

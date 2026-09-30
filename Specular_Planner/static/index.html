@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css?v=aim39" />
-  <link rel="stylesheet" href="/static/flight.css?v=11" />
+  <link rel="stylesheet" href="/static/flight.css?v=12" />
 </head>
 <body class="click-wps" data-view="plan">
   <header id="appbar">
@@ -25,7 +25,7 @@
     <div id="abStatus" class="ab-status hidden" aria-label="Vehicle status">
       <div class="ind"><small>Mode</small><b id="abMode">—</b></div>
       <div class="ind"><small>GPS</small><b id="abGps">—</b></div>
-      <div class="ind"><small>Battery</small><b id="abBatt">—</b></div>
+      <div class="ind"><small>Battery</small><b id="abBatt">—</b><em id="abCurrent">—</em></div>
       <div class="ind"><small>Link</small><b id="abLink">—</b></div>
       <button id="abReady" type="button" class="ready-pill" title="Show launch checks"><i></i><span id="abReadyText">—</span></button>
     </div>
@@ -357,6 +357,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js?v=aim40"></script>
   <script src="/static/instruments.js?v=2"></script>
-  <script src="/static/flight.js?v=12"></script>
+  <script src="/static/flight.js?v=13"></script>
 </body>
 </html>

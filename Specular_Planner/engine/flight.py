@@ -741,6 +741,7 @@ class DemoLink:
                 "landed": 2 if self.alt > 0 else 1, "gps_fix": 3, "satellites": 16,
                 "ekf_ok": True, "sensors_ok": True, "battery_pct": round(self.battery),
                 "battery_voltage": 21.0 + 4.2 * self.battery / 100,
+                "battery_current": round(0.4 if not self.armed else 6.0 + abs(self.vertical_speed), 1),
                 "home": dict(self.home), "position": dict(self.position), "relative_alt": self.alt,
                 "speed": self.ground_speed, "heading": self.heading, "roll": self.roll, "pitch": self.pitch,
                 "course": self.heading if self.ground_speed >= 0.5 else None,
@@ -928,7 +929,11 @@ class MavlinkLink:
         elif kind == "SYS_STATUS":
             needed = m.onboard_control_sensors_enabled & m.onboard_control_sensors_present
             s["sensors_ok"] = needed != 0 and (needed & m.onboard_control_sensors_health) == needed
-            s.update(battery_pct=m.battery_remaining, battery_voltage=None if m.voltage_battery == 65535 else m.voltage_battery / 1000)
+            # current_battery is centiamps; -1 means the power monitor does not report it.
+            raw_current = m.current_battery
+            s.update(battery_pct=m.battery_remaining,
+                     battery_voltage=None if m.voltage_battery == 65535 else m.voltage_battery / 1000,
+                     battery_current=None if raw_current < 0 or raw_current == 65535 else raw_current / 100)
             self.stamps.update(health=now, battery=now)
         elif kind == "EKF_STATUS_REPORT":
             required = 1 | 2 | 4 | 16 | 32
