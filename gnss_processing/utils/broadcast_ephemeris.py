@@ -36,6 +36,27 @@ _BRDC_FILENAME_GZ = "brdc{ddd}0.{yy}n.gz"
 _BRDC_FILENAME_Z = "brdc{ddd}0.{yy}n.Z"
 _COMPRESSION_CHANGE = datetime(2020, 12, 1)
 
+# CDDIS also publishes each UTC hour's broadcast nav separately, well before the
+# day is over -- this is what makes near-real-time processing possible at all,
+# and exactly what a collect from today needs (see `availability`'s docstring:
+# the daily merge does not exist yet for a day that has not finished). Same
+# directory layout one level down, named by hour rather than by day: the
+# standard IGS/CDDIS convention is a lowercase letter, 'a' for 00:00-00:59 UTC
+# through 'x' for 23:00-23:59.
+#
+# UNVERIFIED against a live CDDIS response as of writing -- the archive was
+# returning HTTP 504 for every path tried while this was built, daily files
+# included, so this could not be confirmed by probing it directly. It is the
+# long-standing, stable IGS hourly-RINEX convention, and the failure mode if it
+# is somehow wrong is safe: `hourly_availability`/`load_hourly` report the hour
+# unavailable exactly as they would for one genuinely not yet published, rather
+# than raising or returning wrong data. Confirm with `hourly_availability(...)`
+# once CDDIS answers normally again, before relying on this for real.
+_HOURLY_DIRECTORY = "/gnss/data/hourly/{yyyy}/{ddd}/{yy}n/"
+_HOURLY_FILENAME_GZ = "hour{ddd}{hour_letter}.{yy}n.gz"
+_HOURLY_FILENAME_Z = "hour{ddd}{hour_letter}.{yy}n.Z"
+_HOUR_LETTERS = "abcdefghijklmnopqrstuvwx"  # index 0..23 -> UTC hour 0..23
+
 # Beyond this far from its reference time an ephemeris is being extrapolated well
 # outside its fit interval.  The nominal LNAV fit is four hours centred on toe.
 MAX_AGE_S = 7200.0
@@ -98,6 +119,70 @@ def download_brdc(
     return decompressed
 
 
+def hourly_url_and_path(
+    hour_start: datetime, resources_dir: str | Path
+) -> tuple[str, Path, Path]:
+    """
+    `(url, compressed_path, decompressed_path)` for one UTC hour's broadcast
+    file.  `hour_start` is truncated to the hour it falls in; the file it names
+    covers `[hour_start, hour_start + 1h)`.
+    """
+    hour_start = hour_start.replace(minute=0, second=0, microsecond=0)
+    letter = _HOUR_LETTERS[hour_start.hour]
+    filename = (
+        _HOURLY_FILENAME_Z if hour_start < _COMPRESSION_CHANGE else _HOURLY_FILENAME_GZ
+    )
+    relative = format_filepath(
+        _HOURLY_DIRECTORY + filename, hour_start, hour_letter=letter
+    )
+    url = cddis.CDDIS_ARCHIVE_URL + relative
+    compressed = Path(resources_dir) / relative.lstrip("/")
+    return url, compressed, compressed.with_suffix("")
+
+
+def hourly_availability(
+    hour_start: datetime, resources_dir: str | Path | None = None
+) -> cddis.Availability:
+    """
+    Whether one UTC hour's broadcast file is published, without downloading it.
+
+    Mirrors `availability`, at hourly rather than daily granularity -- see
+    `_HOURLY_DIRECTORY`'s comment for what this buys and the one thing about it
+    that could not be confirmed by probing the archive directly while it was
+    built.
+    """
+    if resources_dir is None:
+        resources_dir = environment_variables.get_resources_path()
+    hour_start = hour_start.replace(minute=0, second=0, microsecond=0)
+    url, compressed, decompressed = hourly_url_and_path(hour_start, resources_dir)
+    label = f"hour {hour_start:%Y-%m-%d %H}:00"
+    if decompressed.exists() and decompressed.stat().st_size > 0:
+        size = compressed.stat().st_size if compressed.exists() else None
+        return cddis.Availability(label, url, True, "cached locally", size)
+    return cddis.Availability(label, url, *cddis.exists(url))
+
+
+def download_hourly(
+    hour_start: datetime,
+    resources_dir: str | Path | None = None,
+    *,
+    overwrite: bool = False,
+) -> Path:
+    """Fetch and decompress one UTC hour's broadcast file. Mirrors `download_brdc`."""
+    if resources_dir is None:
+        resources_dir = environment_variables.get_resources_path()
+    hour_start = hour_start.replace(minute=0, second=0, microsecond=0)
+    url, compressed, decompressed = hourly_url_and_path(hour_start, resources_dir)
+
+    if decompressed.exists() and not overwrite:
+        return decompressed
+
+    poisoned = compressed.exists() and compressed.read_bytes()[:2] != b"\x1f\x8b"
+    cddis.download(url, compressed, overwrite=overwrite or poisoned)
+    decompress(str(compressed), str(decompressed))
+    return decompressed
+
+
 def _split_header(lines: list[str]) -> tuple[list[str], list[str]]:
     """`(header_lines, data_lines)`, split at END OF HEADER."""
     for i, line in enumerate(lines):
@@ -153,6 +238,78 @@ def load_brdc(
     return parse_RINEX_LNAV_data(data_lines)
 
 
+def load_hourly(
+    hour_start: datetime, resources_dir: str | Path | None = None
+) -> dict[int, list[RINEX_LNAVEphemeris]]:
+    """Every ephemeris record in one UTC hour's file, keyed by PRN. Mirrors `load_brdc`."""
+    with open(download_hourly(hour_start, resources_dir), "r") as f:
+        lines = f.readlines()
+    _, data_lines = _split_header(lines)
+    return parse_RINEX_LNAV_data(data_lines)
+
+
+def load_hourly_span(
+    day: datetime, resources_dir: str | Path | None = None, *, until: datetime | None = None
+) -> dict[int, list[RINEX_LNAVEphemeris]]:
+    """
+    Every published hourly file for one UTC day, merged.
+
+    `until` caps how far into the day to look -- the current moment by default,
+    since a hour that has not started yet is never published and there is no
+    point spending a request finding that out. An hour that HAS started but is
+    not yet published (the current, in-progress one; occasionally a recent one
+    still being processed) is skipped quietly rather than raising -- that is the
+    normal state for the tail of "now", not a fault, exactly as a same-day daily
+    file being absent is not one (see `availability`).
+    """
+    if until is None:
+        until = datetime.utcnow()
+    records: dict[int, list[RINEX_LNAVEphemeris]] = {}
+    day0 = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    for h in range(24):
+        hour_start = day0 + timedelta(hours=h)
+        if hour_start > until:
+            break
+        try:
+            for prn, hour_records in load_hourly(hour_start, resources_dir).items():
+                records.setdefault(prn, []).extend(hour_records)
+        except Exception:
+            continue
+    return records
+
+
+def load_day_ephemeris(
+    day: datetime,
+    resources_dir: str | Path | None = None,
+    *,
+    prefer_hourly_fallback: bool = True,
+) -> dict[int, list[RINEX_LNAVEphemeris]]:
+    """
+    One day's ephemeris records: the daily `brdc` merge when it exists, or
+    assembled from whatever hourly files are published otherwise.
+
+    The daily merge is only assembled once its day is over (`availability`'s
+    docstring), which makes it useless for the day a collect is actually being
+    processed on -- exactly the near-real-time case. CDDIS also publishes each
+    UTC hour's file separately, well before the day ends, which this reaches
+    for only when the daily one is not there: one request for a day already
+    past beats up to twenty-four for a fresh one, so the daily file is always
+    tried first and used whenever it is available.
+    """
+    try:
+        return load_brdc(day, resources_dir)
+    except Exception as exc:
+        if not prefer_hourly_fallback:
+            raise
+        records = load_hourly_span(day, resources_dir)
+        if not records:
+            raise RuntimeError(
+                f"Neither the daily brdc file nor any hourly file is published for "
+                f"{day:%Y-%m-%d} yet ({type(exc).__name__}: {exc})"
+            ) from exc
+        return records
+
+
 def load_brdc_iono(
     day: datetime, resources_dir: str | Path | None = None
 ) -> tuple[tuple[float, ...], tuple[float, ...]] | None:
@@ -164,7 +321,11 @@ def load_brdc_iono(
 
 
 def load_brdc_span(
-    start: datetime, end: datetime, resources_dir: str | Path | None = None
+    start: datetime,
+    end: datetime,
+    resources_dir: str | Path | None = None,
+    *,
+    prefer_hourly_fallback: bool = True,
 ) -> dict[int, list[RINEX_LNAVEphemeris]]:
     """
     Records covering a time span, merging whole days.
@@ -172,14 +333,24 @@ def load_brdc_span(
     The day either side is included because a collect near midnight needs
     ephemerides whose fit interval straddles the boundary, and because the record
     valid at 00:05 was usually uploaded the previous day.
+
+    `prefer_hourly_fallback` (on by default) is what makes this usable for
+    near-real-time processing: each day tries the daily `brdc` merge first --
+    one request, and the complete, final answer for any day already over -- and
+    only reaches for CDDIS's separately-published hourly files (see
+    `load_day_ephemeris`) when the daily one is not there yet, which is the
+    normal state for the day a collect is being processed on.
     """
     records: dict[int, list[RINEX_LNAVEphemeris]] = {}
     day = start.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
     last = end.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
     while day <= last:
         try:
-            for prn, day_records in load_brdc(day, resources_dir).items():
-                records.setdefault(prn, []).extend(day_records)
+            day_records = load_day_ephemeris(
+                day, resources_dir, prefer_hourly_fallback=prefer_hourly_fallback
+            )
+            for prn, prn_records in day_records.items():
+                records.setdefault(prn, []).extend(prn_records)
         except Exception as exc:  # a missing neighbouring day is not fatal
             if start.date() <= day.date() <= end.date():
                 raise

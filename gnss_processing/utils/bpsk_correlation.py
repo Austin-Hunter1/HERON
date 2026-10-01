@@ -78,9 +78,20 @@ def _make_correlate_kernel(with_subcarrier: bool):
     runtime instead costs **37%** on the three BPSK signals, which pay for a
     feature only GPS L1C uses.  Generating both from one source is what keeps
     that speed without keeping two copies of the loop in sync by hand.
+
+    `nogil=True`: this loop touches only typed scalars and numpy arrays passed
+    in by the caller, never a Python object, so it is safe to release the GIL
+    for its duration -- and doing so is what lets multiple TrackingChannels
+    (each with its own private `output` array; the only thing they share is
+    the read-only input `samples` buffer) actually run concurrently on
+    separate cores when driven from a thread pool, instead of one channel's
+    correlation blocking every other channel's regardless of core count. This
+    changes nothing about the arithmetic -- `parallel=False` is unrelated and
+    unchanged, and still governs whether THIS SINGLE call may use numba's own
+    internal multithreading, which it does not.
     """
 
-    @nb.jit(nopython=True, parallel=False)
+    @nb.jit(nopython=True, parallel=False, nogil=True)
     def kernel(
             samples: nb.complex64[:],  # type: ignore
             codes_flat: nb.int8[:],  # type: ignore

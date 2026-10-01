@@ -1311,6 +1311,7 @@ def plot_position_enu(
     time_s: Optional[np.ndarray] = None,
     *,
     title: Optional[str] = None,
+    basemap: Optional[tuple[np.ndarray, tuple[float, float, float, float]]] = None,
 ) -> Axes:
     """
     The position solution: east/north scatter beside the three components in time.
@@ -1324,6 +1325,13 @@ def plot_position_enu(
     larger scatter is visible next to them.  A ground receiver's vertical error is
     reliably two to three times its horizontal error, because every satellite is
     above the antenna and none below.
+
+    `basemap`, when given, is `(image, extent_m)` -- typically
+    `(bm.image, bm.extent_m)` from `utils.basemap.fetch_satellite_basemap`, about
+    the same reference point `enu_m` is relative to -- drawn under the scatter via
+    `imshow`. Accepted as a plain `(array, extent)` pair rather than a
+    `utils.basemap.Basemap` so this module, used by every notebook, does not have
+    to import that one, used by only one and requiring network access.
     """
     enu_m = np.atleast_2d(enu_m)
     good = np.isfinite(enu_m[:, 0])
@@ -1332,9 +1340,14 @@ def plot_position_enu(
     axes = fig.subplots(1, 2, width_ratios=[1.0, 1.4])
     ax_scatter, ax_time = axes
 
+    if basemap is not None:
+        image, extent_m = basemap
+        ax_scatter.imshow(image, extent=extent_m, origin="upper", zorder=0)
+
     if len(east):
-        ax_scatter.scatter(east, north, s=12, alpha=0.5, color="tab:blue",
-                           edgecolors="none", label="fixes")
+        ax_scatter.scatter(east, north, s=12, alpha=0.8 if basemap is not None else 0.5,
+                           color="tab:blue" if basemap is None else "tab:cyan",
+                           edgecolors="none", label="fixes", zorder=2)
         ax_scatter.scatter([east.mean()], [north.mean()], marker="x", s=90,
                            color="tab:red", linewidths=2, label="mean", zorder=3)
 
@@ -1347,22 +1360,43 @@ def plot_position_enu(
                 plt.matplotlib.patches.Ellipse(
                     (east.mean(), north.mean()), width, height, angle=angle,
                     fill=False, edgecolor="tab:red", lw=1.5, ls="--",
-                    label="1$\\sigma$",
+                    label="1$\\sigma$", zorder=2,
                 )
             )
         rms = np.sqrt(np.mean(east**2 + north**2))
         ax_scatter.annotate(
             f"horizontal RMS {rms:.1f} m\nvertical RMS {np.sqrt(np.mean(up**2)):.1f} m",
             xy=(0.03, 0.97), xycoords="axes fraction", va="top", fontsize=9,
-            bbox=dict(boxstyle="round", fc="white", ec="gray", alpha=0.8),
+            bbox=dict(boxstyle="round", fc="white", ec="gray", alpha=0.8), zorder=4,
         )
 
-    ax_scatter.axhline(0, color="gray", lw=0.6)
-    ax_scatter.axvline(0, color="gray", lw=0.6)
+    if basemap is None:
+        # A crosshair at the reference point is useful against a blank axes;
+        # against real imagery it is just a line drawn over the ground, so a
+        # small marker takes its place instead, below.
+        ax_scatter.axhline(0, color="gray", lw=0.6)
+        ax_scatter.axvline(0, color="gray", lw=0.6)
+        ax_scatter.grid(True)
+    else:
+        ax_scatter.scatter([0], [0], marker="+", s=70, color="white",
+                           linewidths=1.5, zorder=2.5)
     ax_scatter.set_xlabel("East [m]")
     ax_scatter.set_ylabel("North [m]")
-    ax_scatter.set_aspect("equal", adjustable="datalim")
-    ax_scatter.grid(True)
+    if basemap is None:
+        ax_scatter.set_aspect("equal", adjustable="datalim")
+    else:
+        # `adjustable="datalim"` (the no-basemap default, above) STRETCHES the
+        # data limits to make the subplot's own physical box square, which
+        # would show blank space past the edge of the photo on whichever axis
+        # it had to grow -- the opposite of what a basemap is supposed to
+        # promise, that everything visible is real imagery. `adjustable="box"`
+        # instead shrinks the BOX to match the data's own aspect ratio, so the
+        # limits stay pinned to exactly the fetched extent and any leftover
+        # space is neutral figure margin beside the map, not blank map itself.
+        east0, east1, north0, north1 = extent_m
+        ax_scatter.set_xlim(east0, east1)
+        ax_scatter.set_ylim(north0, north1)
+        ax_scatter.set_aspect("equal", adjustable="box")
     if ax_scatter.get_legend_handles_labels()[0]:
         ax_scatter.legend(fontsize=8, loc="lower right")
 
