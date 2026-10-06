@@ -48,7 +48,8 @@ SSD_CONN_W, SSD_CONN_H = 45.0, 12.0           # pocket for the 22-pin receptacle
 SLED_T   = 2.0            # printed sled plate on the drive's bottom (hole) face
 SSD_CLR  = 0.3            # clearance per side in the guide channels
 SSD_BASE = 13.0           # cage base height: receptacle adapter + cable exit
-SSD_Y0   = 136.0          # drive front edge (behind the NUC: room for NUC rear I/O and the SATA cable)
+SSD_Y0_MAX = 136.0        # drive front edge, upper limit (behind the NUC: room for NUC rear I/O and the SATA cable)
+SSD_REAR_GAP = 1.0        # PROPOSED: minimum gap, SSD cage rear face to rear plate front face
 SSD_XC   = 23.0           # drive + sled centre plane (middle of the NUC slot)
 
 STANDOFF = 6.0            # tray face -> board bottom (M3 nylon standoffs)
@@ -57,13 +58,38 @@ Z_BOARD  = 9.0            # board lower edge (clears rail strip ribs at z=8)
 
 # rail strip (printed ASA-CF) and TPU C-rail
 STRIP_BASE, RIB_H, RIB_T = 2.0, 6.0, 2.5
-CHAN_W  = 6.4             # channel width
 RAIL_W  = 6.0             # TPU rail overall width (tray 3 + 2x1.5 lips)
+# These two clearances set the radial (X, Z) position of every blade. The SMP
+# blind-mate needs a small radial error, so both are tight. The NUC blade uses
+# the same strip code, so it gets the same values.
+CHAN_CLR      = 0.2       # PROPOSED (was 0.4): total clearance, strip channel to TPU rail
+RAIL_BASE_GAP = 0.1       # PROPOSED (was 0.2): Z gap, TPU rail back to strip base
+CHAN_W  = RAIL_W + CHAN_CLR   # channel width
 RAIL_BACK, RAIL_GRIP = 2.0, 3.0
-STRIP_W = CHAN_W + 2 * RIB_T          # 11.4
-TRAY_OFF = STRIP_W / 2               # tray centre from slot start
-TRAY_Z0 = STRIP_BASE + 0.2 + RAIL_BACK   # 4.2
+STRIP_W = CHAN_W + 2 * RIB_T          # 11.2
+# The tray centre stays 5.7 mm from the slot start. The clock board jacks are
+# placed for this value (it was STRIP_W / 2 with the old 0.4 mm clearance).
+# A change here moves the SDR axes away from the jacks.
+TRAY_OFF = 5.7                       # tray centre from slot start
+TRAY_Z0 = STRIP_BASE + RAIL_BASE_GAP + RAIL_BACK   # 4.1
 TRAY_Z1 = H - TRAY_Z0
+LATCH_Z = STRIP_BASE + RIB_H / 2 + 0.5   # height of the latch pivot; the tray stop and preload screws use it too
+
+# SDR tray axial datum (PROPOSED). The SMP blind-mate does not align itself
+# along Y, so the rack must set the tray position. An M3 set screw in the rear
+# stop block of each SDR rail strip is the datum. A thumbscrew in each SDR
+# latch pushes the tray against it.
+INSERT_D       = 4.0      # hole for an M3 heat-set insert (same as the strip ears)
+STOP_ADJ       = 1.5      # PROPOSED: adjust range of the rear stop screw, +/- mm about TRAY_Y1
+STOP_INSERT_L  = 5.5      # M3 heat-set insert length (same as the strip ears)
+STOP_WALL      = 2.5      # PROPOSED: block material behind the insert
+STOP_BLOCK_L   = STOP_INSERT_L + STOP_WALL   # length of the rear stop block along Y
+STOP_BLOCK_H   = 10.0     # PROPOSED: block top height. It is behind the SDR board, so the 9 mm board clearance does not apply.
+STOP_SCREW_CLR = 3.4      # clearance hole for the M3 set screw (screw enters from the rear)
+LATCH_L        = 15.0     # latch arm length
+LATCH_L_PRE    = 16.0     # arm length when it carries the preload screw (boss diameter 8)
+PRE_BOSS_D     = 8.0      # PROPOSED: preload boss diameter (equals the latch width)
+PRE_BOSS_T     = 7.5      # PROPOSED: preload boss thickness along Y (insert pocket 5.5 + 2 front wall)
 
 # slots (name, kind, pitch)
 SLOTS = [("NUC", "nuc", 42.0),
@@ -73,12 +99,40 @@ MARGIN = 2.0
 W = MARGIN + sum(p for _, _, p in SLOTS) + MARGIN          # interior width
 TRAY_Y0 = 0.5
 TRAY_Y1 = Y_BOARD + SDR_L                                  # 157.69
-STRIP_Y1 = TRAY_Y1 + 0.5 + 3.0                             # closed rear end
+STRIP_Y1 = TRAY_Y1 + STOP_ADJ + STOP_BLOCK_L               # closed rear end of the SDR strip (stop block)
 NUC_TRAY_Y1 = Y_BOARD + NUC_S + 3.0                      # NUC front-aligned, short blade
 NUC_STRIP_Y1 = NUC_TRAY_Y1 + 0.5 + 3.0
-CLK_Y0 = Y_BOARD + SDR_L + SMA_OVERHANG + 9.0 + 25.0   # jack tips 25 mm behind SDR SMA tips
+
+# ---- SMP blind-mate stack-up along Y (all distances in mm) ----
+# The clock board jacks are SMP male (Amphenol SMP-MSLD-PCT). Each SDR rear
+# SMA jack carries an SMA-male to SMP-male adapter. An SMP female-female
+# bullet joins the adapter to the board jack. One change here moves the board,
+# the rear plate and the walls.
+SDR_SMA_TIP_Y = Y_BOARD + SDR_L + SMA_OVERHANG   # plane of the SDR SMA jack tips
+ADAPTER_REACH = 16.0      # VERIFY: SDR SMA tip to the SMP mating face of the screwed-on adapter. Placeholder until measured on a real B210.
+ADAPTER_D     = 8.0       # VERIFY: adapter body diameter (SM8810 width 7.87)
+SMP_JACK_H    = 4.09      # board front face to the jack mating face (Amphenol IGES model)
+BULLET_L      = 9.90      # PROPOSED: bullet length (Amphenol SMP-FSBA-990, Rosenberger 9.90)
+BULLET_D      = 3.43      # bullet body diameter
+BULLET_GAP    = BULLET_L - 5.6   # VERIFY: face-to-face gap between the two male mating faces. Rosenberger: 6.45 mm bullet gives 0.85 mm gap. Ask Amphenol for its table.
+CLK_Y0 = SDR_SMA_TIP_Y + ADAPTER_REACH + BULLET_GAP + SMP_JACK_H   # clock board front face
 REAR_Y0 = CLK_Y0 + 1.6 + 8.0   # rear plate front face (8 mm standoffs)
-D = REAR_Y0 + T + 3.0     # overall depth (walls/plates), 204
+D = REAR_Y0 + T + 3.0     # overall depth (walls/plates)
+# The SSD bay must fit between the NUC and the rear plate. The SMP stack-up
+# made the rack shorter, so the bay moves forward when 136 mm no longer fits.
+SSD_Y0 = min(SSD_Y0_MAX, REAR_Y0 - SSD_REAR_GAP - (SSD_W + 2 * (SSD_CLR + 2.0)))   # drive front edge
+
+# Rear plate: soldering windows (the jacks are soldered from the back with the SDRs mated)
+SOLDER_WIN_DX   = 7.0     # PROPOSED: window half width about the jack axis (X)
+SOLDER_WIN_DZ   = 6.0     # PROPOSED: window margin above the upper jack and below the lower jack (Z)
+CLK_HOLE_KEEP   = 4.0     # PROPOSED: minimum material around each board mounting hole
+CLK_HOLE_D      = 3.4     # clock board mounting hole in the rear plate
+# Rear plate: access holes for the rear stop screws. The screws are on the
+# strip axis, under the clock board (bottom strips) and above it (top strips).
+# A long hex key goes in through the rear plate along -Y. The key for an M3
+# set screw is 1.5 mm hex; the hole also takes a 3 mm screwdriver shaft.
+STOP_ACCESS_D   = 4.0     # PROPOSED: access hole diameter in the rear plate
+STOP_KEY_D      = 3.0     # tool shaft diameter that check_fit.py proves has a clear path
 
 def slot_x0(i):
     return MARGIN + sum(p for _, _, p in SLOTS[:i])
@@ -155,7 +209,10 @@ WALL_TABS_Y   = [25.0, 105.0, 185.0]     # tab centres along wall bottom/top edg
 WALL_SCREWS_Y = [65.0, 145.0]
 TAB_L = 20.0
 REAR_TABS_X   = [W * 0.22, W * 0.78]
-REAR_SCREWS_X = [W * 0.5]
+# The rear plate screw sits midway between the 2nd and 3rd SDR trays. Why:
+# at W/2 its T-slot nut pocket cut into the rear stop access hole of slot 2.
+_SDR_I = [i for i, sl in enumerate(SLOTS) if sl[1] in ("b210", "b200")]
+REAR_SCREWS_X = [MARGIN + sum(p for _, _, p in SLOTS[:_SDR_I[2]]) + TRAY_OFF - SLOTS[_SDR_I[1]][2] / 2]
 REAR_SIDE_TABS_Z = [30.0, 90.0]
 REAR_SIDE_SCREW_Z = [60.0]
 
@@ -163,13 +220,20 @@ REAR_SIDE_SCREW_Z = [60.0]
 EAR_Y = [(0.0, 14.0), (75.0, 85.0), (145.0, 155.0)]
 NUC_EAR_Y = [(0.0, 14.0), (50.0, 60.0), (95.0, 105.0)]
 
-def strip_local(length, ears):
-    """rail strip in local coords: x across (centred), y along, z up from plate."""
+def strip_local(length, ears, sdr=False):
+    """rail strip in local coords: x across (centred), y along, z up from plate.
+    sdr=True gives the rear stop block a set screw. The tip of that screw is
+    the axial datum of the SDR tray (see STOP_ADJ). The NUC strip stays plain."""
     w2 = STRIP_W / 2
     s = box(-w2, 0, 0, w2, length, STRIP_BASE)
     s = s.fuse(box(-w2, 0, STRIP_BASE, -w2 + RIB_T, length, STRIP_BASE + RIB_H))
     s = s.fuse(box(w2 - RIB_T, 0, STRIP_BASE, w2, length, STRIP_BASE + RIB_H))
-    s = s.fuse(box(-w2, length - 3.0, STRIP_BASE, w2, length, STRIP_BASE + RIB_H))   # rear stop
+    if sdr:
+        # Long, tall stop block: it must hold an M3 heat-set insert. It sits
+        # behind the SDR board, so it can be taller than the ribs.
+        s = s.fuse(box(-w2, length - STOP_BLOCK_L, STRIP_BASE, w2, length, STOP_BLOCK_H))
+    else:
+        s = s.fuse(box(-w2, length - 3.0, STRIP_BASE, w2, length, STRIP_BASE + RIB_H))   # rear stop
     holes = []
     for k, (e0, e1) in enumerate(ears):
         e1 = min(e1, length)
@@ -178,6 +242,14 @@ def strip_local(length, ears):
         holes.append(cq.Solid.makeCylinder(2.0, 5.5, cq.Vector(w2 + 3.0, hy, 0)))   # M3 heat-set from plate side
     # latch pivot insert on front face of first ear (along +y)
     holes.append(cq.Solid.makeCylinder(2.0, 6.0, cq.Vector(w2 + 3.0, 0, STRIP_BASE + RIB_H / 2 + 0.5), cq.Vector(0, 1, 0)))
+    if sdr:
+        # The insert goes in from the FRONT face of the block. The tray pushes
+        # the screw backward, so the load presses the insert into its pocket.
+        # The set screw enters from the rear through the clearance hole.
+        y0 = length - STOP_BLOCK_L
+        up = cq.Vector(0, 1, 0)
+        holes.append(cq.Solid.makeCylinder(INSERT_D / 2, STOP_INSERT_L + 0.01, cq.Vector(0, y0 - 0.01, LATCH_Z), up))
+        holes.append(cq.Solid.makeCylinder(STOP_SCREW_CLR / 2, STOP_BLOCK_L + 0.02, cq.Vector(0, y0 - 0.01, LATCH_Z), up))
     for hh in holes:
         s = s.cut(hh)
     return s.clean()
@@ -315,12 +387,42 @@ def rear_plate_local():
         cuts.append(tslot_x(W, sz, -1))
     # clock board mounting holes
     for (hx, hz) in clk_holes():
-        cuts.append(circ(hx, hz, 3.4))
+        cuts.append(circ(hx, hz, CLK_HOLE_D))
     cx0, cx1, cz0, cz1 = clk_outline()
+    # soldering windows: one behind each SDR jack column
+    cuts += solder_windows()
+    # access holes: one on the axis of each rear stop screw
+    for (ax, az) in stop_axes():
+        cuts.append(circ(ax, az, STOP_ACCESS_D))
     # windows: left of clock board (SSD/NUC cables), above it (SDR power), below it
     cuts += grid_windows(16.0, 18.0, cx0 - 6.0, H - 18.0, 1, 2, 8.0)
     cuts += grid_windows(cx0 + 6.0, cz1 + 6.0, W - 16.0, H - 18.0, 3, 1, 8.0)
     return plate(0, 0, W, H, adds=adds, cuts=cuts)
+
+def stop_axes():
+    """World (X, Z) of every rear stop screw axis: bottom and top strip of each SDR slot.
+    The top strip is the bottom strip mirrored about Z = H/2 (see mirror_top)."""
+    return [(tray_x(i), z) for i in sdr_indices() for z in (LATCH_Z, H - LATCH_Z)]
+
+def solder_windows():
+    """Windows in the rear plate (local coords: x = world X, y = world Z).
+    The jacks are soldered from the back of the clock board with the SDRs
+    already mated. The iron must reach both jacks of one column. A keep-out
+    disc around each board mounting hole leaves enough material there."""
+    out = []
+    keep = [circ(hx, hz, CLK_HOLE_D + 2 * CLK_HOLE_KEEP) for hx, hz in clk_holes()]
+    by_sdr = {}
+    for m in mate_pairs():
+        by_sdr.setdefault(m["sdr"], []).append(m)
+    for name, ms in by_sdr.items():
+        xc = sum(m["jack_xz"][0] for m in ms) / len(ms)
+        z0 = min(m["jack_xz"][1] for m in ms) - SOLDER_WIN_DZ
+        z1 = max(m["jack_xz"][1] for m in ms) + SOLDER_WIN_DZ
+        w = rrect(xc, (z0 + z1) / 2, 2 * SOLDER_WIN_DX, z1 - z0, 2.0)
+        for k in keep:
+            w = w.cut(k)
+        out.append(w)
+    return out
 
 # ---------------------------------------------------------------- clock board (Rev B envelope)
 def sdr_indices():
@@ -351,35 +453,91 @@ CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revB", "proje
                             os.path.join(_HERE, "..", "clockB", "project", "heron_clock.kicad_pcb")) if os.path.exists(p)),
                "")   # rev B KiCad board; the jack positions come from this file
 
-def clk_parts():
-    """{ref: (kx, ky)} board-local positions of J1..J10 from the KiCad file (rev B)."""
+def _clk_read():
+    """{ref: (kx, ky, footprint_name)} for J1..J10 from the KiCad file (rev B)."""
     import re
     out = {}
     if not os.path.exists(CLK_PCB):
         return out
     txt = open(CLK_PCB).read()
-    for blk in re.split(r"\n  \(footprint ", txt)[1:]:
+    for blk in re.split(r"\n[ \t]+\(footprint ", txt)[1:]:   # KiCad 7 indents with spaces, KiCad 8 with tabs
         m = re.search(r'\(at ([-\d.]+) ([-\d.]+)', blk)
         r = re.search(r'\(property "Reference" "([^"]+)"', blk) or re.search(r'fp_text reference "([^"]+)"', blk)
+        f = re.match(r'"([^"]*)"', blk)
         if m and r and re.fullmatch(r"J\d+", r.group(1)):
-            out[r.group(1)] = (float(m.group(1)) - 100.0, float(m.group(2)) - 100.0)
+            out[r.group(1)] = (float(m.group(1)) - 100.0, float(m.group(2)) - 100.0, f.group(1) if f else "")
+    return out
+
+def clk_parts():
+    """{ref: (kx, ky)} board-local positions of J1..J10 from the KiCad file (rev B)."""
+    return {r: (x, y) for r, (x, y, _) in _clk_read().items()}
+
+def clk_jack_kind(ref, fp=""):
+    """'smp' or 'sma'. The footprint name decides. The KiCad file may still hold
+    the old 132134 SMA footprint on J3-J10, so the reference also decides:
+    J3-J10 are the SDR jacks (SMP). J2 (PPS IN) stays SMA."""
+    if "SMP" in fp.upper():
+        return "smp"
+    return "smp" if ref in ("J%d" % n for n in range(3, 11)) else "sma"
+
+def mate_pairs():
+    """One entry for each SDR reference SMA that faces a clock board jack.
+    Both the rear plate windows and the check_fit mate report use this list.
+    The jack is the nearest SDR jack (J3-J10) to the SDR SMA axis. If the
+    KiCad file is missing, the jack axis equals the SDR axis."""
+    jacks = {}
+    for ref, (kx, ky, fp) in _clk_read().items():
+        if clk_jack_kind(ref, fp) == "smp":
+            jacks[ref] = clk_to_world(kx, ky)
+    out = []
+    for i in sdr_indices():
+        for k in ("ref_a", "ref_b"):
+            ax = (sdr_sma_x(i), Z_BOARD + SDR_REAR_SMA[k])
+            ref, jxz = None, ax
+            if jacks:
+                ref = min(jacks, key=lambda r: math.hypot(jacks[r][0] - ax[0], jacks[r][1] - ax[1]))
+                jxz = jacks[ref]
+            out.append(dict(sdr=SLOTS[i][0], key=k, axis_xz=ax, jack=ref, jack_xz=jxz))
     return out
 
 def clock_board_ref():
-    """clock board rev B: PCB in the XZ plane, Amphenol 132134 jacks facing the SDRs, J1 on top."""
+    """clock board rev B: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
+    J3-J10: Amphenol SMP-MSLD-PCT envelope. J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
     for (hx, hz) in clk_holes():
         pcb = pcb.cut(cq.Solid.makeCylinder(1.6, 5, cq.Vector(hx, CLK_Y0 - 1, hz), cq.Vector(0, 1, 0)))
-    parts = clk_parts()
-    for ref, (kx, ky) in parts.items():
+    toward_sdr = cq.Vector(0, -1, 0)
+    for ref, (kx, ky, fp) in _clk_read().items():
         wx, wz = clk_to_world(kx, ky)
         if ref == "J1":   # JST-GH, mouth up
             pcb = pcb.fuse(box(wx - 3.5, CLK_Y0 - 4.3, wz - 3.2, wx + 3.5, CLK_Y0, wz + 3.2))
+        elif clk_jack_kind(ref, fp) == "smp":
+            # SMP-MSLD-PCT, Y measured from the board front face toward the SDR (Amphenol IGES model):
+            # 6.0 sq body 0 - 1.22, dia 6.0 flange 1.22 - 2.31, dia 4.19 shroud 2.31 - SMP_JACK_H
+            pcb = pcb.fuse(box(wx - 3.0, CLK_Y0 - 1.22, wz - 3.0, wx + 3.0, CLK_Y0, wz + 3.0))
+            pcb = pcb.fuse(cq.Solid.makeCylinder(3.0, 1.09, cq.Vector(wx, CLK_Y0 - 1.22, wz), toward_sdr))
+            pcb = pcb.fuse(cq.Solid.makeCylinder(4.19 / 2, SMP_JACK_H - 2.31, cq.Vector(wx, CLK_Y0 - 2.31, wz), toward_sdr))
         else:             # 132134: 6.35 sq body + SMA barrel, ~12.7 mm tall
             pcb = pcb.fuse(box(wx - 3.175, CLK_Y0 - 4.4, wz - 3.175, wx + 3.175, CLK_Y0, wz + 3.175))
-            pcb = pcb.fuse(cq.Solid.makeCylinder(3.175, 8.3, cq.Vector(wx, CLK_Y0 - 4.4, wz), cq.Vector(0, -1, 0)))
+            pcb = pcb.fuse(cq.Solid.makeCylinder(3.175, 8.3, cq.Vector(wx, CLK_Y0 - 4.4, wz), toward_sdr))
     return pcb
+
+def mate_refs():
+    """Reference solids for the blind-mate: one adapter and one bullet for
+    each mated pair. They are not parts to make. They are here to check fit."""
+    out = []
+    face = SDR_SMA_TIP_Y + ADAPTER_REACH          # adapter SMP mating face
+    jack_face = CLK_Y0 - SMP_JACK_H               # board jack mating face
+    yc = (face + jack_face) / 2                   # the bullet sits centred in the gap
+    up = cq.Vector(0, 1, 0)
+    for m in mate_pairs():
+        ax, az = m["axis_xz"]
+        tag = f"{m['sdr']}_{m['key']}"
+        out.append((f"REF_adapter_{tag}", cq.Solid.makeCylinder(ADAPTER_D / 2, ADAPTER_REACH, cq.Vector(ax, SDR_SMA_TIP_Y, az), up)))
+        jx, jz = m["jack_xz"]
+        out.append((f"REF_bullet_{tag}", cq.Solid.makeCylinder(BULLET_D / 2, BULLET_L, cq.Vector(jx, yc - BULLET_L / 2, jz), up)))
+    return out
 
 # ---------------------------------------------------------------- trays
 def tray_local(kind):
@@ -458,9 +616,23 @@ def ssd_sled():
     return s.clean()
 
 # ---------------------------------------------------------------- latch
-def latch_local():
-    s = plate(0, -4, 15, 4)
+def latch_local(preload=False):
+    """Swing latch. Local z runs toward the rack front (world -Y).
+    preload=True (SDR latches) adds a boss with an M3 heat-set insert. An M3
+    thumbscrew goes through the boss along +Y. Its tip pushes on the tray front
+    edge, so the tray stays clamped against the rear stop screw. A screw gives
+    the force: up to 9 N for each SMP smooth-bore interface (18 N for each SDR).
+    The pivot hole and the swing-aside movement do not change."""
+    n = LATCH_L_PRE if preload else LATCH_L
+    s = plate(0, -4, n, 4)
     s = s.cut(circ(3.0, 0, 3.4))
+    if preload:
+        bx = STRIP_W / 2 + 6.0                 # local x of the tray centre plane (pivot is 3 mm from the arm start)
+        s = s.fuse(cq.Solid.makeCylinder(PRE_BOSS_D / 2, PRE_BOSS_T, cq.Vector(bx, 0, 0)))
+        # The insert goes in from the REAR face (local z = 0). The tray pushes
+        # the screw toward the front, so the load presses the insert into its pocket.
+        s = s.cut(cq.Solid.makeCylinder(INSERT_D / 2, STOP_INSERT_L, cq.Vector(bx, 0, -0.01)))
+        s = s.cut(cq.Solid.makeCylinder(STOP_SCREW_CLR / 2, PRE_BOSS_T + 0.02, cq.Vector(bx, 0, -0.01)))
     s = s.fuse(cq.Solid.makeCylinder(1.5, 2.0, cq.Vector(12.5, 0, T)))   # grip nub
     return s.clean()
 
@@ -513,7 +685,7 @@ def build(with_refs=True):
         tl = tray_local(kind)
         tw = place(tl, (tray_x(i) - T / 2, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 0))
         parts.append((f"tray_{name}", tw, "laser", tl if first else None, f"tray_{fam}{'_solid' if fam == 'sdr' else ''}_x{n}"))
-        sl = strip_local(NUC_STRIP_Y1 if nuc else STRIP_Y1, NUC_EAR_Y if nuc else EAR_Y)
+        sl = strip_local(NUC_STRIP_Y1 if nuc else STRIP_Y1, NUC_EAR_Y if nuc else EAR_Y, sdr=not nuc)
         sb = sl.moved(cq.Location(cq.Vector(tray_x(i), 0, 0)))
         parts.append((f"strip_bot_{name}", sb, "asa", sl if first else None,
                       f"rail_strip_{'nuc' if nuc else 'sdr'}_x{n} (+ same number MIRRORED for top)"))
@@ -524,11 +696,12 @@ def build(with_refs=True):
         parts.append((f"rail_bot_{name}", rb, "tpu", rl if first else None,
                       f"tpu_rail_{'nuc' if nuc else 'sdr'}_x{2 * n}"))
         parts.append((f"rail_top_{name}", mirror_top(rb), "tpu", None, None))
-        lt = latch_local()
+        lt = latch_local(preload=not nuc)
         px = tray_x(i) + STRIP_W / 2 + 3.0
-        pz = STRIP_BASE + RIB_H / 2 + 0.5
+        pz = LATCH_Z
         lw = place(lt, (px + 3.0, 0, pz), (-1, 0, 0), (0, 0, -1), (0, -1, 0))
-        parts.append((f"latch_bot_{name}", lw, "asa", lt if i == 0 else None, f"latch_x{2 * len(SLOTS) + 1}"))
+        parts.append((f"latch_bot_{name}", lw, "asa", lt if first else None,
+                      "latch_sdr_preload_x%d" % (2 * nsdr) if not nuc else "latch_x3 (NUC x2 + SSD hatch x1)"))
         parts.append((f"latch_top_{name}", mirror_top(lw), "asa", None, None))
     # SSD bay
     cg, sd = ssd_cage(), ssd_sled()
@@ -544,6 +717,7 @@ def build(with_refs=True):
                 refs.append((f"REF_{name}", sdr_place(sdr_ref(kind), i)))
             elif kind == "nuc":
                 refs.append(("REF_NUC7i3DNB_envelope", nuc_ref(i)))
+        refs += mate_refs()
         refs.append(("REF_SSD_2.5in", ssd_ref()))
         refs.append(("REF_clock_board_revB", clock_board_ref()))
     return parts, refs
