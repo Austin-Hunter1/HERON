@@ -7,10 +7,12 @@ Signal flow
 - Two TPS7A2033 LDOs: +3V3_OSC (SiT5155 only) and +3V3_CLK (buffers).
 - SiT5155 10 MHz LVCMOS -> 22 R -> LMK1C1104 1:4 buffer (50 R output).
 - Each 10 MHz output: 0 R -> 100 nF DC block -> 5th-order 0.1 dB Chebyshev
-  low-pass (fc ~13 MHz, 50 R) -> 3 dB pi pad -> ESD -> edge SMA.
+  low-pass (fc ~13 MHz, 50 R) -> 3 dB pi pad -> ESD -> SMP jack.
   Level at a 50 R load: ~ +7 dBm (1.4 Vpp); ~2.9 Vpp into high-Z.
 - PPS in (SMA) -> optional 50 R term (DNP) -> ESD -> 100 R -> SN74LVC1G17
-  (Schmitt, 5 V tolerant) -> SN74LVC125A quad buffer -> 22 R -> ESD -> SMA x4.
+  (Schmitt, 5 V tolerant) -> SN74LVC125A quad buffer -> 22 R -> ESD -> SMP x4.
+- J3-J10 are SMP jacks that blind-mate to the SDRs. J2 (PPS in) stays SMA
+  because it takes a cable from the GNSS receiver.
 """
 from gen_sch import Sheet, OUT
 
@@ -21,7 +23,8 @@ C0805 = "Capacitor_SMD:C_0805_2012Metric"
 L0805 = "Inductor_SMD:L_0805_2012Metric"
 L0603 = "Inductor_SMD:L_0603_1608Metric"
 LED0603 = "LED_SMD:LED_0603_1608Metric"
-SMA_FP = "Connector_Coaxial:SMA_Amphenol_132134_Vertical"   # rev B: vertical THT jack, faces the SDRs
+SMA_FP = "Connector_Coaxial:SMA_Amphenol_132134_Vertical"   # J2 only: PPS input cable
+SMP_FP = "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"   # J3-J10: blind-mate to the SDRs
 ESD_FP = "Package_SON:Texas_DPY0002A_0.6x1mm_P0.65mm"
 
 MPN = {  # value/footprint -> (manufacturer, part number)
@@ -63,6 +66,12 @@ def ESD(ref):
 def SMA(ref, val):
     return dict(kind="SMA", ref=ref, value=val, fp=SMA_FP,
                 fields=(("Manufacturer", "Amphenol RF"), ("MPN", "132134")))
+
+
+def SMP(ref, val):
+    """SDR output jack. Same two-pin symbol as SMA(); only the footprint and MPN change."""
+    return dict(kind="SMA", ref=ref, value=val, fp=SMP_FP,
+                fields=(("Manufacturer", "Amphenol RF"), ("MPN", "SMP-MSLD-PCT")))
 
 
 class Refs:
@@ -183,7 +192,7 @@ def build():
     cap(170.18, 195.58, "1uF", C0603, "+3V3_CLK")
 
     # ------------------------------------------------ D: 10 MHz output chains
-    s.text((200.66, 22.86), "10 MHz OUTPUTS x4: DC block -> 5th-order Chebyshev LPF (fc 13 MHz, 50R) -> 3 dB pad -> SMA", 2.0)
+    s.text((200.66, 22.86), "10 MHz OUTPUTS x4: DC block -> 5th-order Chebyshev LPF (fc 13 MHz, 50R) -> 3 dB pad -> SMP", 2.0)
     names = ["B210_1", "B210_2", "B200_1", "B200_2"]
     for k in range(4):
         y = 35.56 + 27.94 * k
@@ -200,10 +209,10 @@ def build():
             Rsh(ref("R"), "294R"),
             ESD(ref("D")),
             dict(kind="GAP", len=7.62),
-            SMA(f"J{3+k}", f"REF_{names[k]}"),
+            SMP(f"J{3+k}", f"REF_{names[k]}"),
         ])
     # ------------------------------------------------ E: PPS
-    s.text((200.66, 142.24), "PPS: SMA in -> Schmitt buffer -> quad buffer -> 22R -> SMA x4 (3.3 V CMOS, DC coupled)", 2.0)
+    s.text((200.66, 142.24), "PPS: SMA in -> Schmitt buffer -> quad buffer -> 22R -> SMP x4 (3.3 V CMOS, DC coupled)", 2.0)
     s.chain((297.18, 162.56), "PPS_IN", [
         Rsh(ref("R"), "10k"),
         dict(kind="S", lib="Device:R", ref=ref("R"), value="100R", fp=R0402),
@@ -249,7 +258,7 @@ def build():
             R(ref("R"), "22R"),
             ESD(ref("D")),
             dict(kind="GAP", len=7.62),
-            SMA(f"J{7+k}", f"PPS_{names[k]}"),
+            SMP(f"J{7+k}", f"PPS_{names[k]}"),
         ])
 
     # ------------------------------------------------ F: test points, holes, notes

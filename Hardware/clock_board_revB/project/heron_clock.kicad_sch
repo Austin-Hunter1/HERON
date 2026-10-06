@@ -4825,7 +4825,7 @@
         (path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
           (reference "#PWR020")
           (unit 1)))))
-  (text "10 MHz OUTPUTS x4: DC block -> 5th-order Chebyshev LPF (fc 13 MHz, 50R) -> 3 dB pad -> SMA"
+  (text "10 MHz OUTPUTS x4: DC block -> 5th-order Chebyshev LPF (fc 13 MHz, 50R) -> 3 dB pad -> SMP"
     (at 200.66 22.86 0)
     (effects
       (font
@@ -5700,7 +5700,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 332.74 35.56 0)
       (effects
         (font
@@ -5715,7 +5715,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 332.74 35.56 0)
       (effects
         (font
@@ -6634,7 +6634,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 332.74 63.5 0)
       (effects
         (font
@@ -6649,7 +6649,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 332.74 63.5 0)
       (effects
         (font
@@ -7568,7 +7568,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 332.74 91.44 0)
       (effects
         (font
@@ -7583,7 +7583,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 332.74 91.44 0)
       (effects
         (font
@@ -8502,7 +8502,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 332.74 119.38 0)
       (effects
         (font
@@ -8517,7 +8517,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 332.74 119.38 0)
       (effects
         (font
@@ -8568,7 +8568,7 @@
         (path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
           (reference "#PWR048")
           (unit 1)))))
-  (text "PPS: SMA in -> Schmitt buffer -> quad buffer -> 22R -> SMA x4 (3.3 V CMOS, DC coupled)"
+  (text "PPS: SMA in -> Schmitt buffer -> quad buffer -> 22R -> SMP x4 (3.3 V CMOS, DC coupled)"
     (at 200.66 142.24 0)
     (effects
       (font
@@ -10027,7 +10027,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 309.88 190.5 0)
       (effects
         (font
@@ -10042,7 +10042,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 309.88 190.5 0)
       (effects
         (font
@@ -10271,7 +10271,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 309.88 208.28 0)
       (effects
         (font
@@ -10286,7 +10286,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 309.88 208.28 0)
       (effects
         (font
@@ -10515,7 +10515,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 309.88 226.06 0)
       (effects
         (font
@@ -10530,7 +10530,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 309.88 226.06 0)
       (effects
         (font
@@ -10759,7 +10759,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "Connector_Coaxial:SMA_Amphenol_132134_Vertical"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
       (at 309.88 243.84 0)
       (effects
         (font
@@ -10774,7 +10774,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "132134"
+    (property "MPN" "SMP-MSLD-PCT"
       (at 309.88 243.84 0)
       (effects
         (font
@@ -11627,7 +11627,7 @@
         (path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
           (reference "FID3")
           (unit 1)))))
-  (text "ASSEMBLY NOTES\n1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n   No ultrasonic or megasonic cleaning (SiTime).\n2. Reflow: IPC/JEDEC J-STD-020 profile.\n3. SMA J2-J10: vertical THT jacks (132134), hand-solder after reflow.\n4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS."
+  (text "ASSEMBLY NOTES\n1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n   No ultrasonic or megasonic cleaning (SiTime).\n2. Reflow: IPC/JEDEC J-STD-020 profile.\n3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSLD-PCT):\n   insert loose, mate the SDRs, then solder from the back (self-align).\n4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS."
     (at 127 246.38 0)
     (effects
       (font

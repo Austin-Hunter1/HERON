@@ -14,14 +14,14 @@ Qty,References,Value,Footprint,Manufacturer,MPN,Dielectric,Tolerance,Fit
 1,FB1,BLM18PG221,L_0603_1608Metric,Murata,BLM18PG221SN1D,,,Fit
 1,J1,5V_IN,JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal,JST,SM02B-GHS-TB(LF)(SN),,,Fit
 1,J2,PPS_IN,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J3,REF_B210_1,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J4,REF_B210_2,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J5,REF_B200_1,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J6,REF_B200_2,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J7,PPS_B210_1,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J8,PPS_B210_2,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J9,PPS_B200_1,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
-1,J10,PPS_B200_2,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,,,Fit
+1,J3,REF_B210_1,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J4,REF_B210_2,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J5,REF_B200_1,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J6,REF_B200_2,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J7,PPS_B210_1,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J8,PPS_B210_2,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J9,PPS_B200_1,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
+1,J10,PPS_B200_2,SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float,Amphenol RF,SMP-MSLD-PCT,,,Fit
 8,L1 L2 L3 L4 L5 L6 L7 L8,820nH,L_0805_2012Metric,Coilcraft,0805CS-821XJRC,,,Fit
 2,R1 R24,1k,R_0402_1005Metric,,,,,Fit
 3,R2 R4 R21,10k,R_0402_1005Metric,,,,1%,Fit

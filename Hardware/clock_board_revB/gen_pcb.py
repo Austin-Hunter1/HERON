@@ -785,7 +785,8 @@ def labels_revB():
     text("PPS IN", (XC[2] + XC[3]) / 2 + COL_DX / 2 - 0.5, BH - 0.9, 0.8)
     t = "HERON CLOCK DIST rev B   SiT5155 10 MHz + PPS x4   water-soluble flux only"
     tx = pcbnew.PCB_TEXT(board)
-    tx.SetText(t); tx.SetPosition(P(BW / 2, BH - 9.0)); tx.SetLayer(pcbnew.B_SilkS)
+    # BH - 8.5 keeps the text clear of the larger SMP GND pads.
+    tx.SetText(t); tx.SetPosition(P(BW / 2, BH - 8.5)); tx.SetLayer(pcbnew.B_SilkS)
     tx.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(1.0), pcbnew.FromMM(1.0)))
     tx.SetTextThickness(pcbnew.FromMM(0.15)); tx.SetMirrored(True)
     board.Add(tx)

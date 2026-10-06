@@ -1,4 +1,4 @@
-"""Generate the HERON_Clock project library: symbols and the SiT5155 footprint.
+"""Generate the HERON_Clock project library: symbols, the SiT5155 footprint and the SMP jack footprint.
 
 Why: the stock KiCad 7 library has no SiT5155, LMK1C1104 or TPS7A2033
 symbol, and the stock 74LVC125 is a multi-unit symbol. Single-unit
@@ -173,8 +173,73 @@ def build_footprint():
     return fp
 
 
+# ------------------------------------------------ SMP jack footprint (J3-J10)
+# Amphenol RF SMP-MSLD-PCT: SMP male, limited detent, straight PCB jack.
+# Why: the SDRs blind-mate to the board through SMP bullets. The jacks sit
+# loose in oversize holes, the SDRs are mated, and then each jack is
+# soldered from the back, so that it aligns to its own SDR.
+# Lead sizes come from the Amphenol 3D model (IGES, measured in this repo);
+# the Amphenol customer drawing was not available. VERIFY against it.
+SMP_PIN_D = 0.71       # centre pin tail diameter
+SMP_LEG_D = 1.30       # circle that encloses one ground leg (0.95 mm square, rounded corners)
+SMP_LEG_XY = 2.52      # ground leg centre offset from the jack axis, in x and y
+SMP_BODY = 6.0         # square body that sits on the board
+SMP_FLOAT = 0.20       # radial float (each way) that the oversize holes allow (PROPOSED)
+SMP_FIT_CLR = 0.20     # normal diametral lead-to-hole clearance (lead + 0.2 mm)
+SMP_RING = 0.30        # annular ring; a big ring gives the fillet more area
+SMP_FP_NAME = "SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
+
+
+def build_smp_footprint():
+    """SMP-MSLD-PCT land pattern with oversize holes for solder-in-place alignment.
+
+    Origin and pad "1" are on the jack axis. The rack model and gen_pcb.py
+    both use the footprint origin as the jack position, so keep it there.
+    """
+    hole = lambda d: round(d + SMP_FIT_CLR + 2 * SMP_FLOAT, 2)
+    d1, d2 = hole(SMP_PIN_D), hole(SMP_LEG_D)
+    fp = [S("footprint"), SMP_FP_NAME, [S("version"), 20221018],
+          [S("generator"), S("pcbnew")], [S("layer"), "F.Cu"],
+          [S("descr"), "Amphenol RF SMP-MSLD-PCT SMP limited-detent jack, vertical THT. "
+                       f"Oversize holes allow +/-{SMP_FLOAT} mm float for solder-in-place "
+                       "alignment. Lead sizes from the Amphenol 3D model"],
+          [S("tags"), "SMP coaxial jack blind-mate float"],
+          [S("attr"), S("through_hole")]]
+    txt = lambda kind, val, y, layer: [S("fp_text"), S(kind), val, [S("at"), 0, y], [S("layer"), layer],
+                                       [S("effects"), [S("font"), [S("size"), 0.8, 0.8], [S("thickness"), 0.12]]],
+                                       [S("tstamp"), u()]]
+    fp += [txt("reference", "REF**", -4.4, "F.SilkS"), txt("value", "SMP", 4.4, "F.Fab"),
+           txt("user", "${REFERENCE}", 0, "F.Fab")]
+
+    def rect(h, layer, w):
+        return [S("fp_rect"), [S("start"), -h, -h], [S("end"), h, h],
+                [S("stroke"), [S("width"), w], [S("type"), S("solid")]], [S("fill"), S("none")],
+                [S("layer"), layer], [S("tstamp"), u()]]
+    b = SMP_BODY / 2
+    leg_pad_r = (d2 + 2 * SMP_RING) / 2
+    fp.append(rect(b, "F.Fab", 0.1))
+    # Silk: one short mark on each body side, between the ground pads, so
+    # that no silk falls on the pads. The marks show the body edge.
+    s = SMP_LEG_XY - leg_pad_r - 0.2
+    for a, c in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        p, q = ((a * (b + 0.15), -s), (a * (b + 0.15), s)) if a else ((-s, c * (b + 0.15)), (s, c * (b + 0.15)))
+        fp.append([S("fp_line"), [S("start"), *p], [S("end"), *q],
+                   [S("stroke"), [S("width"), 0.12], [S("type"), S("solid")]], [S("layer"), "F.SilkS"],
+                   [S("tstamp"), u()]])
+    fp.append(rect(round(max(b + SMP_FLOAT, SMP_LEG_XY + leg_pad_r) + 0.25, 2), "F.CrtYd", 0.05))
+    fp.append([S("pad"), "1", S("thru_hole"), S("circle"), [S("at"), 0, 0],
+               [S("size"), d1 + 2 * SMP_RING, d1 + 2 * SMP_RING], [S("drill"), d1],
+               [S("layers"), "*.Cu", "*.Mask"], [S("tstamp"), u()]])
+    for sx, sy in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
+        fp.append([S("pad"), "2", S("thru_hole"), S("circle"), [S("at"), sx * SMP_LEG_XY, sy * SMP_LEG_XY],
+                   [S("size"), d2 + 2 * SMP_RING, d2 + 2 * SMP_RING], [S("drill"), d2],
+                   [S("layers"), "*.Cu", "*.Mask"], [S("tstamp"), u()]])
+    return fp
+
+
 def main():
     os.makedirs(OUT + "/HERON_Clock.pretty", exist_ok=True)
+    open(f"{OUT}/HERON_Clock.pretty/{SMP_FP_NAME}.kicad_mod", "w").write(dump(build_smp_footprint()) + "\n")
     lib = [S("kicad_symbol_lib"), [S("version"), 20220914], [S("generator"), S("heron_gen_lib")]]
     lib += build_symbols()
     open(OUT + "/HERON_Clock.kicad_sym", "w").write(dump(lib) + "\n")

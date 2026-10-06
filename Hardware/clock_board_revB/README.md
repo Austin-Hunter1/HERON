@@ -11,11 +11,12 @@ board shape and new connectors so that it fits the payload rack
 | Item | Rev A | Rev B |
 | --- | --- | --- |
 | Board | 84 × 56 mm | 118 × 44 mm, 4 layers, 1.6 mm, four M3 holes |
-| SMA connectors J2–J10 | Amphenol 132289 edge-launch | Amphenol 132134 vertical THT jack |
+| Connectors J2–J10 | Amphenol 132289 edge-launch SMA | J3–J10: Amphenol RF SMP-MSLD-PCT, SMP limited-detent THT jack in oversize holes, blind-mate to the SDRs (D-027). J2: Amphenol 132134 vertical SMA |
 | Connector layout | 10 MHz on one edge, PPS on the other edge | One jack pair for each SDR, on a 30 mm pitch |
 | J1 (5 V, JST-GH) | Left edge | Top edge, opening up |
 | Routing | All by hand (`route.py`) | Clusters by hand (copied from rev A), the rest by Freerouting |
-| Schematic | — | Same parts, values and nets. Only the 9 SMA footprints changed (checked against the rev A netlist). |
+| Schematic | — | Same parts, values and nets. Only the 9 jack footprints changed (checked against the rev A netlist). |
+| Tool | KiCad 7 | KiCad 10 (files saved in the KiCad 10 format) |
 
 ## Fit in the rack
 
@@ -23,9 +24,12 @@ board shape and new connectors so that it fits the payload rack
   component side faces forward, toward the SDRs.
 - Each SDR has two jacks. The jacks are coaxial with the rear reference SMAs of that SDR. The rack
   model reads the jack positions from this KiCad file. The error is 0.000 mm on all 8 jacks.
-- The gap between the jack tips and the SDR SMA tips is about 21 mm. Use flexible male–male
-  RG316 jumpers, 50–75 mm long.
-- Rack coordinates: world X = 46 + x, world Z = 54 − y. The board face is at world Y = 203.2.
+- **Blind-mate (D-027).** Each SDR rear SMA gets an SMA-male to SMP-male smooth-bore adapter. An SMP
+  female–female bullet sits in each board jack. When the SDR tray slides in, the adapter mates with
+  the bullet. There are no jumpers.
+- The board-to-SDR distance comes from the rack parameters `ADAPTER_REACH`, `BULLET_L` and
+  `SMP_JACK_H` (`../payload_rack/heron_rack.py`). `ADAPTER_REACH` is a placeholder. Measure it (Q-015).
+- Rack coordinates: world X = 46 + x, world Z = 54 − y. The rack model gives the world Y of the board face.
 
 | SDR | Upper jack (PPS) | Lower jack (10 MHz) |
 | --- | --- | --- |
@@ -37,8 +41,23 @@ board shape and new connectors so that it fits the payload rack
 Board coordinates are in mm, with (0, 0) at the top-left corner, seen from the component side.
 
 **Verify before you order:** the rack model assumes that the two adjacent rear SMAs
-of each B2x0 (14.2 mm and 34.2 mm from the board corner) are 10 MHz and PPS. Read the silkscreen on
-one SDR. If the order is different, the board still works. Cross the jumpers or use longer jumpers.
+of each B2x0 (14.2 mm and 34.2 mm from the board corner) are 10 MHz (lower) and PPS (upper). Read the
+silkscreen on one SDR. A direct mate cannot cross cables. If the order is different, swap `Y_PPS` and
+`Y_REF` in `gen_pcb.py` (or the nets of J3–J6 and J7–J10) before you order.
+
+## SMP jack footprint (J3–J10)
+
+- Footprint `HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float`, made by `gen_lib.py`. The origin
+  and pad 1 are on the jack axis.
+- Lead sizes come from the Amphenol 3D model (IGES): centre pin ø0.71 mm, four corner ground legs
+  0.95 mm square at (±2.52, ±2.52) mm, 6.0 mm square body, mating face 4.09 mm above the board.
+  The pin and the legs come out 0.9 mm and 1.4 mm through the back of the 1.6 mm board.
+- Holes: lead + 0.2 mm + 2 × float. Float is ±0.20 mm (D-027): centre hole 1.31 mm, leg holes 1.90 mm,
+  0.30 mm annular ring. These holes are larger than IPC recommends. The joint relies on the fillet
+  and the ring, not on full barrel fill. Make a sample joint first.
+- The parameters are at the top of the SMP section in `gen_lib.py` (`SMP_FLOAT` and others).
+- **Verify before you order (Q-015):** compare the lead sizes with the Amphenol customer drawing.
+  A distributor listing gives a 1.57 mm maximum board thickness. The board is 1.6 mm.
 
 ## Layout
 
@@ -68,7 +87,8 @@ one SDR. If the order is different, the board still works. Cross the jumpers or 
 
 | Check | Result |
 | --- | --- |
-| KiCad DRC (KiCad 7.0.11) | 0 errors, 0 unconnected pads. 3 warnings: silkscreen clipped by the solder mask (cosmetic, the same type as the 24 warnings of rev A). |
+| KiCad DRC (KiCad 10.0.6, with schematic parity) | 0 errors, 0 unconnected pads, 0 parity issues. 3 warnings: silkscreen clipped by the solder mask (cosmetic, the same as before the SMP change). 75 `lib_footprint_mismatch` notes: the board keeps the KiCad 7 copies of the stock footprints. These notes are not errors. |
+| SMP change (2026-10-05) | J3–J10 were swapped in place in the PCB. All routes stayed. The ground pours were refilled. The board title text moved 0.5 mm, clear of the larger pads. |
 | Netlist (`check_net.py`) | All nets have 2 or more nodes. Exceptions: the intentional NC pins U1.4, U2.4 and U5.1. |
 | Netlist compared to rev A | All 51 nets are the same. Only the footprints of J2–J10 are different. |
 | Fit in the rack (`../payload_rack/check_fit.py`) | No interference. |
@@ -80,15 +100,34 @@ one SDR. If the order is different, the board still works. Cross the jumpers or 
 1. **U3 SiT5155: use water-soluble flux only. Do not use no-clean flux. Do not use
    ultrasonic or megasonic cleaning.** (SiTime manufacturing guidelines.)
 2. Reflow all SMD parts on the top side. `fab/heron_clock_cpl_top.csv` has the placement data.
-3. Solder the nine 132134 jacks (J2–J10) by hand after reflow.
-4. R23 (49.9 Ω PPS termination) is DNP. Fit it only if the GNSS PPS source needs a 50 Ω load.
-5. J1 pin 1 = +5 V, pin 2 = GND.
+3. Solder J2 (132134 SMA) by hand after reflow.
+4. **J3–J10 (SMP): solder in place in the rack.** This aligns each jack to its own SDR.
+   1. Mount the board on the rear plate. Put each SMP jack loose in its holes, with a bullet in it.
+   2. Fit the adapters to the SDRs. Install all four SDR trays. Set each rear stop and tighten each
+      preload screw (see `../payload_rack/README.md`).
+   3. Solder one ground leg of each jack from the back, through the rear-plate windows.
+   4. Remove the SDRs. Solder the other legs and the centre pin. Check the fillets.
+   5. Do not move an SDR to a different slot after this. Mark the slots.
+5. R23 (49.9 Ω PPS termination) is DNP. Fit it only if the GNSS PPS source needs a 50 Ω load.
+6. J1 pin 1 = +5 V, pin 2 = GND.
 
 ## Rebuild
 
-The generators make all the KiCad files and fab outputs. You need:
+The generators make all the KiCad files and fab outputs.
 
-- KiCad 7 with its Python module (`pcbnew`) and `kicad-cli`.
+**Export only (the normal case now).** The board was edited after the last full run (the SMP swap).
+Make the fab outputs from the KiCad files as they are:
+
+```
+EXPORT_ONLY=1 KICAD_CLI=kicad-cli PYTHON=python3 bash make_fab.sh
+```
+
+On Windows, set `KICAD_CLI` and `PYTHON` to `kicad-cli.exe` and `python.exe` in the KiCad 10 `bin`
+folder, and run the script in Git Bash.
+
+**Full rebuild.** You need:
+
+- KiCad 7 with its Python module (`pcbnew`) and `kicad-cli`. The full rebuild was not tested with KiCad 10.
 - Java 17 or later, Freerouting 1.9.0 (`freerouting-1.9.0.jar`, from GitHub), and Xvfb.
 - `FREEROUTING_JAR` set to the path of the jar. Do not put the jar in git.
 
@@ -115,7 +154,8 @@ because it overwrites the schematic and the PCB.
 
 ## Open items
 
-- Which rear SMA of the B2x0 is 10 MHz and which is PPS (see above).
+- Which rear SMA of the B2x0 is 10 MHz and which is PPS (see above, Q-015).
+- The adapter reach, the adapter part, the bullet length and the Amphenol drawing check (Q-015).
 - The PPS source (GNSS receiver model) is still open. J2 (PPS IN) faces forward, between the B200_1 and B200_2
   jack columns. Route its cable inside the rack.
 - The 10 MHz is free-running, the same as rev A.
