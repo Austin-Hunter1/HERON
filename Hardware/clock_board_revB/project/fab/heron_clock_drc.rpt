@@ -1,0 +1,19 @@
+** Drc report for /home/claude/clockB/project/heron_clock.kicad_pcb **
+** Created on 2026-10-02 11:35:11 **
+
+** Found 3 DRC violations **
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(159.0000 mm, 135.0000 mm): PCB Text 'HERON CLOCK DIST rev B   SiT5155 1...' on B.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(133.3600 mm, 101.5000 mm): PCB Text '+5V' on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; Severity: warning
+    @(155.2650 mm, 121.4150 mm): Reference 'U4'
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** End of Report **

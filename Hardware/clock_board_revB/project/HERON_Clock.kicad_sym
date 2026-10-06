@@ -1,0 +1,602 @@
+(kicad_symbol_lib
+  (version 20220914)
+  (generator heron_gen_lib)
+  (symbol "SiT5155"
+    (in_bom yes)
+    (on_board yes)
+    (property "Reference" "U"
+      (at -7.62 6.35 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Value" "SiT5155AI-FK-33E0-10.000000"
+      (at -7.62 -13.97 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" "HERON_Clock:SiTime_SiT5155_5.0x3.2mm_10L"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Datasheet" "https://www.sitime.com/datasheet/SiT5155"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "ki_description" "SiT5155 +-0.5 ppm Super-TCXO, 10 MHz LVCMOS, 3.3 V, pin 1 OE"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "MPN" "SiT5155AI-FK-33E0-10.000000"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Manufacturer" "SiTime"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (symbol "SiT5155_0_1"
+      (rectangle
+        (start -7.62 5.08)
+        (end 7.62 -12.7)
+        (stroke
+          (width 0.254)
+          (type default))
+        (fill
+          (type background))))
+    (symbol "SiT5155_1_1"
+      (pin power_in line
+        (at -10.16 2.54 0)
+        (length 2.54)
+        (name "VDD"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "9"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -2.54 0)
+        (length 2.54)
+        (name "OE"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "1"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin output line
+        (at 10.16 0 180)
+        (length 2.54)
+        (name "CLK"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "6"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at -7.62 -15.24 90)
+        (length 2.54)
+        (name "NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "8"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at -5.08 -15.24 90)
+        (length 2.54)
+        (name "NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "7"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at -2.54 -15.24 90)
+        (length 2.54)
+        (name "NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "3"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 -15.24 90)
+        (length 2.54)
+        (name "GND"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "4"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at 2.54 -15.24 90)
+        (length 2.54)
+        (name "SCL/NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "2"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at 5.08 -15.24 90)
+        (length 2.54)
+        (name "SDA/NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "10"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin passive line
+        (at 7.62 -15.24 90)
+        (length 2.54)
+        (name "A0/NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "5"
+          (effects
+            (font
+              (size 1.27 1.27)))))))
+  (symbol "LMK1C1104"
+    (in_bom yes)
+    (on_board yes)
+    (property "Reference" "U"
+      (at -10.16 8.89 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Value" "LMK1C1104PWR"
+      (at -10.16 -11.43 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" "Package_SO:TSSOP-8_4.4x3mm_P0.65mm"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Datasheet" "https://www.ti.com/lit/ds/symlink/lmk1c1104.pdf"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "ki_description" "1:4 LVCMOS clock buffer, DC-250 MHz, 50 ohm output impedance"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "MPN" "LMK1C1104PWR"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Manufacturer" "Texas Instruments"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (symbol "LMK1C1104_0_1"
+      (rectangle
+        (start -10.16 7.62)
+        (end 10.16 -10.16)
+        (stroke
+          (width 0.254)
+          (type default))
+        (fill
+          (type background))))
+    (symbol "LMK1C1104_1_1"
+      (pin input line
+        (at -12.7 2.54 0)
+        (length 2.54)
+        (name "CLKIN"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "1"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -12.7 -2.54 0)
+        (length 2.54)
+        (name "1G"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "2"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 10.16 270)
+        (length 2.54)
+        (name "VDD"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "6"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 -12.7 90)
+        (length 2.54)
+        (name "GND"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "4"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin output line
+        (at 12.7 5.08 180)
+        (length 2.54)
+        (name "Y0"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "3"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin output line
+        (at 12.7 2.54 180)
+        (length 2.54)
+        (name "Y1"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "8"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin output line
+        (at 12.7 0 180)
+        (length 2.54)
+        (name "Y2"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "5"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin output line
+        (at 12.7 -2.54 180)
+        (length 2.54)
+        (name "Y3"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "7"
+          (effects
+            (font
+              (size 1.27 1.27)))))))
+  (symbol "TPS7A2033DBV"
+    (in_bom yes)
+    (on_board yes)
+    (property "Reference" "U"
+      (at -7.62 6.35 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Value" "TPS7A2033DBVR"
+      (at -7.62 -8.89 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Datasheet" "https://www.ti.com/lit/ds/symlink/tps7a20.pdf"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "ki_description" "300 mA low-noise LDO, 3.3 V fixed, SOT-23-5"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "MPN" "TPS7A2033DBVR"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Manufacturer" "Texas Instruments"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (symbol "TPS7A2033DBV_0_1"
+      (rectangle
+        (start -7.62 5.08)
+        (end 7.62 -7.62)
+        (stroke
+          (width 0.254)
+          (type default))
+        (fill
+          (type background))))
+    (symbol "TPS7A2033DBV_1_1"
+      (pin power_in line
+        (at -10.16 2.54 0)
+        (length 2.54)
+        (name "IN"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "1"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -2.54 0)
+        (length 2.54)
+        (name "EN"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "3"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_out line
+        (at 10.16 2.54 180)
+        (length 2.54)
+        (name "OUT"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "5"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin no_connect line
+        (at 10.16 -2.54 180)
+        (length 2.54)
+        (name "NC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "4"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 -10.16 90)
+        (length 2.54)
+        (name "GND"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "2"
+          (effects
+            (font
+              (size 1.27 1.27)))))))
+  (symbol "74LVC125_1U"
+    (in_bom yes)
+    (on_board yes)
+    (property "Reference" "U"
+      (at -7.62 13.97 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Value" "SN74LVC125APWR"
+      (at -7.62 -13.97 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Datasheet" "https://www.ti.com/lit/ds/symlink/sn74lvc125a.pdf"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "ki_description" "Quad buffer, 3-state, 5 V tolerant inputs, single unit"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "MPN" "SN74LVC125APWR"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (property "Manufacturer" "Texas Instruments"
+      (at 0 0 0)
+      (effects
+        (font
+          (size 1.27 1.27)) hide))
+    (symbol "74LVC125_1U_0_1"
+      (rectangle
+        (start -7.62 12.7)
+        (end 7.62 -12.7)
+        (stroke
+          (width 0.254)
+          (type default))
+        (fill
+          (type background))))
+    (symbol "74LVC125_1U_1_1"
+      (pin input line
+        (at -10.16 10.16 0)
+        (length 2.54)
+        (name "1A"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "2"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -2.54 0)
+        (length 2.54)
+        (name "~{1OE}"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "1"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin tri_state line
+        (at 10.16 10.16 180)
+        (length 2.54)
+        (name "1Y"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "3"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 7.62 0)
+        (length 2.54)
+        (name "2A"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "5"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -5.08 0)
+        (length 2.54)
+        (name "~{2OE}"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "4"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin tri_state line
+        (at 10.16 7.62 180)
+        (length 2.54)
+        (name "2Y"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "6"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 5.08 0)
+        (length 2.54)
+        (name "3A"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "9"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -7.62 0)
+        (length 2.54)
+        (name "~{3OE}"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "10"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin tri_state line
+        (at 10.16 5.08 180)
+        (length 2.54)
+        (name "3Y"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "8"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 2.54 0)
+        (length 2.54)
+        (name "4A"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "12"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin input line
+        (at -10.16 -10.16 0)
+        (length 2.54)
+        (name "~{4OE}"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "13"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin tri_state line
+        (at 10.16 2.54 180)
+        (length 2.54)
+        (name "4Y"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "11"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 15.24 270)
+        (length 2.54)
+        (name "VCC"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "14"
+          (effects
+            (font
+              (size 1.27 1.27)))))
+      (pin power_in line
+        (at 0 -15.24 90)
+        (length 2.54)
+        (name "GND"
+          (effects
+            (font
+              (size 1.27 1.27))))
+        (number "7"
+          (effects
+            (font
+              (size 1.27 1.27))))))))
