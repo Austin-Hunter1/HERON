@@ -21,8 +21,8 @@ Rules for this document:
 | --- | --- | --- | --- | --- | --- |
 | ANT-01 | Large green spiral PCB, marked `ZRX-AN-3316` and `R` | Spiral (looks like an Archimedes spiral) | **TBD** (the `R` mark may mean right-handed; not confirmed) | **TBD** | Photo only. No datasheet yet |
 | ANT-02 | Blue spiral PCB, marked "Right-handed" | Archimedes spiral, 0.6–7 GHz | Right-handed circular | **TBD** | Vendor text from the user, in section 3 |
-| ANT-03 | Abracon APKG5012GD active dual-band stacked patch. The team calls it the "Patch antenna" (D-030) | Active patch, LNA 40 ± 2 dB | RHCP | **TBD** | Datasheet, in section 4 |
-| ANT-04 | ArduSimple lightweight helical multiband GNSS antenna. The team calls it the "Flight antenna" (D-030) | Active helical, L1/L2 | RHCP | **TBD** | Datasheet, in section 5 |
+| ANT-03 | Abracon APKG5012GD active dual-band stacked patch. The team calls it the "Patch antenna" (D-032) | Active patch, LNA 40 ± 2 dB | RHCP | **TBD** | Datasheet, in section 4 |
+| ANT-04 | ArduSimple lightweight helical multiband GNSS antenna. The team calls it the "Flight antenna" (D-032) | Active helical, L1/L2 | RHCP | **TBD** | Datasheet, in section 5 |
 
 ## 2. ANT-01: large green spiral PCB
 
@@ -92,8 +92,8 @@ numbers as ANT-02 data.
 
 ![ANT-03](images/antennas/ant-03-square-patch.jpg)
 
-The team calls this antenna the "Patch antenna" (D-030). The recorder
-files of `20261001_URSP_Testing` use that name (see D-029).
+The team calls this antenna the "Patch antenna" (D-032). The recorder
+files of `20261001_URSP_Testing` use that name (see D-031).
 
 Source: `Hardware/datasheets/Abracon-APKG5012GD-datasheet.pdf` (Abracon,
 revised 2026-04-26). The user confirmed on 2026-10-06 that this antenna is
@@ -127,7 +127,7 @@ Notes for the HERON design:
 
 ## 5. ANT-04: ArduSimple lightweight helical multiband GNSS antenna
 
-The team calls this antenna the "Flight antenna" (D-030).
+The team calls this antenna the "Flight antenna" (D-032).
 
 ![ANT-04](images/antennas/ant-04-ardusimple-helical.jpg)
 

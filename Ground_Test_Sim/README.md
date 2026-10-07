@@ -1,6 +1,6 @@
 # Ground_Test_Sim
 
-Ground test simulation for HERON (D-031). It shows where a fixed receiver
+Ground test simulation for HERON (D-033). It shows where a fixed receiver
 on a tripod sees GNSS reflections on flat ground. It also shows the size
 of the first Fresnel zone at each reflection point.
 

@@ -163,7 +163,7 @@ def stream_dir_of(stream: dict) -> str:
 
 
 def physical_antenna(config: dict, stream: dict) -> str:
-    """The antenna that was really on this stream's RF connector (D-029).
+    """The antenna that was really on this stream's RF connector (D-031).
 
     The recorder wrote its own antenna label into each stream folder and YAML, and
     that label is crossed on 2026-10-01. The config maps each stream folder to the

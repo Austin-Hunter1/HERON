@@ -1,0 +1,118 @@
+** Drc report for heron_clock.kicad_pcb **
+** Created on 2026-10-07T14:24:21 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 31 DRC violations **
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; 1 spokes connected to isolated island)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+[lib_footprint_mismatch]: Footprint 'Fuse_1206_3216Metric' does not match copy in library 'Fuse'
+    Local override; warning
+    @(128.2500 mm, 113.3750 mm): Footprint F1
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(123.6500 mm, 131.1750 mm): Footprint C5
+[lib_footprint_mismatch]: Footprint 'L_0603_1608Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(135.4500 mm, 115.5750 mm): Footprint FB1
+[lib_footprint_mismatch]: Footprint 'SOT-23-5' does not match copy in library 'Package_TO_SOT_SMD'
+    Local override; warning
+    @(127.4500 mm, 131.1750 mm): Footprint U2
+[lib_footprint_mismatch]: Footprint 'C_0805_2012Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(133.4500 mm, 130.2750 mm): Footprint C7
+[lib_footprint_mismatch]: Footprint 'C_0805_2012Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(155.7650 mm, 131.9650 mm): Footprint C9
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(209.1600 mm, 125.8600 mm): Footprint L8
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(149.1600 mm, 125.8600 mm): Footprint L4
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(179.1600 mm, 122.2200 mm): Footprint L5
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(153.8650 mm, 114.3650 mm): Footprint C11
+[lib_footprint_mismatch]: Footprint 'SOT-23-5' does not match copy in library 'Package_TO_SOT_SMD'
+    Local override; warning
+    @(190.1100 mm, 127.0000 mm): Footprint U5
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(209.1600 mm, 122.2200 mm): Footprint L7
+[lib_footprint_mismatch]: Footprint 'TSSOP-8_4.4x3mm_P0.65mm' does not match copy in library 'Package_SO'
+    Local override; warning
+    @(155.2650 mm, 118.9650 mm): Footprint U4
+[lib_footprint_mismatch]: Footprint 'JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal' does not match copy in library 'Connector_JST'
+    Local override; warning
+    @(130.1100 mm, 103.2500 mm): Footprint J1
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(123.6500 mm, 124.6750 mm): Footprint C3
+[lib_footprint_mismatch]: Footprint 'C_0805_2012Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(132.0500 mm, 117.3750 mm): Footprint C1
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(131.0500 mm, 123.7750 mm): Footprint C4
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(149.1600 mm, 122.2200 mm): Footprint L3
+[lib_footprint_mismatch]: Footprint 'TSSOP-14_4.4x5mm_P0.65mm' does not match copy in library 'Package_SO'
+    Local override; warning
+    @(166.2650 mm, 118.9650 mm): Footprint U6
+[lib_footprint_mismatch]: Footprint 'LED_0603_1608Metric' does not match copy in library 'LED_SMD'
+    Local override; warning
+    @(186.9100 mm, 120.4000 mm): Footprint D9
+[lib_footprint_mismatch]: Footprint 'LED_0603_1608Metric' does not match copy in library 'LED_SMD'
+    Local override; warning
+    @(129.9500 mm, 134.3750 mm): Footprint D3
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(119.1600 mm, 122.2200 mm): Footprint L1
+[lib_footprint_mismatch]: Footprint 'SOT-23-5' does not match copy in library 'Package_TO_SOT_SMD'
+    Local override; warning
+    @(127.4500 mm, 124.6750 mm): Footprint U1
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(131.0500 mm, 130.2750 mm): Footprint C6
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(119.1600 mm, 125.8600 mm): Footprint L2
+[lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(179.1600 mm, 125.8600 mm): Footprint L6
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(133.3600 mm, 101.5000 mm): PCB text '+5V' on F.Silkscreen
+    @(132.5850 mm, 101.9000 mm): Pad MP [<no net>] of J1 on F.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(159.0000 mm, 135.5000 mm): PCB text 'HERON CLOCK DIST rev C   SiT5155 10 MHz + PPS x4   water-soluble flux only' on B.Silkscreen
+    @(187.5700 mm, 135.0600 mm): PTH pad 2 [GND] of J2
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - PTH inside courtyard
+    - NPTH inside courtyard
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **

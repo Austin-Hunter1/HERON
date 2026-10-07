@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name "HERON_Clock")(type "KiCad")(uri "${KIPRJMOD}/HERON_Clock.pretty")(options "")(descr "HERON clock board parts"))
+)

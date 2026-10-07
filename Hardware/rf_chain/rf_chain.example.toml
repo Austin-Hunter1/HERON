@@ -83,7 +83,7 @@ bands = ["L1", "L5"]
 antenna_gain_dbic = { L1 = 0.0, L5 = 0.0 }    # datasheet maximum: 4.0 dBic L1, > 3.5 dBic L5
 stages = ["patch_lna", "sma_link", "bias_tee", "sma_link"]
 sdr = "b210_rx"
-sdr_gain_db = 70.0                            # D-029, 2026-10-01 test, RF A
+sdr_gain_db = 70.0                            # D-031, 2026-10-01 test, RF A
 bias_tee = "bias_tee"
 active_antenna = "patch_lna"
 # supply_voltage_v = 5.0
@@ -94,7 +94,7 @@ bands = ["L1"]                                # ANT-04 datasheet lists no L5
 antenna_gain_dbic = { L1 = 0.0 }              # datasheet peak: 2 dBi
 stages = ["flight_lna", "sma_link", "bias_tee", "sma_link"]
 sdr = "b210_rx"
-sdr_gain_db = 50.0                            # D-029, 2026-10-01 test, RF B
+sdr_gain_db = 50.0                            # D-031, 2026-10-01 test, RF B
 bias_tee = "bias_tee"
 active_antenna = "flight_lna"
 # supply_voltage_v = 5.0

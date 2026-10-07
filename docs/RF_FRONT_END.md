@@ -22,7 +22,7 @@ The Mermaid version below is the same structure in text form.
 
 Each bias tee has one RF path, so the design needs **one bias tee for each
 antenna**. The RF port assignment (A or B) follows the 2026-10-01 test
-(D-029). It is not a flight decision.
+(D-031). It is not a flight decision.
 
 ```mermaid
 flowchart LR
@@ -84,7 +84,7 @@ Connection notes:
 | B210 RX noise figure | Less than 8 dB | Distributor listing of the Ettus specification (for example [Digilent](https://digilent.com/shop/ettus-usrp-b210-2x2-70mhz-6ghz-sdr-cognitive-radio/)). **Not checked against the Ettus knowledge base** (it returned an error). The value at low gain settings is not in the sources I read |
 | B210 maximum RF input | -15 dBm | Ettus manual (same page) |
 | Noise bandwidth | 20.322 MHz (L5), 20 MHz (L1) | `onboard.example.toml` (placeholder; Q-001 open) |
-| SDR gain settings used on 2026-10-01 | Patch 70 dB (RF A), Flight 50 dB (RF B) | D-029 |
+| SDR gain settings used on 2026-10-01 | Patch 70 dB (RF A), Flight 50 dB (RF B) | D-031 |
 | Minimum received signal | L1 C/A -128.5 dBm; L5 I5 -127.9 dBm, at a 0 dBic antenna | Public GPS interface specifications (IS-GPS-200, IS-GPS-705). **Not from the HERON docs. Confirm.** |
 
 The signal levels are the minimum levels that the GPS specifications
@@ -110,7 +110,7 @@ specifications.
 | Signal at the B210 input | -89.0 dBm | -89.0 dBm | -96.0 dBm |
 | Noise at the B210 input | -60.0 dBm | -60.5 dBm | -67.0 dBm |
 | Headroom to the -15 dBm input limit (noise) | 45.0 dB | 45.5 dB | 52.0 dB |
-| B210 gain setting (D-029) | 70 dB | 70 dB | 50 dB |
+| B210 gain setting (D-031) | 70 dB | 70 dB | 50 dB |
 | Total gain, antenna to B210 output | +109.5 dB | +108.9 dB | +82.5 dB |
 
 In the worst case (`--case worst`: LNA gain at its low tolerance, bias tee

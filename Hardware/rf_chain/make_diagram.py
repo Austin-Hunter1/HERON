@@ -134,7 +134,7 @@ def draw_detailed(data: dict) -> plt.Figure:
     arrow(ax, (69, 23.4), (69, 17.6), "DC pin", dx=1.2, dy=0, ha="left")
     ax.text(2, -13, "Gain, noise figure, and levels come from rf_chain.example.toml via "
             "link_budget.py. Minimum signal reference at a 0 dBic antenna; SMA link loss is "
-            "provisional (0 dB). Port assignment follows the 2026-10-01 test (D-029).",
+            "provisional (0 dB). Port assignment follows the 2026-10-01 test (D-031).",
             fontsize=7.5, style="italic")
     return fig
 

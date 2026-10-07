@@ -64,7 +64,7 @@ You are a test engineer on this project. Obey these rules at all times:
 - `Specular_Planner/` — Jack Abrams' flight planner (web app, orbit and
   specular-point engine). Reference for the orbit code; do not modify
   without asking him.
-- `Ground_Test_Sim/` — Ground test simulation (D-031): specular tracks
+- `Ground_Test_Sim/` — Ground test simulation (D-033): specular tracks
   and Fresnel zones of a fixed receiver. Own `uv` project; reuses
   `Specular_Planner/engine`. See its `README.md`.
 - `Hardware/` — HERON hardware design files.

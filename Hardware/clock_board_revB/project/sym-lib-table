@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "HERON_Clock")(type "KiCad")(uri "${KIPRJMOD}/HERON_Clock.kicad_sym")(options "")(descr "HERON clock board parts"))
+)

@@ -1,0 +1,33 @@
+MPN,Manufacturer,Digi-Key PN,Stock 2026-10-05,Unit price qty 1 (USD),Off-board qty,Off-board use,Spare qty,In hand,Note
+CC0805KRX5R7BB106,YAGEO,311-3502-1-ND,523060,0.63,,,,,Replaces Murata GRM21BR61C106KE15L (no stock until 2026-11-23)
+CC0603KRX7R7BB104,YAGEO,,,,,,,,"Replaces Murata GRM155R71C104KA88D (no stock until 2026-12-18). Rev C (D-028): 0603, was CC0402KRX7R7BB104. Digi-Key PN, stock and price not checked yet"
+GRM188R61C105KA12D,Murata,490-10479-1-ND,9932,0.11,,,,,Replaces GRM188R61C105KA93D (obsolete)
+GRM188R6YA225KA12D,Murata,490-7204-1-ND,66531,0.13,,,,,Replaces GRM188R61A225KE34D (obsolete); 35 V rating
+GRM1885C1H271JA01D,Murata,,,,,,,,"Rev C (D-028): 0603, was GRM1555C1H271JA01D. Digi-Key PN, stock and price not checked yet"
+GRM1885C1H471JA01D,Murata,,,,,,,,"Rev C (D-028): 0603, was GRM1555C1H471JA01D. Digi-Key PN, stock and price not checked yet"
+SMF5.0A,Littelfuse,F5748CT-ND,65978,0.53,,,,,
+SS1030HEWS_R1_00001,Panjit,3757-SS1030HEWS_R1_00001CT-ND,6757,0.26,,,,,Replaces Nexperia PMEG3020EJ (no stock until 2027-02-16); 30 V 1 A; VERIFY land pattern
+150060GS75000,Wurth,732-4971-1-ND,294904,0.15,,,,,
+TPD1E05U06DYAR,Texas Instruments,,,,,,,,"Rev C (D-028): SOD-523 (DYA), was TPD1E05U06DPYR. Digi-Key PN, stock and price not checked yet"
+150060YS75000,Wurth,732-4981-1-ND,110706,0.15,,,,,
+MF-NSMF050-2,Bourns,MF-NSMF050-2CT-ND,29689,0.40,,,,,
+BLM18PG221SN1D,Murata,490-5221-1-ND,273730,0.14,,,,,
+SM02B-GHS-TB(LF)(SN),JST,455-1564-1-ND,11744,0.35,,,,,Mating housing GHR-02V-S (cable side) is not in this BOM
+132134,Amphenol RF,ACX1230-ND,23072,7.30,,,,,
+SMP-MSSB-PCT10T,Amphenol RF,115-SMP-MSSB-PCT10TCT-ND,407,6.89,,,,,"Smooth bore, THT legs + SMD signal tab (2026-10-07). Was SMP-MSSB-PCT ($29.11). Remove the pick-and-place cap before mating. Stock checked 2026-10-07"
+AISC-0805-R82J-T,Abracon,535-10512-1-ND,14360,0.42,,,,,"Replaces Coilcraft 0805CS-821XJRC (Digi-Key Marketplace only). Same size, ceramic core, 2.3 ohm, Q 23 @ 50 MHz, SRF 250 MHz. Stock checked 2026-10-07"
+RC0603JR-070RL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402JR-070RL. Digi-Key PN, stock and price not checked yet"
+RC0603FR-0717R4L,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0717R4L. Digi-Key PN, stock and price not checked yet"
+RMCF0603FT22R0,Stackpole Electronics Inc,RMCF0603FT22R0CT-ND,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0722RL. YAGEO RC0603FR-0722RL out of stock on 2026-10-07: Stackpole used. In stock in the 2026-10-07 Digi-Key cart (0.021 USD at qty 10)"
+RC0603FR-0749R9L,YAGEO,,,,,,5,,"R23 is DNP (fit only if the GNSS PPS source needs 50 ohm). 5 spares in the Digi-Key upload. Rev C (D-028): 0603, was RC0402FR-0749R9L. Digi-Key PN, stock and price not checked yet"
+RC0603FR-07100RL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-07100RL. Digi-Key PN, stock and price not checked yet"
+ERJ-3EKF2940V,Panasonic,,,,,,,,"Rev C (D-028): 0603, was ERJ-2RKF2940X. Digi-Key PN, stock and price not checked yet"
+RC0603FR-071KL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-071KL. Digi-Key PN, stock and price not checked yet"
+RC0603FR-0710KL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0710KL. Digi-Key PN, stock and price not checked yet"
+LP5907MFX-3.3/NOPB,Texas Instruments,296-38557-1-ND,,,,,,,U1 (+3V3_OSC). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
+TLV75533PDBVR,Texas Instruments,296-50411-1-ND,,,,,,,U2 (+3V3_CLK). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
+SiT5155AI-FK-33E0-10.000000,SiTime,,0,55.66,,,,yes,In hand (2026-10-07). Digi-Key estimate 2027-05-17 if more are needed
+LMK1C1104PWR,Texas Instruments,296-LMK1C1104PWRCT-ND,2216,3.75,,,,,
+SN74LVC1G17DBVR,Texas Instruments,296-11933-1-ND,260074,0.15,,,,,
+SN74LVC125APWR,Texas Instruments,296-1222-1-ND,19070,0.41,,,,,
+134-1019-451,Cinch Connectivity Solutions Johnson,24-134-1019-451-ND,71,33.83,8,"Adapter SMA plug to SMP female, one on each SDR rear 10 MHz and PPS SMA; plugs directly onto J3-J10",,,"One-piece adapter, no bullet (D-027, 2026-10-07). 14.25 mm long. Stock checked 2026-10-07. 10+ price 28.75"

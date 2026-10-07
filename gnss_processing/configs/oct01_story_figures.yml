@@ -44,7 +44,7 @@ collects:
   - {folder: dual_L1CA_20261001_144923, label: "L1CA 14:49"}
   - {folder: dual_L5_20261001_145411,   label: "L5 14:54"}
 
-# D-029: which antenna was really on each stream. The recorder wrote crossed
+# D-031: which antenna was really on each stream. The recorder wrote crossed
 # labels (the wizard sorted the two antennas by their saved subdev, and the saved
 # subdev of each antenna was the wrong way round). The user confirmed on 2026-10-02:
 # Patch on the RF A connector (stream chA, subdev A:A), Flight on RF B (chB, A:B).
