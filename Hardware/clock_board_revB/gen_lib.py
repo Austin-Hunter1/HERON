@@ -175,35 +175,46 @@ def build_footprint():
 
 
 # ------------------------------------------------ SMP jack footprint (J3-J10)
-# Amphenol RF SMP-MSSB-PCT: SMP male, smooth bore, straight PCB jack.
-# Why: each SDR mates directly with the board through one SMA-to-SMP-female
-# adapter (D-027). The jacks sit loose in oversize holes, the SDRs are
-# mated, and then each jack is soldered from the back, so that it aligns to
-# its own SDR. Smooth bore: low push-on force; the rack clamp holds the mate.
-# Dimensions: Amphenol customer outline drawing SMP-MSSB-PCT, rev B.
-SMP_PIN_D = 0.71       # centre pin tail diameter (0.71 +/- 0.02)
-SMP_LEG_D = 0.99       # round ground leg diameter (4x 0.99 +/- 0.04)
+# Amphenol RF SMP-MSSB-PCT10T: SMP male, smooth bore, straight PCB jack.
+# The ground legs are through-hole. The signal contact is a surface-mount tab
+# that leaves the body on one side. Why this part: it costs about $7, against
+# about $29 for the SMP-MSSB-PCT with a through-hole centre pin (2026-10-07).
+# Why oversize leg holes: each SDR mates directly with the board through one
+# SMA-to-SMP-female adapter (D-027). The jacks sit loose, the SDRs are mated,
+# the legs are soldered from the back, and then the tab is soldered on top.
+# Dimensions: Amphenol customer outline drawing SMP-MSSB-PCT10T rev A.
+# The tab points along +x at rotation 0. gen_pcb.py turns each jack so that
+# the tab points along its signal trace.
+SMP_LEG_D = 0.99       # round ground leg diameter (4x 0.99 REF)
 SMP_LEG_XY = 2.54      # ground leg offset from the jack axis, in x and y (5.08 mm square pitch)
 SMP_BODY = 5.99        # square body that sits on the board
-SMP_FLOAT = 0.20       # radial float (each way) that the oversize holes allow (PROPOSED)
+SMP_TAB_X0 = 2.6       # signal pad inner edge, from the jack axis (recommended layout)
+SMP_TAB_L = 2.03       # signal pad length (recommended layout)
+SMP_TAB_W = 0.63       # signal pad width (recommended layout)
+SMP_TAB_WIRE = 0.38    # signal tab width (drawing). The pad is tab + 2 x float + 0.05, so the tab stays on the pad
+
+SMP_KEEP_D = 4.24      # copper keep-out circle under the insulator (recommended layout)
+SMP_KEEP_W = 2.73      # copper keep-out slot width along the tab (recommended layout)
+SMP_FLOAT = 0.20       # radial float (each way) that the oversize holes and the big tab pad allow (PROPOSED)
 SMP_FIT_CLR = 0.20     # normal diametral lead-to-hole clearance (lead + 0.2 mm)
 SMP_RING = 0.30        # annular ring; a big ring gives the fillet more area
-SMP_FP_NAME = "SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+SMP_FP_NAME = "SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
 
 
 def build_smp_footprint():
-    """SMP-MSSB-PCT land pattern with oversize holes for solder-in-place alignment.
+    """SMP-MSSB-PCT10T land pattern with float for solder-in-place alignment.
 
-    Origin and pad "1" are on the jack axis. The rack model and gen_pcb.py
-    both use the footprint origin as the jack position, so keep it there.
+    The origin is on the jack axis. The rack model and gen_pcb.py both use the
+    footprint origin as the jack position, so keep it there. Pad "1" is the
+    surface-mount signal tab on +x; pads "2" are the four ground legs.
+    The tab pad has no paste: the jack is soldered by hand after reflow.
     """
-    hole = lambda d: round(d + SMP_FIT_CLR + 2 * SMP_FLOAT, 2)
-    d1, d2 = hole(SMP_PIN_D), hole(SMP_LEG_D)
+    d2 = round(SMP_LEG_D + SMP_FIT_CLR + 2 * SMP_FLOAT, 2)
     fp = [S("footprint"), SMP_FP_NAME, [S("version"), 20221018],
           [S("generator"), S("pcbnew")], [S("layer"), "F.Cu"],
-          [S("descr"), "Amphenol RF SMP-MSSB-PCT SMP smooth-bore jack, vertical THT. "
-                       f"Oversize holes allow +/-{SMP_FLOAT} mm float for solder-in-place "
-                       "alignment. Dimensions from the Amphenol outline drawing rev B"],
+          [S("descr"), "Amphenol RF SMP-MSSB-PCT10T SMP smooth-bore jack, vertical, THT legs, SMD signal tab. "
+                       f"Oversize leg holes and tab pad allow +/-{SMP_FLOAT} mm float for solder-in-place "
+                       "alignment. Dimensions from the Amphenol outline drawing rev A"],
           [S("tags"), "SMP coaxial jack blind-mate float"],
           [S("attr"), S("through_hole")]]
     txt = lambda kind, val, y, layer: [S("fp_text"), S(kind), val, [S("at"), 0, y], [S("layer"), layer],
@@ -212,29 +223,54 @@ def build_smp_footprint():
     fp += [txt("reference", "REF**", -4.4, "F.SilkS"), txt("value", "SMP", 4.4, "F.Fab"),
            txt("user", "${REFERENCE}", 0, "F.Fab")]
 
-    def rect(h, layer, w):
-        return [S("fp_rect"), [S("start"), -h, -h], [S("end"), h, h],
+    def rect(x0, y0, x1, y1, layer, w):
+        return [S("fp_rect"), [S("start"), x0, y0], [S("end"), x1, y1],
                 [S("stroke"), [S("width"), w], [S("type"), S("solid")]], [S("fill"), S("none")],
                 [S("layer"), layer], [S("tstamp"), u()]]
     b = SMP_BODY / 2
     leg_pad_r = (d2 + 2 * SMP_RING) / 2
-    fp.append(rect(b, "F.Fab", 0.1))
-    # Silk: one short mark on each body side, between the ground pads, so
-    # that no silk falls on the pads. The marks show the body edge.
+    # The tab tip is 0.55 mm outside the body (3.55 mm from the axis), so the
+    # recommended pad end (4.63 mm) already covers +0.2 mm of float. Only the
+    # inner end and the width grow. Why not wider: the 10 MHz filter column has
+    # a GND pad 0.6 mm to the side of the pad end.
+    tab_x0, tab_x1 = SMP_TAB_X0 - SMP_FLOAT, SMP_TAB_X0 + SMP_TAB_L
+    tab_w = max(SMP_TAB_W, SMP_TAB_WIRE + 2 * SMP_FLOAT + 0.05)
+    fp.append(rect(-b, -b, b, b, "F.Fab", 0.1))
+    fp.append([S("fp_line"), [S("start"), b, 0], [S("end"), b + 0.55, 0],     # tab outline on Fab
+               [S("stroke"), [S("width"), 0.38], [S("type"), S("solid")]], [S("layer"), "F.Fab"], [S("tstamp"), u()]])
+    # Silk: one short mark on each body side between the ground pads, except
+    # on the tab side (+x), so that no silk falls on a pad.
     s = SMP_LEG_XY - leg_pad_r - 0.2
-    for a, c in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+    for a, c in ((-1, 0), (0, -1), (0, 1)):
         p, q = ((a * (b + 0.15), -s), (a * (b + 0.15), s)) if a else ((-s, c * (b + 0.15)), (s, c * (b + 0.15)))
         fp.append([S("fp_line"), [S("start"), *p], [S("end"), *q],
                    [S("stroke"), [S("width"), 0.12], [S("type"), S("solid")]], [S("layer"), "F.SilkS"],
                    [S("tstamp"), u()]])
-    fp.append(rect(round(max(b + SMP_FLOAT, SMP_LEG_XY + leg_pad_r) + 0.25, 2), "F.CrtYd", 0.05))
-    fp.append([S("pad"), "1", S("thru_hole"), S("circle"), [S("at"), 0, 0],
-               [S("size"), d1 + 2 * SMP_RING, d1 + 2 * SMP_RING], [S("drill"), d1],
-               [S("layers"), "*.Cu", "*.Mask"], [S("tstamp"), u()]])
+    cy = round(max(b + SMP_FLOAT, SMP_LEG_XY + leg_pad_r) + 0.25, 2)
+    fp.append(rect(-cy, -cy, round(max(cy, tab_x1 + 0.25), 2), cy, "F.CrtYd", 0.05))
+    fp.append([S("pad"), "1", S("smd"), S("rect"), [S("at"), round((tab_x0 + tab_x1) / 2, 3), 0],
+               [S("size"), round(tab_x1 - tab_x0, 3), round(tab_w, 3)],
+               [S("layers"), "F.Cu", "F.Mask"], [S("tstamp"), u()]])
     for sx, sy in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
         fp.append([S("pad"), "2", S("thru_hole"), S("circle"), [S("at"), sx * SMP_LEG_XY, sy * SMP_LEG_XY],
                    [S("size"), d2 + 2 * SMP_RING, d2 + 2 * SMP_RING], [S("drill"), d2],
                    [S("layers"), "*.Cu", "*.Mask"], [S("tstamp"), u()]])
+    # Copper keep-out under the insulator and along the tab (F.Cu). Why: the
+    # signal contact runs along the bottom of the body to the tab, so no GND
+    # pour or track may be under it. Pads stay allowed.
+    import math
+    r, hw = SMP_KEEP_D / 2, SMP_KEEP_W / 2
+    a0 = math.asin(hw / r)
+    arc = [(r * math.cos(t), r * math.sin(t)) for t in
+           [a0 + (2 * math.pi - 2 * a0) * k / 32 for k in range(33)]]
+    pts = arc + [(b + 0.26, -hw), (b + 0.26, hw)]
+    fp.append([S("zone"), [S("net"), 0], [S("net_name"), ""], [S("layer"), "F.Cu"], [S("tstamp"), u()],
+               [S("hatch"), S("edge"), 0.5], [S("connect_pads"), [S("clearance"), 0]],
+               [S("min_thickness"), 0.25],
+               [S("keepout"), [S("tracks"), S("not_allowed")], [S("vias"), S("not_allowed")],
+                [S("pads"), S("allowed")], [S("copperpour"), S("not_allowed")], [S("footprints"), S("allowed")]],
+               [S("fill"), [S("thermal_gap"), 0.5], [S("thermal_bridge_width"), 0.5]],
+               [S("polygon"), [S("pts")] + [[S("xy"), round(x, 3), round(y, 3)] for x, y in pts]]])
     return fp
 
 

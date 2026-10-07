@@ -2,7 +2,7 @@
 	(version "E")
 	(design
 		(source "C:\\Users\\Nathan\\Documents\\Github\\HERON\\Hardware\\clock_board_revB\\project\\heron_clock.kicad_sch")
-		(date "2026-10-07T10:19:48")
+		(date "2026-10-07T11:51:55")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -3531,14 +3531,14 @@
 		(comp
 			(ref "J3")
 			(value "REF_B210_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3557,7 +3557,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3597,14 +3597,14 @@
 		(comp
 			(ref "J4")
 			(value "REF_B210_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3623,7 +3623,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3663,14 +3663,14 @@
 		(comp
 			(ref "J5")
 			(value "REF_B200_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3689,7 +3689,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3729,14 +3729,14 @@
 		(comp
 			(ref "J6")
 			(value "REF_B200_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3755,7 +3755,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3795,14 +3795,14 @@
 		(comp
 			(ref "J7")
 			(value "PPS_B210_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3821,7 +3821,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3861,14 +3861,14 @@
 		(comp
 			(ref "J8")
 			(value "PPS_B210_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3887,7 +3887,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3927,14 +3927,14 @@
 		(comp
 			(ref "J9")
 			(value "PPS_B200_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3953,7 +3953,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -3993,14 +3993,14 @@
 		(comp
 			(ref "J10")
 			(value "PPS_B200_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSSB-PCT")
+					(name "MPN") "SMP-MSSB-PCT10T")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -4019,7 +4019,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSSB-PCT")
+				(value "SMP-MSSB-PCT10T")
 			)
 			(property
 				(name "Sheetname")
@@ -4062,9 +4062,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4081,11 +4081,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4128,9 +4128,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4147,11 +4147,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4194,9 +4194,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4213,11 +4213,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4260,9 +4260,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4279,11 +4279,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4326,9 +4326,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4345,11 +4345,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4392,9 +4392,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4411,11 +4411,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4458,9 +4458,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4477,11 +4477,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")
@@ -4524,9 +4524,9 @@
 			(footprint "Inductor_SMD:L_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Coilcraft")
+					(name "Manufacturer") "Abracon")
 				(field
-					(name "MPN") "0805CS-821XJRC")
+					(name "MPN") "AISC-0805-R82J-T")
 				(field
 					(name "Footprint") "Inductor_SMD:L_0805_2012Metric")
 				(field
@@ -4543,11 +4543,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Coilcraft")
+				(value "Abracon")
 			)
 			(property
 				(name "MPN")
-				(value "0805CS-821XJRC")
+				(value "AISC-0805-R82J-T")
 			)
 			(property
 				(name "Sheetname")

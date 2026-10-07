@@ -26,7 +26,7 @@ L0805 = "Inductor_SMD:L_0805_2012Metric"
 L0603 = "Inductor_SMD:L_0603_1608Metric"
 LED0603 = "LED_SMD:LED_0603_1608Metric"
 SMA_FP = "Connector_Coaxial:SMA_Amphenol_132134_Vertical"   # J2 only: PPS input cable
-SMP_FP = "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"   # J3-J10: blind-mate to the SDRs
+SMP_FP = "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"   # J3-J10: blind-mate to the SDRs
 ESD_FP = "Package_SON:Texas_DPY0002A_0.6x1mm_P0.65mm"
 
 # Parts checked on Digi-Key on 2026-10-05. The original Murata 1 uF and
@@ -40,7 +40,7 @@ MPN = {  # value/footprint -> (manufacturer, part number)
     "10uF": ("YAGEO", "CC0805KRX5R7BB106"),          # 16 V X5R 0805 (was Murata GRM21BR61C106KE15L, no stock)
     "270pF C0G": ("Murata", "GRM1555C1H271JA01D"),
     "470pF C0G": ("Murata", "GRM1555C1H471JA01D"),
-    "820nH": ("Coilcraft", "0805CS-821XJRC"),
+    "820nH": ("Abracon", "AISC-0805-R82J-T"),       # ceramic wirewound, 2.3 ohm, Q 23, SRF 250 MHz (was Coilcraft 0805CS-821XJRC, Digi-Key Marketplace only)
 }
 
 
@@ -95,7 +95,7 @@ def SMA(ref, val):
 def SMP(ref, val):
     """SDR output jack. Same two-pin symbol as SMA(); only the footprint and MPN change."""
     return dict(kind="SMA", ref=ref, value=val, fp=SMP_FP,
-                fields=(("Manufacturer", "Amphenol RF"), ("MPN", "SMP-MSSB-PCT")))
+                fields=(("Manufacturer", "Amphenol RF"), ("MPN", "SMP-MSSB-PCT10T")))
 
 
 class Refs:
@@ -309,8 +309,9 @@ def build():
            "1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n"
            "   No ultrasonic or megasonic cleaning (SiTime).\n"
            "2. Reflow: IPC/JEDEC J-STD-020 profile.\n"
-           "3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSSB-PCT):\n"
-           "   insert loose, mate the SDRs, then solder from the back (self-align).\n"
+           "3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSSB-PCT10T):\n"
+           "   remove the cap, insert loose, mate the SDRs, solder the legs from the\n"
+           "   back (self-align), then remove the SDRs and solder the tab on top.\n"
            "4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS.", 1.27)
     s.write(f"{OUT}/heron_clock.kicad_sch", "HERON 10 MHz + PPS Distribution", "B",
             comments=("SiT5155 Super-TCXO, 4x 10 MHz + 4x PPS to 2x B210 + 2x B200",

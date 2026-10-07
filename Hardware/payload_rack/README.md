@@ -22,7 +22,7 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
   - To swap: open the latch and pull the cord loop on the handle. The removal path is checked clear of all parts.
   - Swap with the payload powered off.
 - **Clock board rev B.** A 118 × 44 mm strip on the rear plate, behind the four SDRs (`../clock_board_revB/`).
-  - Its 8 SDR jacks (J3–J10) are Amphenol RF SMP-MSSB-PCT SMP male jacks (smooth bore). They face forward, coaxial with each SDR's rear reference SMAs. J2 (PPS IN) stays an SMA jack.
+  - Its 8 SDR jacks (J3–J10) are Amphenol RF SMP-MSSB-PCT10T SMP male jacks (smooth bore). They face forward, coaxial with each SDR's rear reference SMAs. J2 (PPS IN) stays an SMA jack.
   - There are no cable jumpers. Each SDR blade plugs directly onto the board. See "SMP direct mate" below.
 
 ## SMP direct mate (SDR to clock board)
@@ -30,7 +30,7 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 - One Cinch/Johnson 134-1019-451 adapter: SMA plug to SMP female (jack, female socket). Screw it on the SDR rear 10 MHz or PPS SMA jack. It plugs directly onto the board jack when the tray slides in. There is no bullet.
   - Drawing data: overall length 14.25 mm (0.561 +/- 0.020 in). Hex 5.54 mm across flats (0.218 in REF).
   - SMP engage force: 15 N maximum (3.4 lbf). Disengage force: about 22 N typical (5 lbf).
-- The board jack: Amphenol RF SMP-MSSB-PCT (SMP male, smooth bore, vertical through-hole). Square body 5.99 x 5.99 mm. The mating face is 4.09 mm from the board front face.
+- The board jack: Amphenol RF SMP-MSSB-PCT10T (SMP male, smooth bore, vertical through-hole). Square body 5.99 x 5.99 mm. The mating face is 4.09 mm from the board front face.
 
 **Stack-up along Y.** One chain of named parameters at the top of `heron_rack.py` sets `CLK_Y0`. `REAR_Y0 = CLK_Y0 + 1.6 + CLK_STANDOFF` (20 mm standoffs). The depth `D`, the walls, the plates and the windows follow it.
 `CLK_Y0 = SDR_SMA_TIP_Y + ADAPTER_REACH + SMP_JACK_H`
@@ -122,7 +122,7 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 - M3 × 20 mm F-F standoffs ×4 for the clock board (`CLK_STANDOFF`)
 - SMP direct mate parts, in total for the four SDRs:
   - 8 Cinch/Johnson 134-1019-451 adapters, SMA plug to SMP female (2 for each SDR). There are no bullets.
-  - 8 Amphenol RF SMP-MSSB-PCT jacks (board part J3–J10)
+  - 8 Amphenol RF SMP-MSSB-PCT10T jacks (board part J3–J10)
   - 8 M3 × 12 mm hex-socket set screws (2 for each SDR, rear stops) and their inserts
   - 8 M3 thumbscrews, about 16 mm long (2 for each SDR, one in each latch) and their inserts
 - one 22-pin SATA receptacle adapter: a small PCB with a vertical 22-pin receptacle and a sideways cable exit (fits a 45 × 12 × 10 mm pocket)
@@ -153,7 +153,7 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 
 ## Clock board rev B
 The board is in `../clock_board_revB/` (118 × 44 mm, KiCad 7). `heron_rack.py` reads the jack
-positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
+positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
 All 8 SDR jacks are coaxial with the SDR reference SMAs (error 0.000 mm).
 The board mounts on the rear plate with four M3 × 20 mm standoffs (`CLK_STANDOFF`). Its holes are at world (X, Z) =
 (50, 50), (160, 50), (50, 14) and (160, 14).

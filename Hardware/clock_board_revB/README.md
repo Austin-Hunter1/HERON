@@ -11,7 +11,7 @@ board shape and new connectors so that it fits the payload rack
 | Item | Rev A | Rev B |
 | --- | --- | --- |
 | Board | 84 × 56 mm | 118 × 44 mm, 4 layers, 1.6 mm, four M3 holes |
-| Connectors J2–J10 | Amphenol 132289 edge-launch SMA | J3–J10: Amphenol RF SMP-MSSB-PCT, SMP smooth-bore THT jack in oversize holes, direct blind-mate to the SDRs (D-027). J2: Amphenol 132134 vertical SMA |
+| Connectors J2–J10 | Amphenol 132289 edge-launch SMA | J3–J10: Amphenol RF SMP-MSSB-PCT10T, SMP smooth-bore jack (THT legs in oversize holes, SMD signal tab), direct blind-mate to the SDRs (D-027). J2: Amphenol 132134 vertical SMA |
 | Connector layout | 10 MHz on one edge, PPS on the other edge | One jack pair for each SDR, on a 30 mm pitch |
 | J1 (5 V, JST-GH) | Left edge | Top edge, opening up |
 | Routing | All by hand (`route.py`) | Clusters by hand (copied from rev A), the rest by Freerouting |
@@ -47,18 +47,32 @@ silkscreen on one SDR. A direct mate cannot cross cables. If the order is differ
 
 ## SMP jack footprint (J3–J10)
 
-- Footprint `HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float`, made by `gen_lib.py`. The origin
-  and pad 1 are on the jack axis.
-- Dimensions come from the Amphenol customer outline drawing SMP-MSSB-PCT rev B: centre pin
-  ø0.71 mm, four round ground legs ø0.99 mm on a 5.08 mm square pitch, 5.99 mm square body, mating
-  face 4.09 mm above the board, legs 3.0 mm long. The legs come out 1.4 mm through the back of the
-  1.6 mm board. Push-on force 9 N max, release force 2.2 N min (smooth bore).
-- Holes: lead + 0.2 mm + 2 × float. Float is ±0.20 mm (D-027): centre hole 1.31 mm, leg holes 1.59 mm,
-  0.30 mm annular ring. These holes are larger than IPC recommends. The joint relies on the fillet
-  and the ring, not on full barrel fill. Make a sample joint first.
+- Part: Amphenol RF **SMP-MSSB-PCT10T** (2026-10-07; was SMP-MSSB-PCT, about $29, now about $7).
+  The four ground legs are through-hole. The signal contact is a surface-mount tab that leaves the
+  body on one side. The part ships with a pick-and-place cap: remove it before you mate a jack.
+- Footprint `HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`, made by `gen_lib.py`. The origin
+  is on the jack axis. Pad 1 is the tab pad on +x; pads 2 are the legs.
+- Dimensions come from the Amphenol customer outline drawing SMP-MSSB-PCT10T rev A: four round
+  ground legs ø0.99 mm on a 5.08 mm square pitch, 2.49 mm long (0.9 mm through the 1.6 mm board),
+  5.99 mm square body, tab 0.38 mm wide and 0.55 mm outside the body, mating face 4.09 mm above the
+  board. Push-on force 9 N max, release force 2.2 N min (smooth bore). Rated -40 to +85 °C.
+- Holes: leg + 0.2 mm + 2 × float. Float is ±0.20 mm (D-027): leg holes 1.59 mm, 0.30 mm annular ring.
+  These holes are larger than IPC recommends. The joint relies on the fillet and the ring, not on
+  full barrel fill. Make a sample joint first.
+- Tab pad: 2.23 × 0.83 mm, from 2.4 to 4.63 mm off the axis (Amphenol's pad, plus 0.2 mm inward and
+  enough width for ±0.2 mm float of the 0.38 mm tab). No paste: the tab is soldered by hand.
+- A copper keep-out (ø4.24 mm circle and a 2.73 mm slot along the tab, from the drawing) is in the
+  footprint. The signal contact runs along the bottom of the body there.
+- All eight jacks have the tab toward +x. The 10 MHz traces leave the tab straight to the filter
+  column. The PPS jacks have a dog-leg around the lower-right leg to the ESD diode (J7, J8, J10 on F.Cu;
+  J9 through two vias and B.Cu, because the PPS4_Y trace passes next to J9).
+- DRC warnings that remain by design: 8 courtyard overlaps between the 10 MHz jack tab side and the
+  filter column (the real body and tab are at least 1 mm from those parts, and the jacks are fitted by
+  hand after reflow), and starved thermal reliefs on some leg pads on F.Cu (the legs also connect to
+  the solid GND plane on In1).
 - The parameters are at the top of the SMP section in `gen_lib.py` (`SMP_FLOAT` and others).
-- **Check before you order (Q-015):** a distributor listing for this jack family gives a 1.57 mm
-  maximum board thickness. The board is 1.6 mm. The 3.0 mm legs are long enough, but ask Amphenol.
+- **Check before you order (Q-015):** the 2.49 mm legs on the 1.6 mm board leave 0.9 mm for the back
+  fillet. Make a sample joint.
 
 ## Layout
 
@@ -103,11 +117,12 @@ silkscreen on one SDR. A direct mate cannot cross cables. If the order is differ
 2. Reflow all SMD parts on the top side. `fab/heron_clock_cpl_top.csv` has the placement data.
 3. Solder J2 (132134 SMA) by hand after reflow.
 4. **J3–J10 (SMP): solder in place in the rack.** This aligns each jack to its own SDR.
-   1. Mount the board on the rear plate. Put each SMP jack loose in its holes.
+   1. Remove the pick-and-place cap from each jack. Mount the board on the rear plate. Put each SMP
+      jack loose in its holes.
    2. Fit the adapters (134-1019-451) to the SDRs. Install all four SDR trays, so each adapter plugs
       onto its jack. Tighten each preload screw (see `../payload_rack/README.md`).
-   3. Solder one ground leg of each jack from the back, through the rear-plate windows.
-   4. Remove the SDRs. Solder the other legs and the centre pin. Check the fillets.
+   3. Solder the ground legs of each jack from the back, through the rear-plate windows.
+   4. Remove the SDRs. Solder the signal tab of each jack on the top side. Check the fillets.
    5. Do not move an SDR to a different slot after this. Mark the slots.
 5. R23 (49.9 Ω PPS termination) is DNP. Fit it only if the GNSS PPS source needs a 50 Ω load.
 6. J1 pin 1 = +5 V, pin 2 = GND.

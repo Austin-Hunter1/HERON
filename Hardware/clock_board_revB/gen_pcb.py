@@ -25,6 +25,13 @@ PRJ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "project")
 FPLIB = os.environ.get("KICAD7_FOOTPRINT_DIR", "/usr/share/kicad/footprints")
 OX, OY = 100.0, 100.0          # sheet offset of the board corner
 BW, BH = 118.0, 44.0           # board size (rev B)
+SMP_ROT_REF, SMP_ROT_PPS = 0, 0       # SMP jack rotation: signal tab toward +x on all jacks
+# PPS jacks: the ESD diode right under the jack blocks a tab toward +y, and U6
+# blocks -x. The tab points +x and a dog-leg goes around the lower-right leg:
+# tab -> (+SMP_PPS_DOGLEG_X, 0) -> (+SMP_PPS_DOGLEG_X, +SMP_PPS_DOGLEG_Y) -> (0, ..) -> diode pad.
+# The 2026-10-07 board edit added these tracks by script. A full rebuild by
+# this generator does not route the dog-leg yet (VERIFY before a full rebuild).
+SMP_PPS_DOGLEG_X, SMP_PPS_DOGLEG_Y = 4.4, 4.0
 XC = [13.16, 43.16, 73.16, 103.16]   # jack columns, 30 mm pitch = SDR blade pitch
 Y_PPS, Y_REF = 10.84, 30.78           # PPS row / 10 MHz row (from the Ettus rear SMA positions)
 COL_DX = 6.0                          # 10 MHz filter column, right of each jack
@@ -508,8 +515,9 @@ def place_columns():
     PPS output chains (downward, under the PPS jack)."""
     ref_chains, pps_chains = [], []
     for k, xj in enumerate(XC):
-        place(f"J{3+k}", xj, Y_REF, 0, show_ref=False)
-        place(f"J{7+k}", xj, Y_PPS, 0, show_ref=False)
+        # The SMP-MSSB-PCT10T signal tab points along +x at 0 deg (see SMP_ROT_*).
+        place(f"J{3+k}", xj, Y_REF, SMP_ROT_REF, show_ref=False)
+        place(f"J{7+k}", xj, Y_PPS, SMP_ROT_PPS, show_ref=False)
         r = lambda n: f"R{n + 4*k}"
         c = lambda n: f"C{n + 4*k}"
         items = [(f"D{4+k}", "P"), (r(8), "P"), (r(7), "S"), (r(6), "P"), (c(15), "P"),

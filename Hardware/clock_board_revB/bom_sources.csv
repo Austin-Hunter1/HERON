@@ -14,8 +14,8 @@ MF-NSMF050-2,Bourns,29689,0.40,,,,,
 BLM18PG221SN1D,Murata,273730,0.14,,,,,
 SM02B-GHS-TB(LF)(SN),JST,11744,0.35,,,,,Mating housing GHR-02V-S (cable side) is not in this BOM
 132134,Amphenol RF,23072,7.30,,,,,
-SMP-MSSB-PCT,Amphenol RF,56,29.11,,,,,"Smooth bore (D-027, 2026-10-07). Was SMP-MSLD-PCT (limited detent). Stock checked 2026-10-07"
-0805CS-821XJRC,Coilcraft,11068,1.34,,,,,
+SMP-MSSB-PCT10T,Amphenol RF,407,6.89,,,,,"Smooth bore, THT legs + SMD signal tab (2026-10-07). Was SMP-MSSB-PCT ($29.11). Remove the pick-and-place cap before mating. Stock checked 2026-10-07"
+AISC-0805-R82J-T,Abracon,14360,0.42,,,,,"Replaces Coilcraft 0805CS-821XJRC (Digi-Key Marketplace only). Same size, ceramic core, 2.3 ohm, Q 23 @ 50 MHz, SRF 250 MHz. Stock checked 2026-10-07"
 RC0402JR-070RL,YAGEO,1549072,0.10,,,,,
 RC0402FR-0717R4L,YAGEO,18709,0.11,,,,,
 RC0402FR-0722RL,YAGEO,4564009,0.11,,,,,

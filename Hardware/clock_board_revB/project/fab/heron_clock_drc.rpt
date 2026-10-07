@@ -1,8 +1,52 @@
 ** Drc report for heron_clock.kicad_pcb **
-** Created on 2026-10-07T10:19:53 **
+** Created on 2026-10-07T11:52:00 **
 ** Report includes: Errors, Warnings, Exclusions **
 
-** Found 78 DRC violations **
+** Found 89 DRC violations **
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(148.6500 mm, 131.7150 mm): Footprint R12
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(178.6500 mm, 131.7150 mm): Footprint R16
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(118.6800 mm, 127.7750 mm): Footprint C15
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(118.6500 mm, 131.7150 mm): Footprint R8
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(178.6800 mm, 127.7750 mm): Footprint C23
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(208.6500 mm, 131.7150 mm): Footprint R20
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(208.6800 mm, 127.7750 mm): Footprint C27
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(143.1600 mm, 130.7800 mm): Footprint J4
+    @(148.6800 mm, 127.7750 mm): Footprint C19
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; 1 spokes connected to isolated island)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
 [lib_footprint_mismatch]: Footprint 'R_0402_1005Metric' does not match copy in library 'Resistor_SMD'
     Local override; warning
     @(148.6500 mm, 131.7150 mm): Footprint R12

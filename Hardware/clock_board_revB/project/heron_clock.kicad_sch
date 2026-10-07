@@ -5561,12 +5561,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 242.57 35.56 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 242.57 35.56 90)
       (effects
         (font
@@ -5715,12 +5715,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 262.89 35.56 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 262.89 35.56 90)
       (effects
         (font
@@ -6211,7 +6211,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 332.74 35.56 0)
       (effects
         (font
@@ -6226,7 +6226,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 332.74 35.56 0)
       (effects
         (font
@@ -6535,12 +6535,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 242.57 63.5 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 242.57 63.5 90)
       (effects
         (font
@@ -6689,12 +6689,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 262.89 63.5 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 262.89 63.5 90)
       (effects
         (font
@@ -7185,7 +7185,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 332.74 63.5 0)
       (effects
         (font
@@ -7200,7 +7200,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 332.74 63.5 0)
       (effects
         (font
@@ -7509,12 +7509,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 242.57 91.44 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 242.57 91.44 90)
       (effects
         (font
@@ -7663,12 +7663,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 262.89 91.44 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 262.89 91.44 90)
       (effects
         (font
@@ -8159,7 +8159,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 332.74 91.44 0)
       (effects
         (font
@@ -8174,7 +8174,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 332.74 91.44 0)
       (effects
         (font
@@ -8483,12 +8483,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 242.57 119.38 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 242.57 119.38 90)
       (effects
         (font
@@ -8637,12 +8637,12 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "Manufacturer" "Coilcraft"
+    (property "Manufacturer" "Abracon"
       (at 262.89 119.38 90)
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "0805CS-821XJRC"
+    (property "MPN" "AISC-0805-R82J-T"
       (at 262.89 119.38 90)
       (effects
         (font
@@ -9133,7 +9133,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 332.74 119.38 0)
       (effects
         (font
@@ -9148,7 +9148,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 332.74 119.38 0)
       (effects
         (font
@@ -10718,7 +10718,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 309.88 190.5 0)
       (effects
         (font
@@ -10733,7 +10733,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 309.88 190.5 0)
       (effects
         (font
@@ -10972,7 +10972,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 309.88 208.28 0)
       (effects
         (font
@@ -10987,7 +10987,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 309.88 208.28 0)
       (effects
         (font
@@ -11226,7 +11226,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 309.88 226.06 0)
       (effects
         (font
@@ -11241,7 +11241,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 309.88 226.06 0)
       (effects
         (font
@@ -11480,7 +11480,7 @@
       (effects
         (font
           (size 1.27 1.27))))
-    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
+    (property "Footprint" "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
       (at 309.88 243.84 0)
       (effects
         (font
@@ -11495,7 +11495,7 @@
       (effects
         (font
           (size 1.27 1.27)) hide))
-    (property "MPN" "SMP-MSSB-PCT"
+    (property "MPN" "SMP-MSSB-PCT10T"
       (at 309.88 243.84 0)
       (effects
         (font
@@ -12348,7 +12348,7 @@
         (path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
           (reference "FID3")
           (unit 1)))))
-  (text "ASSEMBLY NOTES\n1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n   No ultrasonic or megasonic cleaning (SiTime).\n2. Reflow: IPC/JEDEC J-STD-020 profile.\n3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSSB-PCT):\n   insert loose, mate the SDRs, then solder from the back (self-align).\n4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS."
+  (text "ASSEMBLY NOTES\n1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n   No ultrasonic or megasonic cleaning (SiTime).\n2. Reflow: IPC/JEDEC J-STD-020 profile.\n3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSSB-PCT10T):\n   remove the cap, insert loose, mate the SDRs, solder the legs from the\n   back (self-align), then remove the SDRs and solder the tab on top.\n4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS."
     (at 127 246.38 0)
     (effects
       (font

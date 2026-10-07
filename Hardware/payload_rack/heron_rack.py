@@ -107,7 +107,7 @@ NUC_TRAY_Y1 = Y_BOARD + NUC_S + 3.0                      # NUC front-aligned, sh
 NUC_STRIP_Y1 = NUC_TRAY_Y1 + 0.5 + 3.0
 
 # ---- SMP direct mate stack-up along Y (all distances in mm) ----
-# The clock board jacks are SMP male, smooth bore (Amphenol SMP-MSSB-PCT).
+# The clock board jacks are SMP male, smooth bore (Amphenol SMP-MSSB-PCT10T).
 # Each SDR rear SMA jack carries ONE adapter: Cinch/Johnson 134-1019-451,
 # SMA plug to SMP female. The adapter plugs directly onto the board jack.
 # There is no bullet. One change here moves the board, the rear plate and
@@ -120,7 +120,7 @@ ADAPTER_REACH = 9.0       # SDR SMA tip plane to the board jack mating face, ada
 # Source: Cinch 134-1019-451 drawing, hex 5.54 mm across flats. The body is
 # modelled as a cylinder on the across-corners diameter, so it never under-sizes the hex.
 ADAPTER_D     = 5.54 / math.cos(math.radians(30))   # = 6.40
-SMP_JACK_H    = 4.09      # board front face to the jack mating face (Amphenol drawing, SMP-MSSB-PCT)
+SMP_JACK_H    = 4.09      # board front face to the jack mating face (Amphenol drawing, SMP-MSSB-PCT10T)
 CLK_Y0 = SDR_SMA_TIP_Y + ADAPTER_REACH + SMP_JACK_H   # clock board front face
 # Clock board standoffs (2026-10-07, option 1). The direct mate moved the
 # board 11 mm closer to the SDRs. Longer standoffs keep the rear plate and the
@@ -513,7 +513,7 @@ def mate_pairs():
 
 def clock_board_ref():
     """clock board rev B: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
-    J3-J10: Amphenol SMP-MSSB-PCT envelope. J2: Amphenol 132134 SMA envelope."""
+    J3-J10: Amphenol SMP-MSSB-PCT10T envelope. J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
     for (hx, hz) in clk_holes():
@@ -524,7 +524,7 @@ def clock_board_ref():
         if ref == "J1":   # JST-GH, mouth up
             pcb = pcb.fuse(box(wx - 3.5, CLK_Y0 - 4.3, wz - 3.2, wx + 3.5, CLK_Y0, wz + 3.2))
         elif clk_jack_kind(ref, fp) == "smp":
-            # SMP-MSSB-PCT (square body 5.99, mating face at SMP_JACK_H), Y measured from the board front face toward the SDR (Amphenol IGES model):
+            # SMP-MSSB-PCT10T (square body 5.99, mating face at SMP_JACK_H), Y measured from the board front face toward the SDR (Amphenol IGES model):
             # 6.0 sq body 0 - 1.22, dia 6.0 flange 1.22 - 2.31, dia 4.19 shroud 2.31 - SMP_JACK_H
             pcb = pcb.fuse(box(wx - 3.0, CLK_Y0 - 1.22, wz - 3.0, wx + 3.0, CLK_Y0, wz + 3.0))
             pcb = pcb.fuse(cq.Solid.makeCylinder(3.0, 1.09, cq.Vector(wx, CLK_Y0 - 1.22, wz), toward_sdr))

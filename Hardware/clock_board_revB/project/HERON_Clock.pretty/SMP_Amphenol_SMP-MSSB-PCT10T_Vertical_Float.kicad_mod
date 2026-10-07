@@ -1,0 +1,165 @@
+(footprint "SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float"
+  (version 20221018)
+  (generator pcbnew)
+  (layer "F.Cu")
+  (descr "Amphenol RF SMP-MSSB-PCT10T SMP smooth-bore jack, vertical, THT legs, SMD signal tab. Oversize leg holes and tab pad allow +/-0.2 mm float for solder-in-place alignment. Dimensions from the Amphenol outline drawing rev A")
+  (tags "SMP coaxial jack blind-mate float")
+  (attr through_hole)
+  (fp_text reference "REF**"
+    (at 0 -4.4)
+    (layer "F.SilkS")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "81faad34-bf22-4ade-bbe2-457827a0f064"))
+  (fp_text value "SMP"
+    (at 0 4.4)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "2ec2ec87-f7d0-49eb-ac87-c6686c4d8f7c"))
+  (fp_text user "${REFERENCE}"
+    (at 0 0)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "eef5fdea-6c05-4daa-afd7-27e59001cdfe"))
+  (fp_rect
+    (start -2.995 -2.995)
+    (end 2.995 2.995)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (fill none)
+    (layer "F.Fab")
+    (tstamp "47f05fe0-c399-4aeb-b254-89a3437a3567"))
+  (fp_line
+    (start 2.995 0)
+    (end 3.545 0)
+    (stroke
+      (width 0.38)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "002c7c4d-0f33-4c5f-93c3-ca2f2fe6152b"))
+  (fp_line
+    (start -3.145 -1.245)
+    (end -3.145 1.245)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "c9dcbf52-ce66-4993-8a95-e57f9b3abb4e"))
+  (fp_line
+    (start -1.245 -3.145)
+    (end 1.245 -3.145)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "50db191b-9894-42c8-b25e-ccc673b38cc5"))
+  (fp_line
+    (start -1.245 3.145)
+    (end 1.245 3.145)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "d3af4bf6-dd6c-4476-b561-9371e5687ccc"))
+  (fp_rect
+    (start -3.88 -3.88)
+    (end 4.88 3.88)
+    (stroke
+      (width 0.05)
+      (type solid))
+    (fill none)
+    (layer "F.CrtYd")
+    (tstamp "f61d3848-fa47-4235-b314-a9bc7643d527"))
+  (pad "1" smd rect
+    (at 3.515 0)
+    (size 2.23 0.83)
+    (layers "F.Cu" "F.Mask")
+    (tstamp "10846d11-d190-4a38-ba78-6242224bef92"))
+  (pad "2" thru_hole circle
+    (at -2.54 -2.54)
+    (size 2.19 2.19)
+    (drill 1.59)
+    (layers "*.Cu" "*.Mask")
+    (tstamp "050b3ee4-5320-4fe0-84eb-e3ee84904f51"))
+  (pad "2" thru_hole circle
+    (at -2.54 2.54)
+    (size 2.19 2.19)
+    (drill 1.59)
+    (layers "*.Cu" "*.Mask")
+    (tstamp "e9663621-5d96-4e61-82f6-b4be131ba55c"))
+  (pad "2" thru_hole circle
+    (at 2.54 -2.54)
+    (size 2.19 2.19)
+    (drill 1.59)
+    (layers "*.Cu" "*.Mask")
+    (tstamp "023091da-412c-42c4-9a4b-bf53b65e1007"))
+  (pad "2" thru_hole circle
+    (at 2.54 2.54)
+    (size 2.19 2.19)
+    (drill 1.59)
+    (layers "*.Cu" "*.Mask")
+    (tstamp "b142c01e-5782-4ab3-a474-0a92b8eb6bc0"))
+  (zone
+    (net 0)
+    (net_name "")
+    (layer "F.Cu")
+    (tstamp "1f29cebb-666b-49d5-8fee-1ca7f21fee9c")
+    (hatch edge 0.5)
+    (connect_pads
+      (clearance 0))
+    (min_thickness 0.25)
+    (keepout
+      (tracks not_allowed)
+      (vias not_allowed)
+      (pads allowed)
+      (copperpour not_allowed)
+      (footprints allowed))
+    (fill
+      (thermal_gap 0.5)
+      (thermal_bridge_width 0.5))
+    (polygon
+      (pts
+        (xy 1.622 1.365)
+        (xy 1.396 1.596)
+        (xy 1.137 1.789)
+        (xy 0.852 1.941)
+        (xy 0.547 2.048)
+        (xy 0.229 2.108)
+        (xy -0.094 2.118)
+        (xy -0.415 2.079)
+        (xy -0.726 1.992)
+        (xy -1.021 1.858)
+        (xy -1.291 1.681)
+        (xy -1.532 1.465)
+        (xy -1.737 1.215)
+        (xy -1.902 0.937)
+        (xy -2.022 0.637)
+        (xy -2.095 0.322)
+        (xy -2.12 0)
+        (xy -2.095 -0.322)
+        (xy -2.022 -0.637)
+        (xy -1.902 -0.937)
+        (xy -1.737 -1.215)
+        (xy -1.532 -1.465)
+        (xy -1.291 -1.681)
+        (xy -1.021 -1.858)
+        (xy -0.726 -1.992)
+        (xy -0.415 -2.079)
+        (xy -0.094 -2.118)
+        (xy 0.229 -2.108)
+        (xy 0.547 -2.048)
+        (xy 0.852 -1.941)
+        (xy 1.137 -1.789)
+        (xy 1.396 -1.596)
+        (xy 1.622 -1.365)
+        (xy 3.255 -1.365)
+        (xy 3.255 1.365)))))
