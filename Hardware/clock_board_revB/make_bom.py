@@ -9,8 +9,11 @@ stale BOM cannot pass silently.
 
 It also writes a Digi-Key list-upload file next to the BOM
 (<bom name>_digikey.csv): one product per line, comma-delimited, no header:
-"quantity,part number,customer reference". The part number is the MPN,
-because the Digi-Key upload accepts manufacturer part numbers. DNP parts are
+"quantity,part number,customer reference". The part number is the Digi-Key
+part number from bom_sources.csv. Why: an MPN can match more than one product
+(for example 132134 also matches a Brady part), and then Digi-Key drops the line
+or picks another maker. When a part has no Digi-Key number, the MPN is used
+and the script prints a warning. DNP parts are
 left out, and so are parts marked "yes" in the "In hand" column of
 bom_sources.csv (the team already has them). A "Spare qty" in bom_sources.csv adds
 that fixed number of spares (also for DNP parts, for example R23). The off-board adapters are included.
@@ -54,7 +57,7 @@ rows = sorted(groups.items(), key=lambda kv: (kv[0][0], nat(sorted(r for r, _ in
 problems = []
 with open(sys.argv[2], "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
-    w.writerow(["Qty", "References", "Value", "Footprint", "Manufacturer", "MPN", "Dielectric", "Tolerance", "Fit",
+    w.writerow(["Qty", "References", "Value", "Footprint", "Manufacturer", "MPN", "Digi-Key PN", "Dielectric", "Tolerance", "Fit",
                 "Stock 2026-10-05", "Unit price qty 1 (USD)", "Note"])
     for (isdnp, _, fp, mfr, mpn, diel, tol), items in rows:
         items = sorted(items, key=lambda x: nat(x[0]))
@@ -70,7 +73,7 @@ with open(sys.argv[2], "w", newline="", encoding="utf-8") as f:
         spare = int(s.get("Spare qty") or 0)
         if mpn and spare:
             upload.append((spare, mpn, " ".join(refs) + (" DNP" if isdnp else "") + " spare"))
-        w.writerow([len(refs), " ".join(refs), " / ".join(vals), fp.split(":")[1], mfr, mpn, diel, tol,
+        w.writerow([len(refs), " ".join(refs), " / ".join(vals), fp.split(":")[1], mfr, mpn, s.get("Digi-Key PN", ""), diel, tol,
                     "DNP" if isdnp else "Fit", s.get("Stock 2026-10-05", ""),
                     s.get("Unit price qty 1 (USD)", ""), s.get("Note", "")])
     # Off-board parts: not on the PCB, but part of the clock board to SDR connection.
@@ -78,20 +81,26 @@ with open(sys.argv[2], "w", newline="", encoding="utf-8") as f:
         if s.get("Off-board use"):
             if (s["Off-board qty"] or "0") != "0":
                 upload.append((int(s["Off-board qty"]) * BOARDS, s["MPN"], "off-board SDR adapters"))
-            w.writerow([s["Off-board qty"] or 0, "(off-board)", s["Off-board use"], "", s["Manufacturer"], s["MPN"], "", "",
+            w.writerow([s["Off-board qty"] or 0, "(off-board)", s["Off-board use"], "", s["Manufacturer"], s["MPN"], s.get("Digi-Key PN", ""), "", "",
                         "Off-board" if (s["Off-board qty"] or "0") != "0" else "Alternative",
                         s["Stock 2026-10-05"], s["Unit price qty 1 (USD)"], s["Note"]])
 # Digi-Key upload. Why no header and no quotes: the upload expects plain
 # "qty,part,reference" lines. Commas are not allowed inside a field, so the
 # script fails instead of writing a line that the upload would split.
 dk = os.path.splitext(sys.argv[2])[0] + "_digikey.csv"
+no_dk = []
 with open(dk, "w", newline="", encoding="utf-8") as f:
     for qty, mpn, cref in upload:
+        part = src.get(mpn, {}).get("Digi-Key PN", "").strip()
+        if not part:
+            no_dk.append(mpn); part = mpn
         if len(cref) > DK_REF_MAX:   # keep the first and last reference so the line stays readable
             cref = cref.split()[0] + " .. " + cref.split()[-1] + " (%d)" % len(cref.split())
-        if "," in mpn or "," in cref:
+        if "," in part or "," in cref:
             problems.append(f"{mpn}: a comma in the part number or reference breaks the Digi-Key upload")
-        f.write(f"{qty},{mpn},{cref}\r\n")
+        f.write(f"{qty},{part},{cref}\r\n")
+if no_dk:
+    print("WARNING: no Digi-Key PN in bom_sources.csv, MPN used for:", ", ".join(no_dk))
 held = sorted(m for m, r in src.items() if r.get("In hand", "").lower() == "yes")
 print("BOM lines:", len(rows), "| Digi-Key upload lines:", len(upload), "for", BOARDS, "board(s):", os.path.basename(dk),
       "| in hand, not uploaded:", ", ".join(held) or "none")
