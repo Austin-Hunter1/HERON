@@ -125,7 +125,7 @@
           </div>
 
           <div id="areaTools" class="hidden">
-            <p class="tool-guidance">Draw a box or polygon. The planner creates a complete lawnmower sweep.</p>
+            <p class="tool-guidance">Draw a box or polygon. Passes run along its long side.</p>
             <div class="tool-actions"><button type="button" id="btnDraw" class="secondary-button">Draw area</button><button type="button" id="btnFinish" disabled>Finish</button><button type="button" id="btnUndo" disabled>Undo</button><button type="button" id="btnClear">Clear</button></div>
           </div>
 
@@ -136,14 +136,32 @@
 
           <div id="tileTools" class="hidden">
             <div class="field-grid compact-grid">
-              <label class="field aim-el-field">
-                <span>Aim elevation</span>
-                <div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div>
-                <small>Locks onto the satellite closest to this elevation.</small>
-              </label>
-              <label class="field"><span>Tile spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" placeholder="Auto" /><em>m</em></div></label>
-              <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+              <label class="field"><span>Aim elevation</span><div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div></label>
+              <label class="field"><span>Fly</span><select id="survey_style"><option value="continuous">Keep moving</option><option value="hover">Stop and hover</option></select></label>
             </div>
+            <label class="field"><span>Coverage</span>
+              <select id="coverage">
+                <option value="125">Overlap · strips overlap 20% (wind margin)</option>
+                <option value="100" selected>Full · strips just touch</option>
+                <option value="50">Half · one strip gap between passes</option>
+                <option value="25">Quarter · three strip gap between passes</option>
+                <option value="custom">Custom lane spacing</option>
+              </select>
+            </label>
+            <label id="tileField" class="field hidden"><span>Lane spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" step="1" placeholder="e.g. 30" /><em>m</em></div></label>
+            <p id="sweepHint" class="sweep-hint" aria-live="polite"></p>
+
+            <details class="more-settings">
+              <summary>More settings</summary>
+              <label class="field"><span>Sweep direction</span><div class="input-unit"><input type="number" id="sweep_bearing" min="0" max="179.9" step="1" placeholder="Auto · along the long side" /><em>°</em></div><small>Clockwise from north. Areas only; rivers follow the channel.</small></label>
+              <label class="field"><span>Antenna pointing</span><select id="roi_mode"><option value="body_yaw">Turn the aircraft to face the reflection</option><option value="none">Don't command heading</option><option value="per_point">Point at each splash point (old)</option></select></label>
+              <label class="field"><span>Antenna faces</span><div class="input-unit"><input type="number" id="antenna_offset_deg" min="-180" max="180" value="0" /><em>° from nose</em></div><small>0 forward, 90 right, 180 back.</small></label>
+              <div class="field-grid">
+                <label class="field"><span>Max gap between waypoints</span><div class="input-unit"><input type="number" id="max_leg_m" min="20" max="500" value="500" /><em>m</em></div></label>
+                <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+              </div>
+              <small class="more-note">Shorter gaps follow the moving satellite more closely but use more waypoints.</small>
+            </details>
           </div>
         </div>
       </section>

@@ -221,6 +221,18 @@ def point_in_polygon(lon: float, lat: float, geojson: dict) -> bool:
     return False
 
 
+def water_near(geojson: dict, geom):
+    """Union of mapped water (lakes, ponds, buffered rivers) touching ``geom``."""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    if not (geojson.get("features") or []) or geom.is_empty:
+        return Polygon()
+    tree, geoms = _water_index(geojson)
+    near = [geoms[int(i)][0] for i in tree.query(geom)]
+    return unary_union(near) if near else Polygon()
+
+
 def waterbody_containing(geojson: dict, lon: float, lat: float):
     """Smallest mapped water polygon (or buffered river) covering the click."""
     poly, _orig, _feat = waterbody_hit(geojson, lon, lat)

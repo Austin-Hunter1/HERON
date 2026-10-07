@@ -524,9 +524,10 @@ function paintSurveyLock(plan) {
   lock.classList.remove("hidden");
   lock.innerHTML = aimLockHtml(s);
   const hovers = plan.hovers || [];
+  // Moving sweeps are already drawn by their coverage strips; only mark hover stops.
   const step = hovers.length > 80 ? Math.ceil(hovers.length / 80) : 1;
   hovers.forEach((h, i) => {
-    if (h.splash_lat == null || h.splash_lon == null) return;
+    if (h.splash_lat == null || h.splash_lon == null || h.pass_id != null) return;
     if (i % step !== 0 && i !== 0 && i !== hovers.length - 1) return;
     L.circleMarker([h.splash_lat, h.splash_lon], {
       radius: 3,
@@ -710,12 +711,13 @@ function headingToWp(plan, lat, lon, phase, fallback) {
   const m = /^(to|hover)_(\d+)$/.exec(String(phase || ""));
   if (m) {
     const hov = hovers[Number(m[2]) - 1];
-    if (hov && hov.splash_lat != null && hov.splash_lon != null) {
+    if (hov && plan.meta.roi_mode === "body_yaw" && hov.yaw_deg != null) return hov.yaw_deg;
+    if (plan.meta.roi_mode === "per_point" && hov && hov.splash_lat != null && hov.splash_lon != null) {
       const lookSplash = courseHdg(lat, lon, hov.splash_lat, hov.splash_lon);
       if (lookSplash != null) return lookSplash;
     }
   }
-  if ((phase === "climb" || phase === "hold") && hovers[0] && hovers[0].splash_lat != null) {
+  if (plan.meta.roi_mode === "per_point" && (phase === "climb" || phase === "hold") && hovers[0] && hovers[0].splash_lat != null) {
     const look = courseHdg(lat, lon, hovers[0].splash_lat, hovers[0].splash_lon);
     if (look != null) return look;
   }
@@ -824,11 +826,68 @@ function paintTargets() {
       color: "#ffe66a",
       weight: 2,
       fillColor: "#ffe66a",
-      fillOpacity: 0.18,
+      fillOpacity: lastPlan ? 0 : 0.18,
     })
       .bindTooltip(t.name || `area ${i + 1}`, { sticky: true })
       .addTo(targetLayer);
   });
+  updateSweepHint();
+}
+
+function ringAreaM2(ring) {
+  const lat0 = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+  const mx = 111132.92 * Math.cos((lat0 * Math.PI) / 180);
+  const my = 111132.92;
+  let a = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    a += ring[i][0] * mx * ring[i + 1][1] * my - ring[i + 1][0] * mx * ring[i][1] * my;
+  }
+  return Math.abs(a) / 2;
+}
+
+function durationTxt(s) {
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function sweepLaneM() {
+  const h = Number(document.getElementById("h_agl").value) || 60;
+  const el = Math.min(90, Math.max(8, Number(document.getElementById("target_el").value) || 45));
+  const lambda = 299792458 / 1176.45e6;
+  const strip = 2 * Math.sqrt((lambda * h) / Math.sin((el * Math.PI) / 180));
+  const cov = document.getElementById("coverage").value;
+  const hover = document.getElementById("survey_style").value === "hover";
+  const custom = Number(document.getElementById("tile_m").value);
+  let lane = cov === "custom" ? custom : (strip * 100) / Number(cov);
+  if (cov !== "custom" && hover) lane /= Math.SQRT2;
+  return { h, el, strip, lane, hover, custom: cov === "custom" };
+}
+
+function updateSweepHint() {
+  const hint = document.getElementById("sweepHint");
+  if (!hint) return;
+  const { h, el, strip, lane, hover, custom } = sweepLaneM();
+  document.getElementById("tileField").classList.toggle("hidden", !custom);
+  if (!(lane > 0)) {
+    hint.textContent = "Enter a lane spacing.";
+    return;
+  }
+  const what = hover ? "Points every" : "Lanes every";
+  const share = custom ? ` · covers about ${Math.min(100, Math.round((100 * strip) / lane))}% of the area` : "";
+  let txt = `Reflection strip ≈ ${strip.toFixed(0)} m wide at ${h} m and ${el}°. ${what} ${lane.toFixed(0)} m${share}.`;
+  if (missionMode === "areas" && targets.length) {
+    const area = targets.reduce((a, t) => a + ringAreaM2(t.coordinates), 0);
+    const speed = Number(document.getElementById("speed").value) || 8;
+    if (hover) {
+      const n = Math.ceil(area / (lane * lane));
+      const dwell = Number(document.getElementById("loiter").value) || 0;
+      txt += ` About ${n} stops, ${durationTxt(n * dwell + (n * lane) / speed)} on the area.`;
+    } else {
+      const km = area / lane / 1000;
+      txt += ` About ${km < 10 ? km.toFixed(1) : km.toFixed(0)} km of passes, ${durationTxt((km * 1000) / speed)} at ${speed} m/s.`;
+    }
+  }
+  hint.textContent = txt;
 }
 
 function setDrawUi() {
@@ -1032,7 +1091,7 @@ function paintClickWps() {
   });
 }
 
-function resetMission() {
+function resetMission({ keepSelection = false } = {}) {
   window.dispatchEvent(new Event("heron:plan-invalid"));
   planGen += 1;
   stopPlay();
@@ -1058,17 +1117,19 @@ function resetMission() {
     bouncePrn[prn].land.clearLayers();
     delete bouncePrn[prn];
   }
-  clickWps = [];
-  targets = [];
-  surveyStart = null;
-  surveyEnd = null;
-  surveySelLayer.clearLayers();
-  surveyPickLayer.clearLayers();
-  clickWpLayer.clearLayers();
+  if (!keepSelection) {
+    clickWps = [];
+    targets = [];
+    surveyStart = null;
+    surveyEnd = null;
+    surveySelLayer.clearLayers();
+    surveyPickLayer.clearLayers();
+    clickWpLayer.clearLayers();
+    stopAreaDraw();
+    paintClickWps();
+    paintSurveyPicks();
+  }
   targetLayer.clearLayers();
-  stopAreaDraw();
-  paintClickWps();
-  paintSurveyPicks();
   paintTargets();
   document.getElementById("layers").classList.add("hidden");
   document.getElementById("prnToggles").innerHTML = "";
@@ -1136,6 +1197,7 @@ function setMode(m) {
   } else if (m === "areas") {
     startAreaDraw();
   }
+  updateSweepHint();
   setStatus("");
 }
 
@@ -1271,7 +1333,19 @@ async function computePlan() {
         }
       }
       body.max_wp = Number(document.getElementById("max_wp").value);
-      if (tileVal) body.tile_m = Number(tileVal);
+      body.survey_style = document.getElementById("survey_style").value;
+      body.roi_mode = document.getElementById("roi_mode").value;
+      body.antenna_offset_deg = Number(document.getElementById("antenna_offset_deg").value);
+      body.max_leg_m = Number(document.getElementById("max_leg_m").value);
+      const bearing = document.getElementById("sweep_bearing").value;
+      if (bearing !== "") body.sweep_bearing = Number(bearing);
+      const coverage = document.getElementById("coverage").value;
+      if (coverage === "custom") {
+        if (!(Number(tileVal) > 0)) throw new Error("Enter a lane spacing, or pick a Coverage preset.");
+        body.tile_m = Number(tileVal);
+      } else {
+        body.coverage_pct = Number(coverage);
+      }
     }
     if (missionMode === "click") body.waypoints = clickWps;
     const r = await fetch("/api/plan", {
@@ -1345,14 +1419,14 @@ function mixedAt(plan, tSec) {
     });
   }
   speculars.sort((x, y) => y.el - x.el);
-  const phase = u < 0.5 ? a.phase : b.phase;
+  const phase = u < 1 ? a.phase : b.phase;
   const lat = lerp(a.drone.lat, b.drone.lat, u);
   const lon = lerpLon(a.drone.lon, b.drone.lon, u);
   const spd = lerp(a.drone.speed_mps || 0, b.drone.speed_mps || 0, u);
   const satRows = lerpSats(satsWithData(frames, i, -1), satsWithData(frames, i + 1, 1), u);
   return {
     t: tSec,
-    iso: a.iso,
+    iso: new Date(Date.parse(plan.meta.start) + tSec * 1000).toISOString(),
     phase,
     drone: {
       lat,
@@ -1370,23 +1444,25 @@ function mixedAt(plan, tSec) {
   };
 }
 
-function pushTrail(prn, lat, lon) {
-  if (!trails[prn]) trails[prn] = [];
-  const arr = trails[prn];
-  const last = arr[arr.length - 1];
-  if (last && Math.abs(last[0] - lat) < 1e-6 && Math.abs(last[1] - lon) < 1e-6) return;
-  arr.push([lat, lon]);
-  if (arr.length > 18) arr.shift();
-}
-
-function drawTrails() {
+function drawTrails(plan, tSec, current) {
   trailLayer.clearLayers();
-  for (const prn of Object.keys(trails)) {
-    if (!prnEnabled(prn)) continue;
-    const pts = trails[prn];
-    if (pts.length < 2) continue;
-    addShortPolyline(trailLayer, pts, { color: "#7ee0ff", weight: 2, opacity: 0.45, interactive: false });
+  const runs = new Map();
+  function flush(prn) {
+    const pts = runs.get(prn) || [];
+    if (pts.length > 1 && prnEnabled(prn)) addShortPolyline(trailLayer, pts, { color: "#7ee0ff", weight: 2, opacity: 0.45, interactive: false });
+    runs.delete(prn);
   }
+  const frames = plan.frames.filter(f => f.t >= tSec - 60 && f.t <= tSec);
+  if (!frames.length || frames[frames.length-1].t < tSec) frames.push(current);
+  for (const frame of frames) {
+    const present = new Set(frame.speculars.map(s => s.prn));
+    for (const prn of runs.keys()) if (!present.has(prn)) flush(prn);
+    for (const s of frame.speculars) {
+      if (!runs.has(s.prn)) runs.set(s.prn, []);
+      runs.get(s.prn).push([s.lat, s.lon]);
+    }
+  }
+  for (const prn of [...runs.keys()]) flush(prn);
 }
 
 function prnLabIcon(prn, hit) {
@@ -1522,7 +1598,7 @@ function renderMixed(plan, tSec) {
     : "<em>—</em>";
 
   const want = headingToWp(plan, f.drone.lat, f.drone.lon, f.phase, f.drone.hdg);
-  const hdg = smoothHdg(want);
+  const hdg = playing ? smoothHdg(want) : want;
   f.drone.hdg = hdg;
   setDrone(f.drone.lat, f.drone.lon, hdg);
   const tb = document.getElementById("tbody");
@@ -1542,7 +1618,7 @@ function renderMixed(plan, tSec) {
     const hit = picked || wet;
     const col = hit ? "#ffe66a" : "#6b7584";
     upsertSpec(s, f.drone, hit, col);
-    pushTrail(s.prn, s.lat, s.lon);
+    // Trails are reconstructed from mission time, never from display refreshes.
     if (hit) live.add(s.prn);
     if (picked) hits.push(`${s.prn} ${s.el.toFixed(0)}°`);
 
@@ -1564,7 +1640,7 @@ function renderMixed(plan, tSec) {
   sweepSpecParts();
   if (!playing || now - lastTrailAt > 80) {
     lastTrailAt = now;
-    drawTrails();
+    drawTrails(plan, tSec, f);
   }
   if (paintTable && !f.speculars.length) {
     tb.innerHTML = '<tr><td colspan="7" class="no">no sats above mask</td></tr>';
@@ -1709,12 +1785,19 @@ function paintSummary(plan) {
     </div>
     <div class="stat-grid">
       ${statCell("Waypoints", m.n_hovers ?? "—")}
+      ${statCell("Mission items", plan.exports?.mission?.n ?? "—")}
       ${statCell("Duration", mins, "min")}
       ${statCell("Distance", distTxt, distUnit)}
       ${statCell("Speed", m.speed_mps ?? "—", "m/s")}
       ${statCell("Hover", Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
       ${statCell("L5 on water", prns.length)}
     </div>
+    ${m.survey?.sweep_bearing_deg != null ? `<p>${escHtml(String(m.survey.sweep_bearing_deg))}° sweep · ${m.survey.n_passes} passes · lanes every ${m.survey.lane_spacing_m} m · strip ≈ ${m.survey.footprint_m} m wide</p>` : ""}
+    ${m.survey?.sampled_yaw_error_deg != null ? `<p>Sampled heading-setpoint error: ${m.survey.sampled_yaw_error_deg}°. This excludes aircraft yaw lag and fixed mounting tilt.</p>` : ""}
+    ${m.survey?.sampled_tracking_error_m != null ? `<p>Sampled reflection error: ${m.survey.sampled_tracking_error_m} m between checkpoints. Geometry only; turns and aircraft response are not modeled.</p>` : ""}
+    ${plan.coverage?.target ? `<p><b>${plan.coverage.target.percent}% geometric target coverage</b> · pink shows missed area. Selected satellite, survey passes only; not a received-signal guarantee.</p>` : ""}
+    ${m.survey?.unchecked_tracking_segments ? `<p>Some legs could not be checked for reflection tracking because satellite visibility changed.</p>` : ""}
+    ${m.survey ? `<p>${m.roi_mode === "body_yaw" ? "Body yaw follows predicted reflection azimuth; antenna tilt is fixed." : m.roi_mode === "none" ? "No pointing commands; antenna heading is uncontrolled." : "Fixed-ground ROI; not continuous reflection tracking."} Verify the simulated reflection coverage before flight.</p>` : ""}
     <div class="sum-sats">
       <div class="sum-sats-label">L5 on water</div>
       <div class="sum-chips">${satChips(prns)}</div>
@@ -1734,6 +1817,10 @@ function showPlan(plan) {
   clearSpecParts();
 
   const m = plan.meta;
+  paintTargets();
+  if (plan.coverage?.target?.uncovered) {
+    L.geoJSON(plan.coverage.target.uncovered, {style:{color:"#d83b65",weight:1,fillColor:"#d83b65",fillOpacity:0.3},interactive:false}).addTo(targetLayer);
+  }
   const hovers = plan.hovers || [];
   const pts = [[plan.pad.lat, plan.pad.lon], ...hovers.map((h) => [h.lat, h.lon]), [plan.pad.lat, plan.pad.lon]];
   setMissionPath(pts);
@@ -1762,7 +1849,7 @@ function showPlan(plan) {
         .bindTooltip(
           `${h.name}` +
             (h.prn ? `  ${h.prn} @ ${Math.round(h.el)}°` : "  centroid (no sat lined up)") +
-            (h.t_in_window != null ? `  geometry +${h.t_in_window}s` : ""),
+            ((h.geometry_s ?? h.t_in_window) != null ? `  geometry +${Math.round(h.geometry_s ?? h.t_in_window)}s` : ""),
           { direction: "top" }
         )
         .addTo(wpLayer);
@@ -2079,3 +2166,16 @@ document.addEventListener("click", (ev) => {
   };
   L.DomEvent.disableClickPropagation(document.getElementById("fileSheet"));
 })();
+
+// Any planner edit invalidates the previous export and simulation.
+for (const id of ["survey_style", "coverage", "sweep_bearing", "max_leg_m", "roi_mode", "antenna_offset_deg", "tile_m", "max_wp", "target_el", "speed", "loiter", "h_agl"]) {
+  const el = document.getElementById(id);
+  el.addEventListener("input", updateSweepHint);
+  el.addEventListener("change", () => {
+    updateSweepHint();
+    if (!lastPlan) return;
+    resetMission({ keepSelection: true });
+    setStatus("Settings changed. Build mission to update the route and export.");
+  });
+}
+updateSweepHint();

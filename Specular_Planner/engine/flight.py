@@ -47,7 +47,7 @@ SEARCHING = "Searching USB for a flight controller…"
 AUTOPILOT_USB = {(0x1209, 0x5740), (0x1209, 0x5741)}
 FRESH_SECONDS = 5.0
 NAV_COMMANDS = {16, 22}
-ALLOWED_COMMANDS = {16, 20, 22, 178, 201}
+ALLOWED_COMMANDS = {16, 20, 22, 115, 178, 201}
 # Launch never skips these: without them HERON cannot tell what or where the aircraft will fly.
 REQUIRED_CHECKS = {"link", "vehicle", "landed", "mission", "pad", "verified"}
 DEFAULT_SKIPPED_CHECKS = {"arming", "fence_circle", "route_radius", "failsafes"}
@@ -109,6 +109,8 @@ def flight_items(wpl):
         if it["seq"] and it["command"] in NAV_COMMANDS:
             if it["frame"] != 3 or not 2 <= it["alt"] <= 122:
                 raise FlightError("Flight altitudes must be 2–122 m above Home (frame 3).")
+        if it["command"] == 115 and not (0 <= it["p1"] < 360 and 0 < it["p2"] <= 90 and it["p3"] == 0 and it["p4"] == 0):
+            raise FlightError("Body yaw must use an absolute heading and a valid shortest-turn rate.")
         if it["command"] == 178 and not 0.5 <= it["p2"] <= 25:
             raise FlightError("Mission speed must be 0.5–25 m/s.")
     if items[-1]["command"] != 20 or sum(i["command"] == 22 for i in items) != 1:
@@ -122,12 +124,12 @@ def has_position(item):
 
 
 def onboard_rois(items):
-    """DO_SET_ROI aim points, each tied to the next waypoint flown while it applies (a 0,0 ROI clears it)."""
+    """DO_SET_ROI aim points, each tied to the preceding NAV it executes alongside (a 0,0 ROI clears it)."""
     rois = []
     for n, it in enumerate(items[1:], 1):
         if it["command"] != 201 or not has_position(it):
             continue
-        wp = next((j["seq"] for j in items[n + 1:] if j["command"] in NAV_COMMANDS and has_position(j)), None)
+        wp = next((j["seq"] for j in reversed(items[:n]) if j["command"] in NAV_COMMANDS and has_position(j)), None)
         rois.append({"seq": it["seq"], "lat": it["lat"], "lon": it["lon"], "wp": wp})
     return rois
 
@@ -170,6 +172,8 @@ pretend the WPL Home row changes the aircraft's return point.
                 raise FlightError(f"Read-back altitude frame differs at item {a['seq']}.")
             fields += [("lat", 0.000001), ("lon", 0.000001), ("alt", 0.05)]
         if cmd in NAV_COMMANDS:
+            fields += [("p1", 0.01), ("p2", 0.01), ("p3", 0.01), ("p4", 0.01)]
+        elif cmd == 115:
             fields += [("p1", 0.01), ("p2", 0.01), ("p3", 0.01), ("p4", 0.01)]
         elif cmd == 178:
             fields += [("p1", 0.01), ("p2", 0.01)]

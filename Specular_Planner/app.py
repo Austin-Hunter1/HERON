@@ -161,7 +161,7 @@ def api_plan():
     tile_raw = body.get("tile_m")
     tel_raw = body.get("target_el")
     target_el = None
-    if mode == "survey" and tel_raw not in (None, ""):
+    if mode in ("survey", "areas") and tel_raw not in (None, ""):
         target_el = float(tel_raw)
         if target_el < 5 or target_el > 90:
             return jsonify({"error": "Aim elevation must be between 5° and 90°."}), 400
@@ -192,6 +192,12 @@ def api_plan():
             max_wp=int(body.get("max_wp", 200)),
             waypoints=body.get("waypoints"),
             target_el=target_el,
+            sweep_bearing=float(body["sweep_bearing"]) if body.get("sweep_bearing") not in (None, "") else None,
+            survey_style=body.get("survey_style", "hover"),
+            max_leg_m=float(body.get("max_leg_m", 500)),
+            roi_mode=body.get("roi_mode", "per_point"),
+            antenna_offset_deg=float(body.get("antenna_offset_deg", 0)),
+            coverage_pct=float(body.get("coverage_pct", 100)),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400

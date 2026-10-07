@@ -11,6 +11,7 @@ NAV_RTL = 20
 NAV_TAKEOFF = 22
 DO_SET_ROI = 201
 DO_CHANGE_SPEED = 178
+CONDITION_YAW = 115
 
 FRAME_GLOBAL = 0
 FRAME_RELATIVE_ALT = 3
@@ -68,6 +69,10 @@ def qgc_wpl(plan: dict) -> str:
             _row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, hold_s, 0, 0, 0, pad["lat"], pad["lon"], h)
         )
         idx += 1
+    if meta.get("roi_mode") == "body_yaw":
+        # Clear a previous ROI before using absolute body headings.
+        lines.append(_row(idx, 0, FRAME_GLOBAL, DO_SET_ROI, 0, 0, 0, 0, 0, 0, 0))
+        idx += 1
     prev = None
     used_roi = False
     for hov in hovers:
@@ -83,15 +88,21 @@ def qgc_wpl(plan: dict) -> str:
                     lines[j] = "\t".join(parts)
                     break
             continue
-        splash = _splash_ll(hov)
+        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, delay, 0, 0, 0, lat, lon, h))
+        idx += 1
+        if meta.get("roi_mode") == "body_yaw":
+            yaw = float(hov["yaw_deg"])
+            if not math.isfinite(yaw):
+                raise ValueError("Invalid antenna heading.")
+            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, yaw % 360, 15, 0, 0, 0, 0, 0))
+            idx += 1
+        splash = _splash_ll(hov) if meta.get("roi_mode", "per_point") == "per_point" else None
         if splash:
             slat, slon = splash
-            # Copter yaws at this lat/lon while flying; does not wait on heading. need to verify this too, roi may not be best way to do this.
+            # DO/CONDITION commands belong after the NAV they run alongside.
             lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, DO_SET_ROI, 0, 0, 0, 0, slat, slon, 0))
             idx += 1
             used_roi = True
-        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, delay, 0, 0, 0, lat, lon, h))
-        idx += 1
         prev = (lat, lon)
     if used_roi:
         lines.append(_row(idx, 0, FRAME_GLOBAL, DO_SET_ROI, 0, 0, 0, 0, 0, 0, 0))
@@ -180,8 +191,11 @@ def validate_wpl(text: str, plan: dict | None = None) -> dict:
         if any(it["command"] == NAV_LOITER_TIME for it in items):
             warnings.append("LOITER_TIME items are redundant on Copter; use WAYPOINT delay")
         n_roi = sum(1 for it in items if it["command"] == DO_SET_ROI)
-        if n_roi:
-            warnings.append(f"{n_roi} DO_SET_ROI — Copter yaws at each bounce; does not pause for heading")
+        active_roi = sum(1 for it in items if it["command"] == DO_SET_ROI and (it["lat"] or it["lon"]))
+        if active_roi:
+            warnings.append(f"{active_roi} fixed-ground ROI commands; body yaw depends on mount configuration.")
+        if any(it["command"] == CONDITION_YAW for it in items):
+            warnings.append("Body-yaw setpoints approximate moving reflection direction; antenna tilt and vehicle yaw response require validation.")
         for it in items[1:]:
             if it["command"] in (NAV_WAYPOINT, NAV_TAKEOFF, NAV_LOITER_TIME) and it["frame"] != FRAME_RELATIVE_ALT:
                 errors.append(f"seq {it['seq']}: nav item should use relative alt (frame 3)")
@@ -228,6 +242,8 @@ def validate_wpl(text: str, plan: dict | None = None) -> dict:
         "n_rtl": sum(1 for it in items if it["command"] == NAV_RTL),
         "n_speed": sum(1 for it in items if it["command"] == DO_CHANGE_SPEED),
         "n_roi": sum(1 for it in items if it["command"] == DO_SET_ROI),
+        "n_yaw": sum(1 for it in items if it["command"] == CONDITION_YAW),
+        "n_roi_targets": sum(1 for it in items if it["command"] == DO_SET_ROI and (it["lat"] or it["lon"])),
     }
 
 
@@ -269,8 +285,19 @@ def run_card(plan: dict) -> str:
             )
         lines.append("")
         lines.append("Mission Planner: Flight Plan → Load WP File. Copter, relative altitude.")
-        lines.append("Each WAYPOINT Delay is the hover. DO_SET_ROI yaws at the bounce (not the next WP).")
-        lines.append("Copter does not wait for heading. Leave WP_YAW_BEHAVIOR default; ROI points the nose.")
+        if s.get("sweep_bearing_deg") is not None:
+            lines.append(f"Sweep: {s['sweep_bearing_deg']}°; {s['n_passes']} passes; lane spacing {s['lane_spacing_m']} m; checkpoint maximum {s['max_leg_m']} m.")
+        if s.get("footprint_m") is not None:
+            pct = f"{s['coverage_pct']}% coverage" if s.get("coverage_pct") is not None else "custom spacing"
+            lines.append(f"Reflection strip about {s['footprint_m']} m wide; {pct}.")
+        if m.get("roi_mode") == "body_yaw":
+            lines.append("Body-fixed antenna: absolute yaw commands follow predicted reflection azimuth. Yaw only; fixed antenna tilt and aircraft response require validation.")
+        elif m.get("roi_mode", "per_point") == "none":
+            lines.append("No ROI commands. Antenna pointing is not controlled by this mission.")
+        else:
+            lines.append("Legacy per-waypoint ROI uses fixed ground targets, not continuous reflection tracking; yaw depends on mount configuration.")
+        if s.get("sampled_tracking_error_m") is not None:
+            lines.append(f"Sampled straight-leg reflection error: {s['sampled_tracking_error_m']} m. Geometric preview only; turns and aircraft dynamics are not modeled.")
         return "\n".join(lines) + "\n"
     lines = [
         "HERON run card",
