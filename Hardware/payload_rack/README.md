@@ -21,7 +21,7 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
   - The cable leaves the base toward the NUC. A swing latch on the top plate holds the sled handle down.
   - To swap: open the latch and pull the cord loop on the handle. The removal path is checked clear of all parts.
   - Swap with the payload powered off.
-- **Clock board rev B.** A 118 × 44 mm strip on the rear plate, behind the four SDRs (`../clock_board_revB/`).
+- **Clock board rev C.** A 118 × 44 mm strip on the rear plate, behind the four SDRs (`../clock_board_revC/`).
   - Its 8 SDR jacks (J3–J10) are Amphenol RF SMP-MSSB-PCT10T SMP male jacks (smooth bore). They face forward, coaxial with each SDR's rear reference SMAs. J2 (PPS IN) stays an SMA jack.
   - There are no cable jumpers. Each SDR blade plugs directly onto the board. See "SMP direct mate" below.
 
@@ -151,8 +151,8 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 5. **Drone mount pattern.** Not added yet. Do not use the SSD hatch area of the top plate.
 6. **Laser kerf.** Tabs and slots assume 0.15 mm per side. Cut one corner joint first.
 
-## Clock board rev B
-The board is in `../clock_board_revB/` (118 × 44 mm, KiCad 7). `heron_rack.py` reads the jack
+## Clock board rev C
+The board is in `../clock_board_revC/` (118 × 44 mm, KiCad 10, D-028). Rev C has the rev B outline, holes and jack positions; only the small parts are larger. `heron_rack.py` reads the jack
 positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
 All 8 SDR jacks are coaxial with the SDR reference SMAs (error 0.000 mm).
 The board mounts on the rear plate with four M3 × 20 mm standoffs (`CLK_STANDOFF`). Its holes are at world (X, Z) =

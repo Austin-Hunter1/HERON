@@ -23,7 +23,8 @@ jack positions do not change. Rev B stays as it is.
 - The board mounts on the rack rear plate with four M3 × 8 mm standoffs. The
   component side faces forward, toward the SDRs.
 - Each SDR has two jacks. The jacks are coaxial with the rear reference SMAs of that SDR. Rev C does
-  not move the jacks. The rack model still reads the rev B KiCad file (see Open items).
+  not move the jacks. The rack model (`../payload_rack/heron_rack.py`) reads the jack positions from this
+  KiCad file.
 - **Blind-mate (D-027).** Each SDR rear SMA gets one adapter: Cinch/Johnson 134-1019-451, SMA plug to
   SMP female. When the SDR tray slides in, the adapter plugs directly onto the board jack. There is no
   bullet and there are no jumpers.
@@ -124,7 +125,7 @@ The jacks and their footprint are the same as rev B.
 | Netlist compared to rev B | All 51 nets have the same names and the same pins. |
 | `design.py` compared to the schematic | All 110 parts have the same value, footprint, manufacturer and MPN. |
 | U3 layout rules | Pass. See Layout. |
-| Fit in the rack (`../payload_rack/check_fit.py`) | Not run for rev C. The rack model still reads the rev B board. The jacks did not move. |
+| Fit in the rack (`../payload_rack/check_fit.py`, 2026-10-07) | The rack model reads rev C. 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error. Stop screw access: clear. |
 | Hardware test | Not done. Use the rev A bring-up checklist. |
 
 ## Assembly
@@ -184,8 +185,6 @@ folder, and run the script in Git Bash.
 - **Rev C part numbers (2026-10-07):** the 12 new 0603 and SOD-523 MPNs have no Digi-Key part number,
   stock or price in `bom_sources.csv` yet. The Digi-Key upload uses the MPN for them. Check them before
   you order.
-- **Rack model:** `../payload_rack/heron_rack.py` and `check_fit.py` still read the rev B board. Point them
-  to rev C when the team selects rev C to order, and run `check_fit.py` again.
 - **U3 SiT5155:** the team has the parts in hand (2026-10-07). Digi-Key had no stock (estimate 2027-05-17).
 - **U1/U2 LDOs (2026-10-07):** TPS7A2033PDBVR had no stock. U1 (+3V3_OSC, TCXO) is now an LP5907MFX-3.3
   (6.5-10 uVrms, output capacitance 0.7-10 uF). U2 (+3V3_CLK) is now a TLV75533PDBVR (71.5 uVrms,

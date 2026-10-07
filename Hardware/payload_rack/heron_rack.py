@@ -442,7 +442,7 @@ def sdr_indices():
 def sdr_sma_x(i):
     return tray_x(i) + T / 2 + STANDOFF + SMA_BZ
 
-CLK_W, CLK_H = 118.0, 44.0          # clock board rev B (Hardware/clock_board, gen_pcb.py)
+CLK_W, CLK_H = 118.0, 44.0          # clock board rev C (Hardware/clock_board_revC; same outline as rev B)
 CLK_TOP_Z = 54.0                    # board top edge height (KiCad y=0)
 
 def clk_outline():
@@ -460,12 +460,12 @@ def clk_to_world(kx, ky):
     return x0 + kx, z1 - ky
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revB", "project", "heron_clock.kicad_pcb"),
+CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revC", "project", "heron_clock.kicad_pcb"),
                             os.path.join(_HERE, "..", "clockB", "project", "heron_clock.kicad_pcb")) if os.path.exists(p)),
-               "")   # rev B KiCad board; the jack positions come from this file
+               "")   # rev C KiCad board (D-028); the jack positions come from this file
 
 def _clk_read():
-    """{ref: (kx, ky, footprint_name)} for J1..J10 from the KiCad file (rev B)."""
+    """{ref: (kx, ky, footprint_name)} for J1..J10 from the KiCad file (rev C)."""
     import re
     out = {}
     if not os.path.exists(CLK_PCB):
@@ -480,7 +480,7 @@ def _clk_read():
     return out
 
 def clk_parts():
-    """{ref: (kx, ky)} board-local positions of J1..J10 from the KiCad file (rev B)."""
+    """{ref: (kx, ky)} board-local positions of J1..J10 from the KiCad file (rev C)."""
     return {r: (x, y) for r, (x, y, _) in _clk_read().items()}
 
 def clk_jack_kind(ref, fp=""):
@@ -512,7 +512,7 @@ def mate_pairs():
     return out
 
 def clock_board_ref():
-    """clock board rev B: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
+    """clock board rev C: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
     J3-J10: Amphenol SMP-MSSB-PCT10T envelope. J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
@@ -727,7 +727,7 @@ def build(with_refs=True):
                 refs.append(("REF_NUC7i3DNB_envelope", nuc_ref(i)))
         refs += mate_refs()
         refs.append(("REF_SSD_2.5in", ssd_ref()))
-        refs.append(("REF_clock_board_revB", clock_board_ref()))
+        refs.append(("REF_clock_board_revC", clock_board_ref()))
     return parts, refs
 
 DENS = {"laser_ply": 0.68, "laser_acrylic": 1.19, "laser_delrin": 1.41, "asa": 1.07, "tpu": 1.21}

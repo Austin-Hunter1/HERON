@@ -23,7 +23,7 @@ bbs = [(n, s, s.BoundingBox()) for n, s in items]
 
 # The mated pair overlaps by design: adapter + board (the adapter covers the
 # jack shroud). Skip this pair only. Every other pair stays in the clash test.
-BOARD = "REF_clock_board_revB"
+BOARD = "REF_clock_board_revC"
 MATED = set()
 for m in R.mate_pairs():
     tag = "%s_%s" % (m["sdr"], m["key"])
