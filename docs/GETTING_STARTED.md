@@ -85,6 +85,8 @@ flight, ground software processes the raw data.
 | `GETTING_STARTED.md` | This document. Basics and index. |
 | `REQUIREMENTS.md` | What the software must do. |
 | `HARDWARE.md` | Hardware sheet for the payload and ground segment. |
+| `ANTENNAS.md` | Antenna inventory: photos, specifications, open items. |
+| `RF_FRONT_END.md` | RF chain from antenna to B210: block diagram, bias tee, gain and noise budget. |
 | `DECISIONS.md` | Confirmed decisions and open questions. |
 | `DEPLOYMENT.md` | How to install the software on a fresh machine. |
 | `USAGE.md` | How to operate the system for a flight. |

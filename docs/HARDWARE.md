@@ -47,6 +47,8 @@ Q-001. `heron-onboard check-config` prints this sum for a config.
 | --- | --- | --- |
 | Direct (up-looking) antenna(s) | **TBD** | RHCP typical for direct |
 | Reflected (down-looking) antenna(s) | **TBD** | LHCP typical for reflection; the 1.02 deck plans L and R HCP |
+| Antenna inventory | Four antennas on hand: two spirals, one patch, one helical | Photos, specifications, and open items: `ANTENNAS.md` |
+| RF front end (draft) | Antenna → Mini-Circuits ZFBT-4R2G-FT+ bias tee (one per antenna) → B210 RX2 | Block diagram and gain/noise budget: `RF_FRONT_END.md` |
 | LNAs / filters / splitters | **TBD** | Record gains and bias-tee use |
 | Antenna-to-SDR-channel map | **TBD** | Must live in config (`antenna_label` per channel) and on physical labels |
 | Signal plan | **Open (Q-001)**: bands per SDR | Keep in config only. The template puts L5 on one B210 + one B200 and L1 on the others as a placeholder |

@@ -1,0 +1,100 @@
+# RF chain budget inputs for link_budget.py. Every number in the budget comes from
+# this file. Change a value here, run the tool again, and read the new tables.
+# Docs: docs/RF_FRONT_END.md. Units: dB, dBm, MHz-free (frequencies are in Hz).
+#
+# A value marked "provisional = true" is a placeholder until someone measures or
+# confirms it. The tool prints "(provisional)" next to it.
+
+[environment]
+reference_temperature_k = 290.0      # Temperature for the thermal noise floor (kT).
+case = "typical"                     # "typical" or "worst". "worst" uses the *_worst maps.
+
+# ---- GNSS bands. noise_bandwidth_hz is a placeholder until Q-001 closes. ----
+# min_signal_dbm is the received power at a 0 dBic antenna. Source: public GPS
+# interface specifications (IS-GPS-200 for L1 C/A, IS-GPS-705 for L5 I5).
+# Not from the HERON docs. Confirm before you rely on it.
+[bands.L1]
+frequency_hz = 1575.42e6
+noise_bandwidth_hz = 20e6            # onboard.example.toml
+min_signal_dbm = -128.5
+
+[bands.L5]
+frequency_hz = 1176.45e6
+noise_bandwidth_hz = 20.322e6        # onboard.example.toml
+min_signal_dbm = -127.9
+
+# ---- Required-gain calculation (optional). ----
+# target_cn0_dbhz: C/N0 the chain must reach at the min_signal_dbm of each band.
+# Given by the user on 2026-10-06. The tool finds the first-stage (LNA) gain that meets it.
+# max_cn0_loss_db: extra goals. The largest C/N0 loss (dB) that the stages after the LNA may cost.
+[requirements]
+target_cn0_dbhz = 43.0
+max_cn0_loss_db = [0.5, 0.1]
+
+# ---- Parts. gain_db is negative for a loss. ----
+# nf_db may be left out for a pure loss. The tool then uses nf = -gain.
+# A part with positive gain must give nf_db.
+
+[components.patch_lna]               # ANT-03, Abracon APKG5012GD, LNA inside the antenna
+description = "Abracon APKG5012GD active patch (LNA)"
+gain_db = { L1 = 39.97, L5 = 39.30 }         # datasheet "LNA Gain" table, p.10
+gain_db_worst = { L1 = 38.0, L5 = 38.0 }     # datasheet: 40 +/- 2 dB
+nf_db = { L1 = 1.5, L5 = 1.5 }               # datasheet: <= 1.5 dB
+supply_min_v = 3.3
+supply_max_v = 10.0
+supply_current_ma = 34.0                      # datasheet: 34 +/- 3 mA
+
+[components.flight_lna]              # ANT-04, ArduSimple helical, LNA inside the antenna
+description = "ArduSimple AS-ANT2B-HEL-L1L2-SMA-00 helical (LNA)"
+gain_db = { L1 = 33.0 }                       # datasheet: 33 dB average. No L5 data.
+nf_db = { L1 = 1.5 }                          # datasheet: 1.5 dB maximum
+supply_min_v = 3.0
+supply_max_v = 16.0
+supply_current_ma = 35.0                      # datasheet: 35 mA typical at 3 V
+
+[components.sma_link]                # SMA adapters or cables on each side of the bias tee
+description = "SMA adapters and cables"
+gain_db = { L1 = 0.0, L5 = 0.0 }
+provisional = true
+note = "Loss not known. Measure it or take it from the cable datasheet."
+
+[components.bias_tee]                # Mini-Circuits ZFBT-4R2G-FT+, one per antenna
+description = "Mini-Circuits ZFBT-4R2G-FT+ bias tee"
+gain_db = { L1 = -0.5, L5 = -0.4 }            # datasheet typical table (L5 interpolated)
+gain_db_worst = { L1 = -1.2, L5 = -1.2 }      # datasheet maximum, mid range
+dc_resistance_ohm = 4.5
+dc_max_v = 30.0
+dc_max_ma = 500.0
+
+[components.b210_rx]                 # Ettus USRP B210 RX input (AD9361)
+description = "Ettus USRP B210, RX2"
+nf_db = { L1 = 8.0, L5 = 8.0 }                # vendor listing: < 8 dB. Value at low gain: not known.
+max_input_dbm = -15.0                         # Ettus manual
+gain_range_db = [0.0, 76.0]                   # Ettus manual
+
+# ---- Chains. Stages run from the antenna to the SDR. ----
+# antenna_gain_dbic: 0 is the conservative reference used by the GPS specification.
+# sdr_gain_db: the gain set in the recorder config for this channel.
+# supply_voltage_v: leave it out until the supply is known. The tool then prints TBD.
+
+[[chains]]
+name = "Patch (ANT-03)"
+bands = ["L1", "L5"]
+antenna_gain_dbic = { L1 = 0.0, L5 = 0.0 }    # datasheet maximum: 4.0 dBic L1, > 3.5 dBic L5
+stages = ["patch_lna", "sma_link", "bias_tee", "sma_link"]
+sdr = "b210_rx"
+sdr_gain_db = 70.0                            # D-029, 2026-10-01 test, RF A
+bias_tee = "bias_tee"
+active_antenna = "patch_lna"
+# supply_voltage_v = 5.0
+
+[[chains]]
+name = "Flight (ANT-04)"
+bands = ["L1"]                                # ANT-04 datasheet lists no L5
+antenna_gain_dbic = { L1 = 0.0 }              # datasheet peak: 2 dBi
+stages = ["flight_lna", "sma_link", "bias_tee", "sma_link"]
+sdr = "b210_rx"
+sdr_gain_db = 50.0                            # D-029, 2026-10-01 test, RF B
+bias_tee = "bias_tee"
+active_antenna = "flight_lna"
+# supply_voltage_v = 5.0
