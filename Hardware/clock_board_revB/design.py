@@ -4,7 +4,9 @@ Run: python3 design.py  ->  project/heron_clock.kicad_sch
 
 Signal flow
 - 5 V in (JST-GH) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
-- Two TPS7A2033 LDOs: +3V3_OSC (SiT5155 only) and +3V3_CLK (buffers).
+- Two 3.3 V LDOs, same SOT-23-5 pinout: LP5907 for +3V3_OSC (SiT5155 only,
+  low noise) and TLV75533P for +3V3_CLK (buffers; it accepts the ~13 uF on
+  that rail, which is above the LP5907 10 uF limit).
 - SiT5155 10 MHz LVCMOS -> 22 R -> LMK1C1104 1:4 buffer (50 R output).
 - Each 10 MHz output: 0 R -> 100 nF DC block -> 5th-order 0.1 dB Chebyshev
   low-pass (fc ~13 MHz, 50 R) -> 3 dB pi pad -> ESD -> SMP jack.
@@ -24,17 +26,35 @@ L0805 = "Inductor_SMD:L_0805_2012Metric"
 L0603 = "Inductor_SMD:L_0603_1608Metric"
 LED0603 = "LED_SMD:LED_0603_1608Metric"
 SMA_FP = "Connector_Coaxial:SMA_Amphenol_132134_Vertical"   # J2 only: PPS input cable
-SMP_FP = "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"   # J3-J10: blind-mate to the SDRs
+SMP_FP = "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"   # J3-J10: blind-mate to the SDRs
 ESD_FP = "Package_SON:Texas_DPY0002A_0.6x1mm_P0.65mm"
 
+# Parts checked on Digi-Key on 2026-10-05. The original Murata 1 uF and
+# 2.2 uF parts are obsolete, and the 10 uF and 100 nF parts had no stock.
+# The replacements have the same value, size and dielectric, and an equal or
+# higher voltage rating. Purchase links: bom_sources.csv.
 MPN = {  # value/footprint -> (manufacturer, part number)
-    "100nF": ("Murata", "GRM155R71C104KA88D"),
-    "1uF": ("Murata", "GRM188R61C105KA93D"),
-    "2.2uF": ("Murata", "GRM188R61A225KE34D"),
-    "10uF": ("Murata", "GRM21BR61C106KE15L"),
+    "100nF": ("YAGEO", "CC0402KRX7R7BB104"),        # 16 V X7R 0402 (was Murata GRM155R71C104KA88D, no stock)
+    "1uF": ("Murata", "GRM188R61C105KA12D"),         # 16 V X5R 0603 (was GRM188R61C105KA93D, obsolete)
+    "2.2uF": ("Murata", "GRM188R6YA225KA12D"),       # 35 V X5R 0603 (was GRM188R61A225KE34D 10 V, obsolete)
+    "10uF": ("YAGEO", "CC0805KRX5R7BB106"),          # 16 V X5R 0805 (was Murata GRM21BR61C106KE15L, no stock)
     "270pF C0G": ("Murata", "GRM1555C1H271JA01D"),
     "470pF C0G": ("Murata", "GRM1555C1H471JA01D"),
     "820nH": ("Coilcraft", "0805CS-821XJRC"),
+}
+
+
+# 0402 resistors, 1 %, by value. Why one table: every resistor of one value
+# then gets the same part, and a part change is one edit.
+RES_MPN = {
+    "0R": ("YAGEO", "RC0402JR-070RL"),       # jumper; tolerance does not apply
+    "17.4R": ("YAGEO", "RC0402FR-0717R4L"),
+    "22R": ("YAGEO", "RC0402FR-0722RL"),
+    "49.9R": ("YAGEO", "RC0402FR-0749R9L"),
+    "100R": ("YAGEO", "RC0402FR-07100RL"),
+    "294R": ("Panasonic", "ERJ-2RKF2940X"),  # the YAGEO 294R had no stock on 2026-10-05
+    "1k": ("YAGEO", "RC0402FR-071KL"),
+    "10k": ("YAGEO", "RC0402FR-0710KL"),
 }
 
 
@@ -42,14 +62,18 @@ def f(mfr_pn):
     return (("Manufacturer", mfr_pn[0]), ("MPN", mfr_pn[1]))
 
 
-def R(ref, val, dnp=False, mpn=None):
-    fl = (("Tolerance", "1%"),) + (f(mpn) if mpn else ())
-    return dict(kind="S", lib="Device:R", ref=ref, value=val, fp=R0402, fields=fl, dnp=dnp)
+def res_fields(val):
+    """Tolerance, manufacturer and MPN fields of one 0402 resistor value."""
+    return (("Tolerance", "jumper" if val == "0R" else "1%"),) + f(RES_MPN[val])
+
+
+def R(ref, val, dnp=False):
+    return dict(kind="S", lib="Device:R", ref=ref, value=val, fp=R0402, fields=res_fields(val), dnp=dnp)
 
 
 def Rsh(ref, val, dnp=False):
     return dict(kind="P", lib="Device:R", ref=ref, value=val, fp=R0402, dnp=dnp, step=10.16,
-                fields=(("Tolerance", "1%"),))
+                fields=res_fields(val))
 
 
 def Csh(ref, val, fp, key=None, diel=None):
@@ -71,7 +95,7 @@ def SMA(ref, val):
 def SMP(ref, val):
     """SDR output jack. Same two-pin symbol as SMA(); only the footprint and MPN change."""
     return dict(kind="SMA", ref=ref, value=val, fp=SMP_FP,
-                fields=(("Manufacturer", "Amphenol RF"), ("MPN", "SMP-MSLD-PCT")))
+                fields=(("Manufacturer", "Amphenol RF"), ("MPN", "SMP-MSSB-PCT")))
 
 
 class Refs:
@@ -96,7 +120,7 @@ def build():
 
     def res_v(x, y, val, net_top, net_bot, rref=None):
         """Vertical resistor between two labeled nets."""
-        pins = s.symbol("Device:R", rref or ref("R"), val, (x, y), fp=R0402, fields=(("Tolerance", "1%"),))
+        pins = s.symbol("Device:R", rref or ref("R"), val, (x, y), fp=R0402, fields=res_fields(val))
         t = pins["1"]; e = (t[0], t[1] - 2.54); s.wire(t[:2], e); s.label(e, net_top, (1, 0))
         b = pins["2"]; e = (b[0], b[1] + 2.54); s.wire(b[:2], e); s.label(e, net_bot, (1, 0))
 
@@ -126,8 +150,9 @@ def build():
              fields=(("Manufacturer", "Bourns"), ("MPN", "MF-NSMF050-2"))),
         dict(kind="P", lib="Device:D_Zener", rot=270, ref=ref("D"), value="SMF5.0A", step=12.7,
              fp="Diode_SMD:D_SOD-123F", fields=(("Manufacturer", "Littelfuse"), ("MPN", "SMF5.0A"))),
-        dict(kind="S", lib="Device:D_Schottky", rot=180, ref=ref("D"), value="PMEG3020EJ",
-             fp="Diode_SMD:D_SOD-323F", fields=(("Manufacturer", "Nexperia"), ("MPN", "PMEG3020EJ,115"))),
+        dict(kind="S", lib="Device:D_Schottky", rot=180, ref=ref("D"), value="SS1030HEWS",
+             fp="Diode_SMD:D_SOD-323F",   # SOD-323HE body fits the SOD-323F land (VERIFY on the Panjit drawing)
+             fields=(("Manufacturer", "Panjit"), ("MPN", "SS1030HEWS_R1_00001"))),   # 30 V 1 A; was PMEG3020EJ (no stock)
         dict(kind="GAP", len=7.62),
         dict(kind="S", lib="Device:FerriteBead_Small", ref=ref("FB"), value="BLM18PG221", fp=L0603,
              fields=(("Manufacturer", "Murata"), ("MPN", "BLM18PG221SN1D"))),
@@ -142,17 +167,22 @@ def build():
 
     # ------------------------------------------------ B: LDOs
     s.text((20.32, 60.96), "LOW-NOISE LDOs: separate rail for the TCXO", 2.0)
+    # 2026-10-07: TPS7A2033PDBVR had no stock. Both replacements have the same
+    # pinout (1 IN, 2 GND, 3 EN, 4 NC, 5 OUT), so the symbol and footprint stay.
+    # LP5907: 6.5-10 uVrms, Cout 0.7-10 uF, 250 mA. TLV75533P: 71.5 uVrms,
+    # Cout 1-200 uF, 500 mA. Both: VIN max 5.5 V (VIN_5V is about 4.7 V).
+    LDO = {"+3V3_OSC": "LP5907MFX-3.3/NOPB", "+3V3_CLK": "TLV75533PDBVR"}
     for (y, rail) in ((78.74, "+3V3_OSC"), (106.68, "+3V3_CLK")):
-        s.part("HERON_Clock:TPS7A2033DBV", ref("U"), "TPS7A2033DBVR", (68.58, y),
+        s.part("HERON_Clock:TPS7A2033DBV", ref("U"), LDO[rail], (68.58, y),
                {"1": "VIN_5V", "3": "VIN_5V", "5": rail, "4": "NC", "2": "GND"},
                fp="Package_TO_SOT_SMD:SOT-23-5",
-               fields=(("Manufacturer", "Texas Instruments"), ("MPN", "TPS7A2033DBVR")),
+               fields=(("Manufacturer", "Texas Instruments"), ("MPN", LDO[rail])),
                ref_off=(0, -8.89, "center"), val_off=(0, -6.35, "center"))
         cap(38.1, y + 3.81, "1uF", C0603, "VIN_5V")
         cap(99.06, y + 3.81, "2.2uF", C0603, rail)
     cap(114.3, 106.68 + 3.81, "10uF", C0805, "+3V3_CLK")
     s.chain((25.4, 127.0), "+3V3_CLK", [
-        dict(kind="S", lib="Device:R", ref=ref("R"), value="1k", fp=R0402),
+        R(ref("R"), "1k"),
         dict(kind="P", lib="Device:LED", rot=90, ref=ref("D"), value="GRN PWR", fp=LED0603,
              fields=(("Manufacturer", "Wurth"), ("MPN", "150060GS75000"))),
     ])
@@ -177,7 +207,7 @@ def build():
     res_v(40.64, 205.74, "10k", "+3V3_OSC", "OSC_OE")
     s.chain(u3["6"][:2], None, [
         dict(kind="GAP", len=5.08),
-        dict(kind="S", lib="Device:R", ref=ref("R"), value="22R", fp=R0402),
+        R(ref("R"), "22R"),
         dict(kind="GAP", len=5.08),
         dict(kind="LABEL", net="CLK10_IN")])
     u4 = s.part("HERON_Clock:LMK1C1104", ref("U"), "LMK1C1104PWR", (139.7, 172.72),
@@ -215,7 +245,7 @@ def build():
     s.text((200.66, 142.24), "PPS: SMA in -> Schmitt buffer -> quad buffer -> 22R -> SMP x4 (3.3 V CMOS, DC coupled)", 2.0)
     s.chain((297.18, 162.56), "PPS_IN", [
         Rsh(ref("R"), "10k"),
-        dict(kind="S", lib="Device:R", ref=ref("R"), value="100R", fp=R0402),
+        R(ref("R"), "100R"),
         ESD(ref("D")),
         Rsh(ref("R"), "49.9R", dnp=True),
         dict(kind="GAP", len=7.62),
@@ -230,7 +260,7 @@ def build():
     s.wire((297.18, 162.56), u5["2"][:2])
     cap(388.62, 162.56, "100nF", C0402, "+3V3_CLK")
     s.chain((358.14, 180.34), "PPS_BUF", [
-        dict(kind="S", lib="Device:R", ref=ref("R"), value="1k", fp=R0402),
+        R(ref("R"), "1k"),
         dict(kind="P", lib="Device:LED", rot=90, ref=ref("D"), value="YEL PPS", fp=LED0603,
              fields=(("Manufacturer", "Wurth"), ("MPN", "150060YS75000"))),
     ])
@@ -279,7 +309,8 @@ def build():
            "1. U3 SiT5155: water-soluble flux only. No no-clean flux.\n"
            "   No ultrasonic or megasonic cleaning (SiTime).\n"
            "2. Reflow: IPC/JEDEC J-STD-020 profile.\n"
-           "3. SMA J2-J10: vertical THT jacks (132134), hand-solder after reflow.\n"
+           "3. J2 SMA (132134): hand-solder after reflow. J3-J10 SMP (SMP-MSSB-PCT):\n"
+           "   insert loose, mate the SDRs, then solder from the back (self-align).\n"
            "4. Outputs: J3-J6 10 MHz ~ +7 dBm/50R, J7-J10 PPS 3.3 V CMOS.", 1.27)
     s.write(f"{OUT}/heron_clock.kicad_sch", "HERON 10 MHz + PPS Distribution", "B",
             comments=("SiT5155 Super-TCXO, 4x 10 MHz + 4x PPS to 2x B210 + 2x B200",

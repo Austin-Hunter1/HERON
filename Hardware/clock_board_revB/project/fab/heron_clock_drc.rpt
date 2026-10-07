@@ -1,5 +1,5 @@
 ** Drc report for heron_clock.kicad_pcb **
-** Created on 2026-10-05T18:50:36 **
+** Created on 2026-10-07T10:19:53 **
 ** Report includes: Errors, Warnings, Exclusions **
 
 ** Found 78 DRC violations **
@@ -230,12 +230,12 @@
     @(179.1600 mm, 125.4950 mm): Footprint L6
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; warning
-    @(155.2650 mm, 121.4150 mm): Reference field of U4
-    @(155.0900 mm, 121.9550 mm): Pad 2 [/CLK10_IN] of R3 on F.Cu
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; warning
     @(133.3600 mm, 101.5000 mm): PCB text '+5V' on F.Silkscreen
     @(132.5850 mm, 101.9000 mm): Pad MP [<no net>] of J1 on F.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(155.2650 mm, 121.4150 mm): Reference field of U4
+    @(155.0900 mm, 121.9550 mm): Pad 2 [/CLK10_IN] of R3 on F.Cu
 [silk_over_copper]: Silkscreen clipped by solder mask
     Local override; warning
     @(159.0000 mm, 135.5000 mm): PCB text 'HERON CLOCK DIST rev B   SiT5155 10 MHz + PPS x4   water-soluble flux only' on B.Silkscreen

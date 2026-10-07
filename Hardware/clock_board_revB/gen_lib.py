@@ -94,7 +94,8 @@ def build_symbols():
                        "1:4 LVCMOS clock buffer, DC-250 MHz, 50 ohm output impedance",
                        (-10.16, 7.62, 10.16, -10.16), p,
                        [("MPN", "LMK1C1104PWR"), ("Manufacturer", "Texas Instruments")]))
-    # TPS7A2033 in SOT-23-5 (DBV): IN1 GND2 EN3 NC4 OUT5.
+    # TPS7A2033 in SOT-23-5 (DBV): IN1 GND2 EN3 NC4 OUT5. The board uses LP5907 and
+    # TLV75533P on this symbol (same pinout, D-027 notes); the symbol name stays.
     p = [pin("1", "IN", -10.16, 2.54, 0, "power_in"),
          pin("3", "EN", -10.16, -2.54, 0, "input"),
          pin("5", "OUT", 10.16, 2.54, 180, "power_out"),
@@ -174,24 +175,24 @@ def build_footprint():
 
 
 # ------------------------------------------------ SMP jack footprint (J3-J10)
-# Amphenol RF SMP-MSLD-PCT: SMP male, limited detent, straight PCB jack.
-# Why: the SDRs blind-mate to the board through SMP bullets. The jacks sit
-# loose in oversize holes, the SDRs are mated, and then each jack is
-# soldered from the back, so that it aligns to its own SDR.
-# Lead sizes come from the Amphenol 3D model (IGES, measured in this repo);
-# the Amphenol customer drawing was not available. VERIFY against it.
-SMP_PIN_D = 0.71       # centre pin tail diameter
-SMP_LEG_D = 1.30       # circle that encloses one ground leg (0.95 mm square, rounded corners)
-SMP_LEG_XY = 2.52      # ground leg centre offset from the jack axis, in x and y
-SMP_BODY = 6.0         # square body that sits on the board
+# Amphenol RF SMP-MSSB-PCT: SMP male, smooth bore, straight PCB jack.
+# Why: each SDR mates directly with the board through one SMA-to-SMP-female
+# adapter (D-027). The jacks sit loose in oversize holes, the SDRs are
+# mated, and then each jack is soldered from the back, so that it aligns to
+# its own SDR. Smooth bore: low push-on force; the rack clamp holds the mate.
+# Dimensions: Amphenol customer outline drawing SMP-MSSB-PCT, rev B.
+SMP_PIN_D = 0.71       # centre pin tail diameter (0.71 +/- 0.02)
+SMP_LEG_D = 0.99       # round ground leg diameter (4x 0.99 +/- 0.04)
+SMP_LEG_XY = 2.54      # ground leg offset from the jack axis, in x and y (5.08 mm square pitch)
+SMP_BODY = 5.99        # square body that sits on the board
 SMP_FLOAT = 0.20       # radial float (each way) that the oversize holes allow (PROPOSED)
 SMP_FIT_CLR = 0.20     # normal diametral lead-to-hole clearance (lead + 0.2 mm)
 SMP_RING = 0.30        # annular ring; a big ring gives the fillet more area
-SMP_FP_NAME = "SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float"
+SMP_FP_NAME = "SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float"
 
 
 def build_smp_footprint():
-    """SMP-MSLD-PCT land pattern with oversize holes for solder-in-place alignment.
+    """SMP-MSSB-PCT land pattern with oversize holes for solder-in-place alignment.
 
     Origin and pad "1" are on the jack axis. The rack model and gen_pcb.py
     both use the footprint origin as the jack position, so keep it there.
@@ -200,9 +201,9 @@ def build_smp_footprint():
     d1, d2 = hole(SMP_PIN_D), hole(SMP_LEG_D)
     fp = [S("footprint"), SMP_FP_NAME, [S("version"), 20221018],
           [S("generator"), S("pcbnew")], [S("layer"), "F.Cu"],
-          [S("descr"), "Amphenol RF SMP-MSLD-PCT SMP limited-detent jack, vertical THT. "
+          [S("descr"), "Amphenol RF SMP-MSSB-PCT SMP smooth-bore jack, vertical THT. "
                        f"Oversize holes allow +/-{SMP_FLOAT} mm float for solder-in-place "
-                       "alignment. Lead sizes from the Amphenol 3D model"],
+                       "alignment. Dimensions from the Amphenol outline drawing rev B"],
           [S("tags"), "SMP coaxial jack blind-mate float"],
           [S("attr"), S("through_hole")]]
     txt = lambda kind, val, y, layer: [S("fp_text"), S(kind), val, [S("at"), 0, y], [S("layer"), layer],

@@ -11,7 +11,7 @@ board shape and new connectors so that it fits the payload rack
 | Item | Rev A | Rev B |
 | --- | --- | --- |
 | Board | 84 × 56 mm | 118 × 44 mm, 4 layers, 1.6 mm, four M3 holes |
-| Connectors J2–J10 | Amphenol 132289 edge-launch SMA | J3–J10: Amphenol RF SMP-MSLD-PCT, SMP limited-detent THT jack in oversize holes, blind-mate to the SDRs (D-027). J2: Amphenol 132134 vertical SMA |
+| Connectors J2–J10 | Amphenol 132289 edge-launch SMA | J3–J10: Amphenol RF SMP-MSSB-PCT, SMP smooth-bore THT jack in oversize holes, direct blind-mate to the SDRs (D-027). J2: Amphenol 132134 vertical SMA |
 | Connector layout | 10 MHz on one edge, PPS on the other edge | One jack pair for each SDR, on a 30 mm pitch |
 | J1 (5 V, JST-GH) | Left edge | Top edge, opening up |
 | Routing | All by hand (`route.py`) | Clusters by hand (copied from rev A), the rest by Freerouting |
@@ -24,9 +24,9 @@ board shape and new connectors so that it fits the payload rack
   component side faces forward, toward the SDRs.
 - Each SDR has two jacks. The jacks are coaxial with the rear reference SMAs of that SDR. The rack
   model reads the jack positions from this KiCad file. The error is 0.000 mm on all 8 jacks.
-- **Blind-mate (D-027).** Each SDR rear SMA gets an SMA-male to SMP-male smooth-bore adapter. An SMP
-  female–female bullet sits in each board jack. When the SDR tray slides in, the adapter mates with
-  the bullet. There are no jumpers.
+- **Blind-mate (D-027).** Each SDR rear SMA gets one adapter: Cinch/Johnson 134-1019-451, SMA plug to
+  SMP female. When the SDR tray slides in, the adapter plugs directly onto the board jack. There is no
+  bullet and there are no jumpers.
 - The board-to-SDR distance comes from the rack parameters `ADAPTER_REACH`, `BULLET_L` and
   `SMP_JACK_H` (`../payload_rack/heron_rack.py`). `ADAPTER_REACH` is a placeholder. Measure it (Q-015).
 - Rack coordinates: world X = 46 + x, world Z = 54 − y. The rack model gives the world Y of the board face.
@@ -47,17 +47,18 @@ silkscreen on one SDR. A direct mate cannot cross cables. If the order is differ
 
 ## SMP jack footprint (J3–J10)
 
-- Footprint `HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float`, made by `gen_lib.py`. The origin
+- Footprint `HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float`, made by `gen_lib.py`. The origin
   and pad 1 are on the jack axis.
-- Lead sizes come from the Amphenol 3D model (IGES): centre pin ø0.71 mm, four corner ground legs
-  0.95 mm square at (±2.52, ±2.52) mm, 6.0 mm square body, mating face 4.09 mm above the board.
-  The pin and the legs come out 0.9 mm and 1.4 mm through the back of the 1.6 mm board.
-- Holes: lead + 0.2 mm + 2 × float. Float is ±0.20 mm (D-027): centre hole 1.31 mm, leg holes 1.90 mm,
+- Dimensions come from the Amphenol customer outline drawing SMP-MSSB-PCT rev B: centre pin
+  ø0.71 mm, four round ground legs ø0.99 mm on a 5.08 mm square pitch, 5.99 mm square body, mating
+  face 4.09 mm above the board, legs 3.0 mm long. The legs come out 1.4 mm through the back of the
+  1.6 mm board. Push-on force 9 N max, release force 2.2 N min (smooth bore).
+- Holes: lead + 0.2 mm + 2 × float. Float is ±0.20 mm (D-027): centre hole 1.31 mm, leg holes 1.59 mm,
   0.30 mm annular ring. These holes are larger than IPC recommends. The joint relies on the fillet
   and the ring, not on full barrel fill. Make a sample joint first.
 - The parameters are at the top of the SMP section in `gen_lib.py` (`SMP_FLOAT` and others).
-- **Verify before you order (Q-015):** compare the lead sizes with the Amphenol customer drawing.
-  A distributor listing gives a 1.57 mm maximum board thickness. The board is 1.6 mm.
+- **Check before you order (Q-015):** a distributor listing for this jack family gives a 1.57 mm
+  maximum board thickness. The board is 1.6 mm. The 3.0 mm legs are long enough, but ask Amphenol.
 
 ## Layout
 
@@ -102,9 +103,9 @@ silkscreen on one SDR. A direct mate cannot cross cables. If the order is differ
 2. Reflow all SMD parts on the top side. `fab/heron_clock_cpl_top.csv` has the placement data.
 3. Solder J2 (132134 SMA) by hand after reflow.
 4. **J3–J10 (SMP): solder in place in the rack.** This aligns each jack to its own SDR.
-   1. Mount the board on the rear plate. Put each SMP jack loose in its holes, with a bullet in it.
-   2. Fit the adapters to the SDRs. Install all four SDR trays. Set each rear stop and tighten each
-      preload screw (see `../payload_rack/README.md`).
+   1. Mount the board on the rear plate. Put each SMP jack loose in its holes.
+   2. Fit the adapters (134-1019-451) to the SDRs. Install all four SDR trays, so each adapter plugs
+      onto its jack. Tighten each preload screw (see `../payload_rack/README.md`).
    3. Solder one ground leg of each jack from the back, through the rear-plate windows.
    4. Remove the SDRs. Solder the other legs and the centre pin. Check the fillets.
    5. Do not move an SDR to a different slot after this. Mark the slots.
@@ -150,12 +151,22 @@ because it overwrites the schematic and the PCB.
 | `design.py`, `gen_lib.py`, `gen_sch.py` | Schematic and library generators (the same as rev A, except the SMA footprint) |
 | `gen_pcb.py` | Rev B placement, hand routes, autorouting, pours and DRC |
 | `check_net.py`, `make_bom.py`, `make_fab.sh` | Netlist check, BOM, full rebuild |
+| `bom_sources.csv` | Purchase data for each MPN: Digi-Key stock and price on the check date, notes. Also the off-board parts (8 Cinch 134-1019-451 SMA-to-SMP adapters). `make_bom.py` merges it into `fab/heron_clock_bom.csv` and fails when a fitted part has no MPN or no row. |
 | `sim/lpf.py` | Filter and output level model (unchanged) |
 
 ## Open items
 
+- **U3 SiT5155:** the team has the parts in hand (2026-10-07). Digi-Key had no stock (estimate 2027-05-17).
+- **U1/U2 LDOs (2026-10-07):** TPS7A2033PDBVR had no stock. U1 (+3V3_OSC, TCXO) is now an LP5907MFX-3.3
+  (6.5-10 uVrms, output capacitance 0.7-10 uF). U2 (+3V3_CLK) is now a TLV75533PDBVR (71.5 uVrms,
+  1-200 uF), because +3V3_CLK has about 13 uF, above the LP5907 limit. Same SOT-23-5 pinout, no layout
+  change. Both have a 5.5 V maximum input: keep the payload 5 V rail below about 5.8 V. Check their stock.
+- Five parts changed on 2026-10-05 (approved 2026-10-07) because of obsolete or out-of-stock parts (see `design.py` and
+  `bom_sources.csv`). D2 is now a Panjit SS1030HEWS (SOD-323HE). Check its land pattern against the
+  SOD-323F footprint.
+
 - Which rear SMA of the B2x0 is 10 MHz and which is PPS (see above, Q-015).
-- The adapter reach, the adapter part, the bullet length and the Amphenol drawing check (Q-015).
+- The adapter reach (`ADAPTER_REACH`, measure it with the adapter fitted and mated) and the board thickness check (Q-015).
 - The PPS source (GNSS receiver model) is still open. J2 (PPS IN) faces forward, between the B200_1 and B200_2
   jack columns. Route its cable inside the rack.
 - The 10 MHz is free-running, the same as rev A.

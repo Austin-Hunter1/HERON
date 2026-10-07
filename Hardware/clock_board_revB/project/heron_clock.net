@@ -2,7 +2,7 @@
 	(version "E")
 	(design
 		(source "C:\\Users\\Nathan\\Documents\\Github\\HERON\\Hardware\\clock_board_revB\\project\\heron_clock.kicad_sch")
-		(date "2026-10-05T18:50:31")
+		(date "2026-10-07T10:19:48")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -12,7 +12,7 @@
 				(title "HERON 10 MHz + PPS Distribution")
 				(company "CU Boulder - HERON")
 				(rev "B")
-				(date "2026-10-02")
+				(date "2026-10-07")
 				(source "heron_clock.kicad_sch")
 				(comment
 					(number "1")
@@ -60,9 +60,9 @@
 			(footprint "Capacitor_SMD:C_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM21BR61C106KE15L")
+					(name "MPN") "CC0805KRX5R7BB106")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
 				(field
@@ -79,11 +79,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM21BR61C106KE15L")
+				(value "CC0805KRX5R7BB106")
 			)
 			(property
 				(name "Sheetname")
@@ -126,9 +126,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -145,11 +145,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -194,7 +194,7 @@
 				(field
 					(name "Manufacturer") "Murata")
 				(field
-					(name "MPN") "GRM188R61C105KA93D")
+					(name "MPN") "GRM188R61C105KA12D")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
 				(field
@@ -215,7 +215,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "GRM188R61C105KA93D")
+				(value "GRM188R61C105KA12D")
 			)
 			(property
 				(name "Sheetname")
@@ -260,7 +260,7 @@
 				(field
 					(name "Manufacturer") "Murata")
 				(field
-					(name "MPN") "GRM188R61A225KE34D")
+					(name "MPN") "GRM188R6YA225KA12D")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
 				(field
@@ -281,7 +281,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "GRM188R61A225KE34D")
+				(value "GRM188R6YA225KA12D")
 			)
 			(property
 				(name "Sheetname")
@@ -326,7 +326,7 @@
 				(field
 					(name "Manufacturer") "Murata")
 				(field
-					(name "MPN") "GRM188R61C105KA93D")
+					(name "MPN") "GRM188R61C105KA12D")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
 				(field
@@ -347,7 +347,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "GRM188R61C105KA93D")
+				(value "GRM188R61C105KA12D")
 			)
 			(property
 				(name "Sheetname")
@@ -392,7 +392,7 @@
 				(field
 					(name "Manufacturer") "Murata")
 				(field
-					(name "MPN") "GRM188R61A225KE34D")
+					(name "MPN") "GRM188R6YA225KA12D")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
 				(field
@@ -413,7 +413,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "GRM188R61A225KE34D")
+				(value "GRM188R6YA225KA12D")
 			)
 			(property
 				(name "Sheetname")
@@ -456,9 +456,9 @@
 			(footprint "Capacitor_SMD:C_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM21BR61C106KE15L")
+					(name "MPN") "CC0805KRX5R7BB106")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
 				(field
@@ -475,11 +475,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM21BR61C106KE15L")
+				(value "CC0805KRX5R7BB106")
 			)
 			(property
 				(name "Sheetname")
@@ -522,9 +522,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -541,11 +541,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -588,9 +588,9 @@
 			(footprint "Capacitor_SMD:C_0805_2012Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM21BR61C106KE15L")
+					(name "MPN") "CC0805KRX5R7BB106")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0805_2012Metric")
 				(field
@@ -607,11 +607,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM21BR61C106KE15L")
+				(value "CC0805KRX5R7BB106")
 			)
 			(property
 				(name "Sheetname")
@@ -654,9 +654,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -673,11 +673,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -722,7 +722,7 @@
 				(field
 					(name "Manufacturer") "Murata")
 				(field
-					(name "MPN") "GRM188R61C105KA93D")
+					(name "MPN") "GRM188R61C105KA12D")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0603_1608Metric")
 				(field
@@ -743,7 +743,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "GRM188R61C105KA93D")
+				(value "GRM188R61C105KA12D")
 			)
 			(property
 				(name "Sheetname")
@@ -786,9 +786,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -805,11 +805,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -1068,9 +1068,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -1087,11 +1087,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -1350,9 +1350,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -1369,11 +1369,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -1632,9 +1632,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -1651,11 +1651,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -1914,9 +1914,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -1933,11 +1933,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -1980,9 +1980,9 @@
 			(footprint "Capacitor_SMD:C_0402_1005Metric")
 			(fields
 				(field
-					(name "Manufacturer") "Murata")
+					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "GRM155R71C104KA88D")
+					(name "MPN") "CC0402KRX7R7BB104")
 				(field
 					(name "Footprint") "Capacitor_SMD:C_0402_1005Metric")
 				(field
@@ -1999,11 +1999,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Murata")
+				(value "YAGEO")
 			)
 			(property
 				(name "MPN")
-				(value "GRM155R71C104KA88D")
+				(value "CC0402KRX7R7BB104")
 			)
 			(property
 				(name "Sheetname")
@@ -2108,13 +2108,13 @@
 		)
 		(comp
 			(ref "D2")
-			(value "PMEG3020EJ")
+			(value "SS1030HEWS")
 			(footprint "Diode_SMD:D_SOD-323F")
 			(fields
 				(field
-					(name "Manufacturer") "Nexperia")
+					(name "Manufacturer") "Panjit")
 				(field
-					(name "MPN") "PMEG3020EJ,115")
+					(name "MPN") "SS1030HEWS_R1_00001")
 				(field
 					(name "Footprint") "Diode_SMD:D_SOD-323F")
 				(field
@@ -2131,11 +2131,11 @@
 			)
 			(property
 				(name "Manufacturer")
-				(value "Nexperia")
+				(value "Panjit")
 			)
 			(property
 				(name "MPN")
-				(value "PMEG3020EJ,115")
+				(value "SS1030HEWS_R1_00001")
 			)
 			(property
 				(name "Sheetname")
@@ -3531,14 +3531,14 @@
 		(comp
 			(ref "J3")
 			(value "REF_B210_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3557,7 +3557,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3597,14 +3597,14 @@
 		(comp
 			(ref "J4")
 			(value "REF_B210_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3623,7 +3623,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3663,14 +3663,14 @@
 		(comp
 			(ref "J5")
 			(value "REF_B200_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3689,7 +3689,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3729,14 +3729,14 @@
 		(comp
 			(ref "J6")
 			(value "REF_B200_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3755,7 +3755,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3795,14 +3795,14 @@
 		(comp
 			(ref "J7")
 			(value "PPS_B210_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3821,7 +3821,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3861,14 +3861,14 @@
 		(comp
 			(ref "J8")
 			(value "PPS_B210_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3887,7 +3887,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3927,14 +3927,14 @@
 		(comp
 			(ref "J9")
 			(value "PPS_B200_1")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -3953,7 +3953,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -3993,14 +3993,14 @@
 		(comp
 			(ref "J10")
 			(value "PPS_B200_2")
-			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+			(footprint "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 			(fields
 				(field
 					(name "Manufacturer") "Amphenol RF")
 				(field
-					(name "MPN") "SMP-MSLD-PCT")
+					(name "MPN") "SMP-MSSB-PCT")
 				(field
-					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSLD-PCT_Vertical_Float")
+					(name "Footprint") "HERON_Clock:SMP_Amphenol_SMP-MSSB-PCT_Vertical_Float")
 				(field
 					(name "Datasheet")
 				)
@@ -4019,7 +4019,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SMP-MSLD-PCT")
+				(value "SMP-MSSB-PCT")
 			)
 			(property
 				(name "Sheetname")
@@ -4590,6 +4590,12 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
+					(name "Tolerance") "1%")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-071KL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4602,6 +4608,18 @@
 				(lib "Device")
 				(part "R")
 				(description "Resistor")
+			)
+			(property
+				(name "Tolerance")
+				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-071KL")
 			)
 			(property
 				(name "Sheetname")
@@ -4646,6 +4664,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0710KL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4662,6 +4684,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -4704,6 +4734,12 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
+					(name "Tolerance") "1%")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0722RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4716,6 +4752,18 @@
 				(lib "Device")
 				(part "R")
 				(description "Resistor")
+			)
+			(property
+				(name "Tolerance")
+				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0722RL")
 			)
 			(property
 				(name "Sheetname")
@@ -4760,6 +4808,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0710KL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4776,6 +4828,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -4818,7 +4878,11 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
-					(name "Tolerance") "1%")
+					(name "Tolerance") "jumper")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402JR-070RL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
@@ -4835,7 +4899,15 @@
 			)
 			(property
 				(name "Tolerance")
-				(value "1%")
+				(value "jumper")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402JR-070RL")
 			)
 			(property
 				(name "Sheetname")
@@ -4880,6 +4952,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4896,6 +4972,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -4940,6 +5024,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0717R4L")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -4956,6 +5044,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0717R4L")
 			)
 			(property
 				(name "Sheetname")
@@ -5000,6 +5096,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5016,6 +5116,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5058,7 +5166,11 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
-					(name "Tolerance") "1%")
+					(name "Tolerance") "jumper")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402JR-070RL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
@@ -5075,7 +5187,15 @@
 			)
 			(property
 				(name "Tolerance")
-				(value "1%")
+				(value "jumper")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402JR-070RL")
 			)
 			(property
 				(name "Sheetname")
@@ -5120,6 +5240,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5136,6 +5260,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5180,6 +5312,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0717R4L")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5196,6 +5332,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0717R4L")
 			)
 			(property
 				(name "Sheetname")
@@ -5240,6 +5384,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5256,6 +5404,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5298,7 +5454,11 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
-					(name "Tolerance") "1%")
+					(name "Tolerance") "jumper")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402JR-070RL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
@@ -5315,7 +5475,15 @@
 			)
 			(property
 				(name "Tolerance")
-				(value "1%")
+				(value "jumper")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402JR-070RL")
 			)
 			(property
 				(name "Sheetname")
@@ -5360,6 +5528,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5376,6 +5548,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5420,6 +5600,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0717R4L")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5436,6 +5620,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0717R4L")
 			)
 			(property
 				(name "Sheetname")
@@ -5480,6 +5672,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5496,6 +5692,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5538,7 +5742,11 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
-					(name "Tolerance") "1%")
+					(name "Tolerance") "jumper")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402JR-070RL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
@@ -5555,7 +5763,15 @@
 			)
 			(property
 				(name "Tolerance")
-				(value "1%")
+				(value "jumper")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402JR-070RL")
 			)
 			(property
 				(name "Sheetname")
@@ -5600,6 +5816,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5616,6 +5836,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5660,6 +5888,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0717R4L")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5676,6 +5908,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0717R4L")
 			)
 			(property
 				(name "Sheetname")
@@ -5720,6 +5960,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "Panasonic")
+				(field
+					(name "MPN") "ERJ-2RKF2940X")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5736,6 +5980,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "Panasonic")
+			)
+			(property
+				(name "MPN")
+				(value "ERJ-2RKF2940X")
 			)
 			(property
 				(name "Sheetname")
@@ -5780,6 +6032,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0710KL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5796,6 +6052,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -5838,6 +6102,12 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
+					(name "Tolerance") "1%")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-07100RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5850,6 +6120,18 @@
 				(lib "Device")
 				(part "R")
 				(description "Resistor")
+			)
+			(property
+				(name "Tolerance")
+				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-07100RL")
 			)
 			(property
 				(name "Sheetname")
@@ -5894,6 +6176,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0749R9L")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5910,6 +6196,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0749R9L")
 			)
 			(property
 				(name "Sheetname")
@@ -5958,6 +6252,12 @@
 			(footprint "Resistor_SMD:R_0402_1005Metric")
 			(fields
 				(field
+					(name "Tolerance") "1%")
+				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-071KL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -5970,6 +6270,18 @@
 				(lib "Device")
 				(part "R")
 				(description "Resistor")
+			)
+			(property
+				(name "Tolerance")
+				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-071KL")
 			)
 			(property
 				(name "Sheetname")
@@ -6014,6 +6326,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0722RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -6030,6 +6346,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0722RL")
 			)
 			(property
 				(name "Sheetname")
@@ -6074,6 +6398,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0722RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -6090,6 +6418,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0722RL")
 			)
 			(property
 				(name "Sheetname")
@@ -6134,6 +6470,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0722RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -6150,6 +6490,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0722RL")
 			)
 			(property
 				(name "Sheetname")
@@ -6194,6 +6542,10 @@
 				(field
 					(name "Tolerance") "1%")
 				(field
+					(name "Manufacturer") "YAGEO")
+				(field
+					(name "MPN") "RC0402FR-0722RL")
+				(field
 					(name "Footprint") "Resistor_SMD:R_0402_1005Metric")
 				(field
 					(name "Datasheet")
@@ -6210,6 +6562,14 @@
 			(property
 				(name "Tolerance")
 				(value "1%")
+			)
+			(property
+				(name "Manufacturer")
+				(value "YAGEO")
+			)
+			(property
+				(name "MPN")
+				(value "RC0402FR-0722RL")
 			)
 			(property
 				(name "Sheetname")
@@ -6626,13 +6986,13 @@
 		)
 		(comp
 			(ref "U1")
-			(value "TPS7A2033DBVR")
+			(value "LP5907MFX-3.3/NOPB")
 			(footprint "Package_TO_SOT_SMD:SOT-23-5")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPS7A2033DBVR")
+					(name "MPN") "LP5907MFX-3.3/NOPB")
 				(field
 					(name "Footprint") "Package_TO_SOT_SMD:SOT-23-5")
 				(field
@@ -6653,7 +7013,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPS7A2033DBVR")
+				(value "LP5907MFX-3.3/NOPB")
 			)
 			(property
 				(name "Sheetname")
@@ -6693,13 +7053,13 @@
 		)
 		(comp
 			(ref "U2")
-			(value "TPS7A2033DBVR")
+			(value "TLV75533PDBVR")
 			(footprint "Package_TO_SOT_SMD:SOT-23-5")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPS7A2033DBVR")
+					(name "MPN") "TLV75533PDBVR")
 				(field
 					(name "Footprint") "Package_TO_SOT_SMD:SOT-23-5")
 				(field
@@ -6720,7 +7080,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPS7A2033DBVR")
+				(value "TLV75533PDBVR")
 			)
 			(property
 				(name "Sheetname")
@@ -7146,7 +7506,6 @@
 			(lib "Connector")
 			(part "Conn_Coaxial")
 			(description "coaxial connector (BNC, SMA, SMB, SMC, Cinch/RCA, LEMO, ...)")
-			(docs "~")
 			(footprints
 				(fp "*BNC*")
 				(fp "*SMA*")
@@ -7167,7 +7526,8 @@
 					(name "Footprint")
 				)
 				(field
-					(name "Datasheet") "~")
+					(name "Datasheet")
+				)
 				(field
 					(name "Description") "coaxial connector (BNC, SMA, SMB, SMC, Cinch/RCA, LEMO, ...)")
 			)
@@ -7488,6 +7848,8 @@
 				)
 				(field
 					(name "Description") "Light emitting diode")
+				(field
+					(name "Sim.Pins") "1=K 2=A")
 			)
 			(pins
 				(pin
