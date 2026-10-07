@@ -152,6 +152,7 @@ because it overwrites the schematic and the PCB.
 | `gen_pcb.py` | Rev B placement, hand routes, autorouting, pours and DRC |
 | `check_net.py`, `make_bom.py`, `make_fab.sh` | Netlist check, BOM, full rebuild |
 | `bom_sources.csv` | Purchase data for each MPN: Digi-Key stock and price on the check date, notes. Also the off-board parts (8 Cinch 134-1019-451 SMA-to-SMP adapters). `make_bom.py` merges it into `fab/heron_clock_bom.csv` and fails when a fitted part has no MPN or no row. |
+| `project/fab/heron_clock_bom_digikey.csv` | Digi-Key list upload: one product per line, `quantity,MPN,references`, comma-delimited, no header. DNP parts and parts marked "In hand" in `bom_sources.csv` (the SiT5155) are left out. The 8 off-board adapters are included, and 5 spare R23 resistors (`Spare qty`). For more boards: `python make_bom.py heron_clock.net fab/heron_clock_bom.csv <boards>` in `project/`. |
 | `sim/lpf.py` | Filter and output level model (unchanged) |
 
 ## Open items

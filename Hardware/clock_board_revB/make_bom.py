@@ -6,6 +6,17 @@ and prices change often, but the schematic must not. The same file lists the
 off-board parts (bullets, adapters) that the board needs in the rack.
 The script fails when a fitted part has no MPN or no purchase data, so a
 stale BOM cannot pass silently.
+
+It also writes a Digi-Key list-upload file next to the BOM
+(<bom name>_digikey.csv): one product per line, comma-delimited, no header:
+"quantity,part number,customer reference". The part number is the MPN,
+because the Digi-Key upload accepts manufacturer part numbers. DNP parts are
+left out, and so are parts marked "yes" in the "In hand" column of
+bom_sources.csv (the team already has them). A "Spare qty" in bom_sources.csv adds
+that fixed number of spares (also for DNP parts, for example R23). The off-board adapters are included.
+
+Usage: make_bom.py <netlist> <bom.csv> [boards]
+  boards: number of boards to buy for (default 1). The quantities scale with it.
 """
 import csv, os, sys, re
 from sexp import parse, find, find1
@@ -16,6 +27,9 @@ SOURCES = os.path.join(HERE, "bom_sources.csv")
 net = parse(open(sys.argv[1], encoding="utf-8").read())
 sch = parse(open(sys.argv[1].replace('.net', '.kicad_sch'), encoding="utf-8").read())
 src = {r["MPN"]: r for r in csv.DictReader(open(SOURCES, encoding="utf-8", newline=""))}
+BOARDS = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+DK_REF_MAX = 48     # Digi-Key customer reference length limit (VERIFY on the upload page)
+upload = []         # (quantity, MPN, customer reference) for the Digi-Key file
 
 dnp = set()
 for s in find(sch, "symbol"):
@@ -49,16 +63,38 @@ with open(sys.argv[2], "w", newline="", encoding="utf-8") as f:
         s = src.get(mpn, {})
         if not isdnp and (not mpn or not s):
             problems.append(f"{' '.join(refs)}: {'no MPN' if not mpn else 'no row in bom_sources.csv for ' + mpn}")
+        if not isdnp and mpn and s.get("In hand", "").lower() != "yes":
+            upload.append((len(refs) * BOARDS, mpn, " ".join(refs)))
+        # Spares: a fixed count from bom_sources.csv, also for DNP parts. Why:
+        # R23 is DNP until the GNSS receiver is chosen, but the part must be on hand.
+        spare = int(s.get("Spare qty") or 0)
+        if mpn and spare:
+            upload.append((spare, mpn, " ".join(refs) + (" DNP" if isdnp else "") + " spare"))
         w.writerow([len(refs), " ".join(refs), " / ".join(vals), fp.split(":")[1], mfr, mpn, diel, tol,
                     "DNP" if isdnp else "Fit", s.get("Stock 2026-10-05", ""),
                     s.get("Unit price qty 1 (USD)", ""), s.get("Note", "")])
     # Off-board parts: not on the PCB, but part of the clock board to SDR connection.
     for s in src.values():
         if s.get("Off-board use"):
+            if (s["Off-board qty"] or "0") != "0":
+                upload.append((int(s["Off-board qty"]) * BOARDS, s["MPN"], "off-board SDR adapters"))
             w.writerow([s["Off-board qty"] or 0, "(off-board)", s["Off-board use"], "", s["Manufacturer"], s["MPN"], "", "",
                         "Off-board" if (s["Off-board qty"] or "0") != "0" else "Alternative",
                         s["Stock 2026-10-05"], s["Unit price qty 1 (USD)"], s["Note"]])
-print("BOM lines:", len(rows))
+# Digi-Key upload. Why no header and no quotes: the upload expects plain
+# "qty,part,reference" lines. Commas are not allowed inside a field, so the
+# script fails instead of writing a line that the upload would split.
+dk = os.path.splitext(sys.argv[2])[0] + "_digikey.csv"
+with open(dk, "w", newline="", encoding="utf-8") as f:
+    for qty, mpn, cref in upload:
+        if len(cref) > DK_REF_MAX:   # keep the first and last reference so the line stays readable
+            cref = cref.split()[0] + " .. " + cref.split()[-1] + " (%d)" % len(cref.split())
+        if "," in mpn or "," in cref:
+            problems.append(f"{mpn}: a comma in the part number or reference breaks the Digi-Key upload")
+        f.write(f"{qty},{mpn},{cref}\r\n")
+held = sorted(m for m, r in src.items() if r.get("In hand", "").lower() == "yes")
+print("BOM lines:", len(rows), "| Digi-Key upload lines:", len(upload), "for", BOARDS, "board(s):", os.path.basename(dk),
+      "| in hand, not uploaded:", ", ".join(held) or "none")
 if problems:
     print("BOM PROBLEMS:\n  " + "\n  ".join(problems))
     sys.exit(1)

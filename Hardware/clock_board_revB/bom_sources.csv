@@ -1,33 +1,33 @@
-MPN,Manufacturer,Stock 2026-10-05,Unit price qty 1 (USD),Off-board qty,Off-board use,Note
-CC0805KRX5R7BB106,YAGEO,523060,0.63,,,Replaces Murata GRM21BR61C106KE15L (no stock until 2026-11-23)
-CC0402KRX7R7BB104,YAGEO,2790064,0.10,,,Replaces Murata GRM155R71C104KA88D (no stock until 2026-12-18)
-GRM188R61C105KA12D,Murata,9932,0.11,,,Replaces GRM188R61C105KA93D (obsolete)
-GRM188R6YA225KA12D,Murata,66531,0.13,,,Replaces GRM188R61A225KE34D (obsolete); 35 V rating
-GRM1555C1H271JA01D,Murata,546695,0.11,,,
-GRM1555C1H471JA01D,Murata,267000,0.10,,,
-SMF5.0A,Littelfuse,65978,0.53,,,
-SS1030HEWS_R1_00001,Panjit,6757,0.26,,,Replaces Nexperia PMEG3020EJ (no stock until 2027-02-16); 30 V 1 A; VERIFY land pattern
-150060GS75000,Wurth,294904,0.15,,,
-TPD1E05U06DPYR,Texas Instruments,614037,0.44,,,
-150060YS75000,Wurth,110706,0.15,,,
-MF-NSMF050-2,Bourns,29689,0.40,,,
-BLM18PG221SN1D,Murata,273730,0.14,,,
-SM02B-GHS-TB(LF)(SN),JST,11744,0.35,,,Mating housing GHR-02V-S (cable side) is not in this BOM
-132134,Amphenol RF,23072,7.30,,,
-SMP-MSSB-PCT,Amphenol RF,56,29.11,,,"Smooth bore (D-027, 2026-10-07). Was SMP-MSLD-PCT (limited detent). Stock checked 2026-10-07"
-0805CS-821XJRC,Coilcraft,11068,1.34,,,
-RC0402JR-070RL,YAGEO,1549072,0.10,,,
-RC0402FR-0717R4L,YAGEO,18709,0.11,,,
-RC0402FR-0722RL,YAGEO,4564009,0.11,,,
-RC0402FR-0749R9L,YAGEO,2652000,0.10,,,
-RC0402FR-07100RL,YAGEO,755944,0.10,,,
-ERJ-2RKF2940X,Panasonic,182059,0.10,,,YAGEO RC0402FR-07294RL had no stock
-RC0402FR-071KL,YAGEO,4252853,0.10,,,
-RC0402FR-0710KL,YAGEO,10811271,0.10,,,
-LP5907MFX-3.3/NOPB,Texas Instruments,,,,,U1 (+3V3_OSC). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
-TLV75533PDBVR,Texas Instruments,,,,,U2 (+3V3_CLK). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
-SiT5155AI-FK-33E0-10.000000,SiTime,0,55.66,,,In hand (2026-10-07). Digi-Key estimate 2027-05-17 if more are needed
-LMK1C1104PWR,Texas Instruments,2216,3.75,,,
-SN74LVC1G17DBVR,Texas Instruments,260074,0.15,,,
-SN74LVC125APWR,Texas Instruments,19070,0.41,,,
-134-1019-451,Cinch Connectivity Solutions Johnson,71,33.83,8,"Adapter SMA plug to SMP female, one on each SDR rear 10 MHz and PPS SMA; plugs directly onto J3-J10","One-piece adapter, no bullet (D-027, 2026-10-07). 14.25 mm long. Stock checked 2026-10-07. 10+ price 28.75"
+MPN,Manufacturer,Stock 2026-10-05,Unit price qty 1 (USD),Off-board qty,Off-board use,Spare qty,In hand,Note
+CC0805KRX5R7BB106,YAGEO,523060,0.63,,,,,Replaces Murata GRM21BR61C106KE15L (no stock until 2026-11-23)
+CC0402KRX7R7BB104,YAGEO,2790064,0.10,,,,,Replaces Murata GRM155R71C104KA88D (no stock until 2026-12-18)
+GRM188R61C105KA12D,Murata,9932,0.11,,,,,Replaces GRM188R61C105KA93D (obsolete)
+GRM188R6YA225KA12D,Murata,66531,0.13,,,,,Replaces GRM188R61A225KE34D (obsolete); 35 V rating
+GRM1555C1H271JA01D,Murata,546695,0.11,,,,,
+GRM1555C1H471JA01D,Murata,267000,0.10,,,,,
+SMF5.0A,Littelfuse,65978,0.53,,,,,
+SS1030HEWS_R1_00001,Panjit,6757,0.26,,,,,Replaces Nexperia PMEG3020EJ (no stock until 2027-02-16); 30 V 1 A; VERIFY land pattern
+150060GS75000,Wurth,294904,0.15,,,,,
+TPD1E05U06DPYR,Texas Instruments,614037,0.44,,,,,
+150060YS75000,Wurth,110706,0.15,,,,,
+MF-NSMF050-2,Bourns,29689,0.40,,,,,
+BLM18PG221SN1D,Murata,273730,0.14,,,,,
+SM02B-GHS-TB(LF)(SN),JST,11744,0.35,,,,,Mating housing GHR-02V-S (cable side) is not in this BOM
+132134,Amphenol RF,23072,7.30,,,,,
+SMP-MSSB-PCT,Amphenol RF,56,29.11,,,,,"Smooth bore (D-027, 2026-10-07). Was SMP-MSLD-PCT (limited detent). Stock checked 2026-10-07"
+0805CS-821XJRC,Coilcraft,11068,1.34,,,,,
+RC0402JR-070RL,YAGEO,1549072,0.10,,,,,
+RC0402FR-0717R4L,YAGEO,18709,0.11,,,,,
+RC0402FR-0722RL,YAGEO,4564009,0.11,,,,,
+RC0402FR-0749R9L,YAGEO,2652000,0.10,,,5,,R23 is DNP (fit only if the GNSS PPS source needs 50 ohm). 5 spares in the Digi-Key upload
+RC0402FR-07100RL,YAGEO,755944,0.10,,,,,
+ERJ-2RKF2940X,Panasonic,182059,0.10,,,,,YAGEO RC0402FR-07294RL had no stock
+RC0402FR-071KL,YAGEO,4252853,0.10,,,,,
+RC0402FR-0710KL,YAGEO,10811271,0.10,,,,,
+LP5907MFX-3.3/NOPB,Texas Instruments,,,,,,,U1 (+3V3_OSC). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
+TLV75533PDBVR,Texas Instruments,,,,,,,U2 (+3V3_CLK). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
+SiT5155AI-FK-33E0-10.000000,SiTime,0,55.66,,,,yes,In hand (2026-10-07). Digi-Key estimate 2027-05-17 if more are needed
+LMK1C1104PWR,Texas Instruments,2216,3.75,,,,,
+SN74LVC1G17DBVR,Texas Instruments,260074,0.15,,,,,
+SN74LVC125APWR,Texas Instruments,19070,0.41,,,,,
+134-1019-451,Cinch Connectivity Solutions Johnson,71,33.83,8,"Adapter SMA plug to SMP female, one on each SDR rear 10 MHz and PPS SMA; plugs directly onto J3-J10",,,"One-piece adapter, no bullet (D-027, 2026-10-07). 14.25 mm long. Stock checked 2026-10-07. 10+ price 28.75"

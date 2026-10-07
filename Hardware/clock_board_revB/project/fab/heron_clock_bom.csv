@@ -29,5 +29,5 @@ Qty,References,Value,Footprint,Manufacturer,MPN,Dielectric,Tolerance,Fit,Stock 2
 1,U4,LMK1C1104PWR,TSSOP-8_4.4x3mm_P0.65mm,Texas Instruments,LMK1C1104PWR,,,Fit,2216,3.75,
 1,U5,SN74LVC1G17DBVR,SOT-23-5,Texas Instruments,SN74LVC1G17DBVR,,,Fit,260074,0.15,
 1,U6,SN74LVC125APWR,TSSOP-14_4.4x5mm_P0.65mm,Texas Instruments,SN74LVC125APWR,,,Fit,19070,0.41,
-1,R23,49.9R,R_0402_1005Metric,YAGEO,RC0402FR-0749R9L,,1%,DNP,2652000,0.10,
+1,R23,49.9R,R_0402_1005Metric,YAGEO,RC0402FR-0749R9L,,1%,DNP,2652000,0.10,R23 is DNP (fit only if the GNSS PPS source needs 50 ohm). 5 spares in the Digi-Key upload
 8,(off-board),"Adapter SMA plug to SMP female, one on each SDR rear 10 MHz and PPS SMA; plugs directly onto J3-J10",,Cinch Connectivity Solutions Johnson,134-1019-451,,,Off-board,71,33.83,"One-piece adapter, no bullet (D-027, 2026-10-07). 14.25 mm long. Stock checked 2026-10-07. 10+ price 28.75"
