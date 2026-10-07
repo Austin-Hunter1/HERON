@@ -60,7 +60,7 @@ Z_BOARD  = 9.0            # board lower edge (clears rail strip ribs at z=8)
 STRIP_BASE, RIB_H, RIB_T = 2.0, 6.0, 2.5
 RAIL_W  = 6.0             # TPU rail overall width (tray 3 + 2x1.5 lips)
 # These two clearances set the radial (X, Z) position of every blade. The SMP
-# blind-mate needs a small radial error, so both are tight. The NUC blade uses
+# direct SMP mate needs a small radial error, so both are tight. The NUC blade uses
 # the same strip code, so it gets the same values.
 CHAN_CLR      = 0.2       # PROPOSED (was 0.4): total clearance, strip channel to TPU rail
 RAIL_BASE_GAP = 0.1       # PROPOSED (was 0.2): Z gap, TPU rail back to strip base
@@ -75,12 +75,14 @@ TRAY_Z0 = STRIP_BASE + RAIL_BASE_GAP + RAIL_BACK   # 4.1
 TRAY_Z1 = H - TRAY_Z0
 LATCH_Z = STRIP_BASE + RIB_H / 2 + 0.5   # height of the latch pivot; the tray stop and preload screws use it too
 
-# SDR tray axial datum (PROPOSED). The SMP blind-mate does not align itself
-# along Y, so the rack must set the tray position. An M3 set screw in the rear
-# stop block of each SDR rail strip is the datum. A thumbscrew in each SDR
-# latch pushes the tray against it.
+# SDR tray axial stop (PROPOSED). There is no bullet, so there is no axial
+# float. The mate itself is the axial stop: the thumbscrew seats both
+# connectors. An M3 set screw in the rear stop block of each SDR rail strip is
+# only a backup. It stops the tray STOP_MATE_MARGIN behind the fully mated
+# position, so the thumbscrew cannot overload the jacks.
 INSERT_D       = 4.0      # hole for an M3 heat-set insert (same as the strip ears)
-STOP_ADJ       = 1.5      # PROPOSED: adjust range of the rear stop screw, +/- mm about TRAY_Y1
+STOP_ADJ       = 1.5      # PROPOSED: adjust range of the rear stop screw, +/- mm about the nominal screw tip
+STOP_MATE_MARGIN = 0.3    # PROPOSED: the stop screw tip is this far behind the fully mated tray rear end (+Y)
 STOP_INSERT_L  = 5.5      # M3 heat-set insert length (same as the strip ears)
 STOP_WALL      = 2.5      # PROPOSED: block material behind the insert
 STOP_BLOCK_L   = STOP_INSERT_L + STOP_WALL   # length of the rear stop block along Y
@@ -98,25 +100,34 @@ SLOTS = [("NUC", "nuc", 42.0),
 MARGIN = 2.0
 W = MARGIN + sum(p for _, _, p in SLOTS) + MARGIN          # interior width
 TRAY_Y0 = 0.5
-TRAY_Y1 = Y_BOARD + SDR_L                                  # 157.69
-STRIP_Y1 = TRAY_Y1 + STOP_ADJ + STOP_BLOCK_L               # closed rear end of the SDR strip (stop block)
+TRAY_Y1 = Y_BOARD + SDR_L                                  # 157.69: tray rear end when fully mated
+STOP_TIP_Y = TRAY_Y1 + STOP_MATE_MARGIN                    # nominal stop screw tip: the margin is applied here
+STRIP_Y1 = STOP_TIP_Y + STOP_ADJ + STOP_BLOCK_L               # closed rear end of the SDR strip (stop block)
 NUC_TRAY_Y1 = Y_BOARD + NUC_S + 3.0                      # NUC front-aligned, short blade
 NUC_STRIP_Y1 = NUC_TRAY_Y1 + 0.5 + 3.0
 
-# ---- SMP blind-mate stack-up along Y (all distances in mm) ----
-# The clock board jacks are SMP male (Amphenol SMP-MSLD-PCT). Each SDR rear
-# SMA jack carries an SMA-male to SMP-male adapter. An SMP female-female
-# bullet joins the adapter to the board jack. One change here moves the board,
-# the rear plate and the walls.
+# ---- SMP direct mate stack-up along Y (all distances in mm) ----
+# The clock board jacks are SMP male, smooth bore (Amphenol SMP-MSSB-PCT).
+# Each SDR rear SMA jack carries ONE adapter: Cinch/Johnson 134-1019-451,
+# SMA plug to SMP female. The adapter plugs directly onto the board jack.
+# There is no bullet. One change here moves the board, the rear plate and
+# the walls.
 SDR_SMA_TIP_Y = Y_BOARD + SDR_L + SMA_OVERHANG   # plane of the SDR SMA jack tips
-ADAPTER_REACH = 16.0      # VERIFY: SDR SMA tip to the SMP mating face of the screwed-on adapter. Placeholder until measured on a real B210.
-ADAPTER_D     = 8.0       # VERIFY: adapter body diameter (SM8810 width 7.87)
-SMP_JACK_H    = 4.09      # board front face to the jack mating face (Amphenol IGES model)
-BULLET_L      = 9.90      # PROPOSED: bullet length (Amphenol SMP-FSBA-990, Rosenberger 9.90)
-BULLET_D      = 3.43      # bullet body diameter
-BULLET_GAP    = BULLET_L - 5.6   # VERIFY: face-to-face gap between the two male mating faces. Rosenberger: 6.45 mm bullet gives 0.85 mm gap. Ask Amphenol for its table.
-CLK_Y0 = SDR_SMA_TIP_Y + ADAPTER_REACH + BULLET_GAP + SMP_JACK_H   # clock board front face
-REAR_Y0 = CLK_Y0 + 1.6 + 8.0   # rear plate front face (8 mm standoffs)
+# VERIFY: placeholder. It is estimated from the 14.25 mm overall length of the
+# adapter, minus the SMA thread overlap and the SMP insertion depth. Measure it
+# on a real B210 with the adapter fitted and mated on a jack.
+ADAPTER_REACH = 9.0       # SDR SMA tip plane to the board jack mating face, adapter fully mated
+# Source: Cinch 134-1019-451 drawing, hex 5.54 mm across flats. The body is
+# modelled as a cylinder on the across-corners diameter, so it never under-sizes the hex.
+ADAPTER_D     = 5.54 / math.cos(math.radians(30))   # = 6.40
+SMP_JACK_H    = 4.09      # board front face to the jack mating face (Amphenol drawing, SMP-MSSB-PCT)
+CLK_Y0 = SDR_SMA_TIP_Y + ADAPTER_REACH + SMP_JACK_H   # clock board front face
+# Clock board standoffs (2026-10-07, option 1). The direct mate moved the
+# board 11 mm closer to the SDRs. Longer standoffs keep the rear plate and the
+# SSD bay where they were, so the NUC cables keep about 20 mm to cross behind
+# the NUC, and the SDR rear USB/power plugs keep about 45 mm to the rear plate.
+CLK_STANDOFF = 20.0       # PROPOSED: M3 F-F standoff length, board rear face -> rear plate (a standard length)
+REAR_Y0 = CLK_Y0 + 1.6 + CLK_STANDOFF   # rear plate front face
 D = REAR_Y0 + T + 3.0     # overall depth (walls/plates)
 # The SSD bay must fit between the NUC and the rear plate. The SMP stack-up
 # made the rack shorter, so the bay moves forward when 136 mm no longer fits.
@@ -222,8 +233,8 @@ NUC_EAR_Y = [(0.0, 14.0), (50.0, 60.0), (95.0, 105.0)]
 
 def strip_local(length, ears, sdr=False):
     """rail strip in local coords: x across (centred), y along, z up from plate.
-    sdr=True gives the rear stop block a set screw. The tip of that screw is
-    the axial datum of the SDR tray (see STOP_ADJ). The NUC strip stays plain."""
+    sdr=True gives the rear stop block a set screw. The tip of that screw is a backup
+    stop for the SDR tray (see STOP_TIP_Y). The NUC strip stays plain."""
     w2 = STRIP_W / 2
     s = box(-w2, 0, 0, w2, length, STRIP_BASE)
     s = s.fuse(box(-w2, 0, STRIP_BASE, -w2 + RIB_T, length, STRIP_BASE + RIB_H))
@@ -502,7 +513,7 @@ def mate_pairs():
 
 def clock_board_ref():
     """clock board rev B: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
-    J3-J10: Amphenol SMP-MSLD-PCT envelope. J2: Amphenol 132134 SMA envelope."""
+    J3-J10: Amphenol SMP-MSSB-PCT envelope. J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
     for (hx, hz) in clk_holes():
@@ -513,7 +524,7 @@ def clock_board_ref():
         if ref == "J1":   # JST-GH, mouth up
             pcb = pcb.fuse(box(wx - 3.5, CLK_Y0 - 4.3, wz - 3.2, wx + 3.5, CLK_Y0, wz + 3.2))
         elif clk_jack_kind(ref, fp) == "smp":
-            # SMP-MSLD-PCT, Y measured from the board front face toward the SDR (Amphenol IGES model):
+            # SMP-MSSB-PCT (square body 5.99, mating face at SMP_JACK_H), Y measured from the board front face toward the SDR (Amphenol IGES model):
             # 6.0 sq body 0 - 1.22, dia 6.0 flange 1.22 - 2.31, dia 4.19 shroud 2.31 - SMP_JACK_H
             pcb = pcb.fuse(box(wx - 3.0, CLK_Y0 - 1.22, wz - 3.0, wx + 3.0, CLK_Y0, wz + 3.0))
             pcb = pcb.fuse(cq.Solid.makeCylinder(3.0, 1.09, cq.Vector(wx, CLK_Y0 - 1.22, wz), toward_sdr))
@@ -524,19 +535,16 @@ def clock_board_ref():
     return pcb
 
 def mate_refs():
-    """Reference solids for the blind-mate: one adapter and one bullet for
-    each mated pair. They are not parts to make. They are here to check fit."""
+    """Reference solids for the direct mate: one adapter for each SDR jack.
+    The adapter runs from the SDR SMA tip plane to the board jack mating face.
+    It overlaps the jack shroud by design when mated. These are not parts to
+    make. They are here to check fit."""
     out = []
-    face = SDR_SMA_TIP_Y + ADAPTER_REACH          # adapter SMP mating face
-    jack_face = CLK_Y0 - SMP_JACK_H               # board jack mating face
-    yc = (face + jack_face) / 2                   # the bullet sits centred in the gap
     up = cq.Vector(0, 1, 0)
     for m in mate_pairs():
         ax, az = m["axis_xz"]
         tag = f"{m['sdr']}_{m['key']}"
         out.append((f"REF_adapter_{tag}", cq.Solid.makeCylinder(ADAPTER_D / 2, ADAPTER_REACH, cq.Vector(ax, SDR_SMA_TIP_Y, az), up)))
-        jx, jz = m["jack_xz"]
-        out.append((f"REF_bullet_{tag}", cq.Solid.makeCylinder(BULLET_D / 2, BULLET_L, cq.Vector(jx, yc - BULLET_L / 2, jz), up)))
     return out
 
 # ---------------------------------------------------------------- trays
@@ -620,8 +628,8 @@ def latch_local(preload=False):
     """Swing latch. Local z runs toward the rack front (world -Y).
     preload=True (SDR latches) adds a boss with an M3 heat-set insert. An M3
     thumbscrew goes through the boss along +Y. Its tip pushes on the tray front
-    edge, so the tray stays clamped against the rear stop screw. A screw gives
-    the force: up to 9 N for each SMP smooth-bore interface (18 N for each SDR).
+    edge. The thumbscrew seats both connectors. The rear stop screw is a backup. A screw gives
+    the force: up to 15 N to engage each SMP interface (30 N for each SDR).
     The pivot hole and the swing-aside movement do not change."""
     n = LATCH_L_PRE if preload else LATCH_L
     s = plate(0, -4, n, 4)

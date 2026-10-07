@@ -1,33 +1,33 @@
 """Fit check for the HERON payload rack.
 
 Part 1: interference. Report every pair of parts (and reference boards)
-whose solids overlap. The mated SMP pairs touch by design, so the script
-skips them on purpose (see MATED).
+whose solids overlap. The mated adapter and board overlap by design (the
+adapter plugs onto the jack), so the script skips that pair on purpose
+(see MATED).
 Part 3 (below): a clear tool path to each rear stop screw.
 Part 2: mate report. For each SDR and each of its two reference jacks,
 print the radial offset between the adapter axis and the board jack axis,
-and the face-to-face gap between the two male mating faces. The script
-fails when a value is out of limit.
+and the axial error: the adapter mated face must equal the board jack face.
+The script fails when a value is out of limit.
 """
 import itertools, sys, time
 import cadquery as cq
 import heron_rack as R
 
-RADIAL_MAX = 0.05    # mm: largest radial offset that still blind-mates
-GAP_TOL = 0.01       # mm: largest difference from BULLET_GAP
+RADIAL_MAX = 0.05    # mm: largest radial offset that still mates
+AXIAL_TOL = 0.01     # mm: largest difference between the adapter mated face and the jack face
 
 parts, refs = R.build(with_refs=True)
 items = [(n, s) for n, s, *_ in parts] + list(refs)
 bbs = [(n, s, s.BoundingBox()) for n, s in items]
 
-# Mated pairs touch or overlap by design: adapter + bullet, and bullet + board jack.
-# Skip these pairs only. Every other pair stays in the clash test.
+# The mated pair overlaps by design: adapter + board (the adapter covers the
+# jack shroud). Skip this pair only. Every other pair stays in the clash test.
 BOARD = "REF_clock_board_revB"
 MATED = set()
 for m in R.mate_pairs():
     tag = "%s_%s" % (m["sdr"], m["key"])
-    MATED.add(frozenset(("REF_adapter_" + tag, "REF_bullet_" + tag)))
-    MATED.add(frozenset(("REF_bullet_" + tag, BOARD)))
+    MATED.add(frozenset(("REF_adapter_" + tag, BOARD)))
 
 def ov(a, b, tol=0.01):
     return (a.xmin < b.xmax - tol and b.xmin < a.xmax - tol and a.ymin < b.ymax - tol and
@@ -48,13 +48,13 @@ for b in sorted(bad, reverse=True):
 print("pairs checked; clashes:", len(bad), "time %.0fs" % (time.time() - t))
 
 # ---------------------------------------------------------------- mate report
-# The gap is read from the solids, not from the formula. The jack face is the
+# The axial error is read from the solids, not from the formula. The jack face is the
 # lowest Y of the board model in a thin column around the jack axis.
 byname = dict(items)
 board = byname[BOARD]
 fails = 0
-print("\nMate report (limit: radial <= %.2f mm, gap = BULLET_GAP %.3f +/- %.2f mm)" % (RADIAL_MAX, R.BULLET_GAP, GAP_TOL))
-print("%-8s %-6s %-5s %9s %9s %s" % ("SDR", "jack", "ref", "radial", "gap", "result"))
+print("\nMate report (limit: radial <= %.2f mm, adapter face = jack face +/- %.2f mm)" % (RADIAL_MAX, AXIAL_TOL))
+print("%-8s %-6s %-5s %9s %9s %s" % ("SDR", "jack", "ref", "radial", "axial", "result"))
 for m in R.mate_pairs():
     tag = "%s_%s" % (m["sdr"], m["key"])
     ad = byname["REF_adapter_" + tag].BoundingBox()
@@ -63,10 +63,10 @@ for m in R.mate_pairs():
     radial = ((ax - jx) ** 2 + (az - jz) ** 2) ** 0.5
     col = cq.Solid.makeBox(2.0, 20.0, 2.0, cq.Vector(jx - 1.0, R.CLK_Y0 - 15.0, jz - 1.0))
     jack_face = board.intersect(col).BoundingBox().ymin
-    gap = jack_face - ad.ymax
-    ok = radial <= RADIAL_MAX and abs(gap - R.BULLET_GAP) <= GAP_TOL
+    axial = ad.ymax - jack_face    # 0 when the adapter is fully mated
+    ok = radial <= RADIAL_MAX and abs(axial) <= AXIAL_TOL
     fails += 0 if ok else 1
-    print("%-8s %-6s %-5s %9.3f %9.3f %s" % (m["sdr"], m["jack"], m["key"], radial, gap, "ok" if ok else "FAIL"))
+    print("%-8s %-6s %-5s %9.3f %9.3f %s" % (m["sdr"], m["jack"], m["key"], radial, axial, "ok" if ok else "FAIL"))
 print("mate report:", "PASS" if not fails else "FAIL (%d)" % fails)
 
 # ---------------------------------------------------------------- stop screw access
