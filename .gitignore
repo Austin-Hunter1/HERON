@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .DS_Store
+.venv/
+Specular_Planner/.venv/
+Specular_Planner/output/*.waypoints
+Specular_Planner/output/*.txt
+Specular_Planner/output/*.json
