@@ -1,0 +1,66 @@
+# Ground test simulation: example config.
+# Paths are relative to the folder that holds this file.
+
+[site]
+# Receiver position on the ground (WGS84 degrees).
+latitude_deg = 40.016421
+longitude_deg = -105.188950
+# Height of the ground above the WGS84 ellipsoid, in metres.
+# Placeholder: about 1600 m for Boulder. The result is not sensitive to it.
+ground_height_m = 1600.0
+# Height of the antenna above the ground under it, in metres (tripod).
+# With a [terrain] table, the height above the water comes from the DEM.
+receiver_height_agl_m = 2.0
+
+[time]
+# The test date and the local time window.
+date = "2026-10-12"
+start_local = "08:00"
+end_local = "11:00"
+timezone = "America/Denver"
+# Seconds between simulation samples.
+step_s = 10
+
+[signals]
+# G = GPS, E = Galileo, C = BeiDou. J = QZSS is also possible.
+constellations = ["G", "E", "C"]
+# Carrier frequency for the Fresnel zone size. 1176.45e6 = L5 / E5a / B2a.
+carrier_hz = 1176.45e6
+# Satellites below this elevation are not simulated.
+elevation_mask_deg = 20.0
+
+[map]
+# Satellite imagery under the page. Needs internet when you open the page.
+tile_url = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+attribution = "Esri World Imagery"
+max_native_zoom = 19
+# Water inside this distance (metres) of the receiver is drawn on the map.
+radius_m = 1500.0
+
+[paths]
+# Folder of the Specular_Planner project (Jack Abrams) with its engine/ code.
+planner_dir = "../../Specular_Planner"
+# Folder with the orbit files (current_yuma.alm, gnss/*.tle, gnss/galileo_*.xml).
+data_dir = "../../Specular_Planner/data"
+# Mapped water bodies. This is the planner's own file, so a reflection counts
+# as "on water" by the same rule as in flight planning.
+water_geojson = "../../Specular_Planner/data/waterbodies.geojson"
+output_dir = "../output"
+
+# Terrain from a USGS 3DEP elevation grid. Remove this table for flat ground
+# (then the reflecting height is receiver_height_agl_m above the water).
+# Run once:  uv run ground-sim --config <this file> --fetch-dem
+[terrain]
+dem_file = "../data/dem.npz"
+source_url = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer"
+# Half-width of the grid around the receiver, and the cell size, in metres.
+radius_m = 1500.0
+cell_m = 4.0
+# Spacing of the points checked along a ray, and how far a satellite ray is followed.
+step_m = 2.0
+max_ray_m = 1500.0
+# The ground must be this far above a ray to block it.
+clearance_m = 0.5
+# Optional: one water surface height (DEM datum) for ALL water bodies. When
+# left out, each water body gets the median DEM height inside it.
+# water_level_m = 1591.3

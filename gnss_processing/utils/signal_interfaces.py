@@ -843,6 +843,7 @@ def create_tracking_channels(
     ambiguity_resolutions: dict[str, ambiguity_resolution.AmbiguityResolution]
     | None = None,
     cn0_params: tracking_channel.CN0EstimatorParameters | None = None,
+    code_phase_ms_overrides: dict[str, float] | None = None,
 ) -> dict[str, TrackingChannelAdapter]:
     tracking_policy = TRACKING_POLICIES[signal_type.signal_type_id]
 
@@ -924,12 +925,34 @@ def create_tracking_channels(
                 stacklevel=2,
             )
 
+        # `acq_result.acq_code_phase_seconds` is wrapped into one period of the
+        # acquisition code (1 ms for L1 C/A, 20 ms for L5/L2C CNAV) -- acquisition
+        # has no way to see how many whole periods have cumulatively elapsed, only
+        # phase within one. `code_phase_ms` downstream is the opposite: an
+        # ever-growing, UNWRAPPED counter (`TrackingSignalState.propagate_phase`
+        # never wraps it), and `TimeAnchor.transmit_time_s` reconstructs satellite
+        # time as a pure linear function of it. Seeding straight from the wrapped
+        # acquisition result is correct for the very first acquisition, where
+        # uptime is near zero and wrapped-vs-cumulative coincide -- but wrong for
+        # a re-acquisition, where it silently discards however many whole code
+        # periods elapsed before the gap. `code_phase_ms_overrides` lets a caller
+        # that already knows the correctly unwrapped phase (see
+        # `ChannelSupervisor.try_reacquire`, which computes it as
+        # `predicted_code_phase_ms(...) + implied_gap_ms`) supply it directly,
+        # instead of the wrapped value being used as if it were cumulative.
+        override_code_phase_ms = (code_phase_ms_overrides or {}).get(signal_id)
+        base_code_phase_ms = (
+            acq_result.acq_code_phase_seconds * 1e3
+            if override_code_phase_ms is None
+            else override_code_phase_ms
+        )
+
         code_rate_ms_per_sec = (
             1.0 + acq_result.acq_doppler_hz / signal_type.carrier_freq_hz
         ) * 1e3
         initial_state = tracking_channel.TrackingSignalState(
             uptime_epoch_ms=acq_result.uptime_epoch_ms,
-            code_phase_ms=acq_result.acq_code_phase_seconds * 1e3 + code_phase_offset_ms,
+            code_phase_ms=base_code_phase_ms + code_phase_offset_ms,
             code_rate_ms_per_sec=code_rate_ms_per_sec,
             carrier_phase_cycles=0.0,
             carrier_rate_cyc_per_sec=acq_result.acq_doppler_hz,

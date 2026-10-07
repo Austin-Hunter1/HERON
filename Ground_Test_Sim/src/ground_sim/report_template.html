@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERON Ground Test Simulation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1c2230;--mute:#667085;--line:#d9dde5;--grid:#e6e9ef;--accent:#2a6fdb;--hl:#fff6d6;--off:#9aa3b2;--blk:#e5a50a;
+--G:#2a6fdb;--E:#d97706;--C:#c2307a;--J:#1a9b7a}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--panel:#1b1f29;--ink:#e6e9ef;--mute:#98a2b3;--line:#2c3240;--grid:#262c38;--hl:#3a3418;--off:#667085;--blk:#f5c542;
+--G:#6aa3ff;--E:#f5a742;--C:#ee74b0;--J:#4cd0a8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+main{max-width:1280px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--mute);margin-bottom:12px}
+.banner{border:1px solid var(--line);border-left:4px solid #d97706;background:var(--panel);border-radius:6px;padding:8px 12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:12px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
+.card h2{font-size:13px;margin:0 0 6px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+#map{height:560px;border-radius:6px;background:#222}
+canvas{width:100%;display:block}
+#sky{aspect-ratio:1/1;max-width:520px;margin:0 auto}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.ctl input[type=range]{flex:1;min-width:200px}
+button,select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent)}
+#clock{font-variant-numeric:tabular-nums;font-weight:600;min-width:200px}
+.legend span{margin-right:12px;white-space:nowrap}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;white-space:nowrap}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{cursor:pointer;color:var(--mute);font-weight:600}
+tr.on td{background:var(--hl)}tr.sel td{outline:1px solid var(--accent)}
+tbody tr{cursor:pointer}
+.note{color:var(--mute);font-size:12px;margin-top:8px}
+.leaflet-tooltip.lbl{background:rgba(20,24,32,.8);color:#fff;border:0;box-shadow:none;padding:1px 5px;font-size:11px}
+</style>
+</head>
+<body>
+<main>
+<h1>HERON ground test simulation</h1>
+<div class="sub" id="sub"></div>
+<div class="banner" id="banner" hidden></div>
+<div class="ctl">
+  <button id="play">Play</button>
+  <select id="speed"><option value="30">30x</option><option value="60" selected>60x</option><option value="180">180x</option><option value="600">600x</option></select>
+  <input id="t" type="range" min="0" max="1" step="1" value="0">
+  <span id="clock"></span>
+  <label><input id="offw" type="checkbox" checked> show off-water</label>
+</div>
+<div class="grid">
+  <div class="card"><h2>Satellite map: specular points and first Fresnel zones</h2><div id="map"></div>
+    <div style="margin-top:6px"><button id="zr">Zoom to reflections</button> <button id="zw">Zoom to water</button></div></div>
+  <div class="card"><h2>Sky plot: reflections available on water</h2><canvas id="sky" width="700" height="700"></canvas>
+    <div class="legend" id="legend" style="margin-top:8px"></div></div>
+</div>
+<div class="card" style="margin-top:12px"><h2>Availability over time (click to set the clock)</h2><canvas id="tl" width="1200" height="300" style="cursor:pointer"></canvas></div>
+<div class="card" style="margin-top:12px"><h2>Reflection windows on water</h2>
+  <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+  <div class="note">A window is a time span where the specular point is inside a mapped water body (same test as the flight planner) and terrain does not block the satellite, the reflected leg or the incoming leg. Incidence angle = 90&deg; &minus; elevation, from the ground normal. Water share = part of the first Fresnel zone over water (mean). Highlighted rows are active at the clock time. Click a row to jump to its start.</div>
+</div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script id="data" type="application/json">__HERON_DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const M = D.meta, P = D.passes, W = D.windows;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NAMES = {G:"GPS L5",E:"Galileo E5a",C:"BeiDou B2a",J:"QZSS L5"};
+const t0 = new Date(M.start_local).getTime();
+const fmt = new Intl.DateTimeFormat("en-GB",{timeZone:M.tz,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+const fmtDate = new Intl.DateTimeFormat("en-US",{timeZone:M.tz,weekday:"short",year:"numeric",month:"short",day:"numeric"});
+const clockStr = s => fmt.format(new Date(t0 + s*1000));
+const $ = id => document.getElementById(id);
+
+$("sub").textContent =
+  `${fmtDate.format(new Date(t0))}, ${clockStr(0)}–${clockStr(M.duration_s)} ${M.tz} · ${M.lat.toFixed(6)}, ${M.lon.toFixed(6)} · `+
+  `${M.terrain ? `antenna ${M.ground_elev_m} m ground + ${M.height_m} m mast` : `antenna ${M.height_m} m above the water`} · ${M.bodies.slice(0,4).map(b=>`${b.name}: ${b.distance_m} m away, ${b.height_m} m below antenna`).join("; ")} · carrier ${(M.carrier_hz/1e6).toFixed(2)} MHz · mask ${M.mask_deg}° · `+
+  `almanac ${M.almanac_age_days} d from test date`;
+const nSat = new Set(W.map(w=>w.sid)).size;
+if (!W.length) {
+  $("banner").hidden = false;
+  const nBlk = P.reduce((n,p)=>n+p.samples.filter(s=>s[7]===1).length, 0);
+  $("banner").textContent = "No reflection in this window is available on mapped water. " +
+    (M.nearest_water_m==null ? "The water map has no water." : `The nearest mapped water is ${M.nearest_water_m} m from the receiver.`) +
+    (nBlk ? " Amber tracks are over water but blocked by terrain." : "") + " Grey tracks are above the mask but not over water.";
+} else {
+  $("banner").hidden = false; $("banner").style.borderLeftColor = "var(--accent)";
+  $("banner").textContent = `${W.length} reflection window${W.length>1?"s":""} on water from ${nSat} satellite${nSat>1?"s":""}.`;
+}
+$("legend").innerHTML = [...new Set(P.map(p=>p.constellation))].map(c=>`<span><i class="dot" style="background:var(--${c})"></i>${NAMES[c]||c}</span>`).join("") +
+  `<span><i class="dot" style="background:var(--off)"></i>above mask, not on water</span>` +
+  (M.terrain ? `<span><i class="dot" style="background:var(--blk)"></i>over water, blocked by terrain</span>` : "");
+const stCol = (p, st) => st===2 ? css("--"+p.constellation) : st===1 ? css("--blk") : css("--off");
+
+/* ---- helpers ---- */
+const at = (p, t) => {  // interpolate a pass at time t
+  const S = p.samples; if (t <= S[0][0]) return S[0]; if (t >= S[S.length-1][0]) return S[S.length-1];
+  let lo = 0, hi = S.length-1;
+  while (hi-lo > 1) { const m=(lo+hi)>>1; if (S[m][0] <= t) lo=m; else hi=m; }
+  const a=S[lo], b=S[hi], f=(t-a[0])/(b[0]-a[0]);
+  let daz = b[1]-a[1]; if (daz>180) daz-=360; if (daz<-180) daz+=360;
+  return [t, (a[1]+daz*f+360)%360, ...[2,3,4,5,6].map(i=>a[i]+(b[i]-a[i])*f), a[7], a[8]+(b[8]-a[8])*f];
+};
+const active = t => P.filter(p => t >= p.start_s && t <= p.stop_s);
+const phi = M.lat*Math.PI/180;
+const mLat = 111132.92 - 559.82*Math.cos(2*phi) + 1.175*Math.cos(4*phi);
+const mLon = 111412.84*Math.cos(phi) - 93.5*Math.cos(3*phi);
+const toLL = (e, n) => [M.lat + n/mLat, M.lon + e/mLon];
+const ellipse = (s) => {  // [t,az,el,e,n,along,across,...] -> lat/lon ring
+  const az = s[1]*Math.PI/180, pts = [];
+  for (let i=0;i<48;i++) { const th=2*Math.PI*i/48, x=s[5]*Math.cos(th), y=s[6]*Math.sin(th);
+    pts.push(toLL(s[3] + x*Math.sin(az) + y*Math.cos(az), s[4] + x*Math.cos(az) - y*Math.sin(az))); }
+  return pts;
+};
+let R = 3;
+for (const p of P) for (const s of p.samples) R = Math.max(R, Math.hypot(s[3],s[4]) + s[5]);
+let selected = null;
+
+/* ---- satellite map ---- */
+let map = null, ellLayer = null;
+const recv = [M.lat, M.lon];
+function runs(p) {   // contiguous runs of equal on-water flag -> [[flag, [[lat,lon]..]]]
+  const out = []; let cur = null;
+  p.samples.forEach((s,i) => {
+    const pt = toLL(s[3], s[4]);
+    if (!cur || cur[0] !== s[7]) { const prev = cur && cur[1][cur[1].length-1]; cur = [s[7], prev ? [prev] : []]; out.push(cur); }
+    cur[1].push(pt);
+  });
+  return out;
+}
+function initMap() {
+  if (typeof L === "undefined") { $("map").innerHTML = '<p style="color:#fff;padding:16px">The map library did not load. The map needs an internet connection. The sky plot, timeline and table still work.</p>'; return; }
+  map = L.map("map", {maxZoom: 22, zoomSnap: 0.25}).setView(recv, 19, {animate: false});
+  L.tileLayer(D.map.tile_url, {maxNativeZoom: D.map.max_native_zoom, maxZoom: 22, attribution: D.map.attribution}).addTo(map);
+  const wl = L.geoJSON(D.water, {style: {color: "#38bdf8", weight: 2, fillColor: "#38bdf8", fillOpacity: .35},
+    onEachFeature: (f, l) => l.bindTooltip(`${f.properties.name} · level ${f.properties.level_m} m`, {sticky: true})}).addTo(map);
+  map._waterLayer = wl;
+  L.circleMarker(recv, {radius: 6, color: "#fff", weight: 2, fillColor: "#111", fillOpacity: 1}).addTo(map).bindTooltip("receiver", {permanent: true, direction: "right", className: "lbl"});
+  for (const p of P) for (const [flag, pts] of runs(p)) {
+    if (pts.length < 2) continue;
+    L.polyline(pts, flag===2 ? {color: css("--"+p.constellation), weight: 3, opacity: .9} : {color: flag===1 ? "#e5a50a" : "#9aa3b2", weight: 1.5, opacity: .6, dashArray: "4 4"}).addTo(map);
+  }
+  ellLayer = L.layerGroup().addTo(map);
+  zoomReflections();
+}
+function zoomReflections() { if (!map) return; const [a,b] = [toLL(-R,-R), toLL(R,R)]; map.fitBounds([a,b], {maxZoom: 21, padding: [20,20], animate: false}); }
+function zoomWater() { if (!map) return; const b = map._waterLayer.getBounds(); if (!b.isValid()) return zoomReflections(); b.extend(recv); map.fitBounds(b, {padding: [20,20]}); }
+$("zr").onclick = zoomReflections; $("zw").onclick = zoomWater;
+function drawMap(t) {
+  if (!map) return; ellLayer.clearLayers();
+  for (const p of active(t)) {
+    const s = at(p, t), st = s[7], on = st === 2;
+    if (!on && !$("offw").checked) continue;
+    if (selected && selected !== p.sid) { if (!on) continue; }
+    const col = on ? css("--"+p.constellation) : st===1 ? "#e5a50a" : "#9aa3b2";
+    L.polygon(ellipse(s), {color: col, weight: on ? 2.5 : 1.2, fillColor: col, fillOpacity: on ? .35 : st===1 ? .15 : .08, dashArray: on ? null : "4 4"}).addTo(ellLayer);
+    const c = toLL(s[3], s[4]);
+    L.circleMarker(c, {radius: 3, color: col, fillColor: col, fillOpacity: 1, weight: 1}).addTo(ellLayer)
+      .bindTooltip(`${p.sid} ${s[2].toFixed(0)}°${on ? " · "+Math.round(s[8]*100)+"% water" : st===1 ? " · blocked" : ""}`, {permanent: on, direction: "top", className: "lbl"});
+  }
+}
+
+/* ---- sky plot ---- */
+function drawSky(t) {
+  const cv = $("sky"), g = cv.getContext("2d"), Wd = cv.width, c = Wd/2, rr = Wd/2*0.88;
+  const Pt = (az, el) => { const r = (90-el)/90*rr, a = az*Math.PI/180; return [c+r*Math.sin(a), c-r*Math.cos(a)]; };
+  g.clearRect(0,0,Wd,Wd); g.font = "20px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.strokeStyle = css("--grid"); g.fillStyle = css("--mute"); g.lineWidth = 1;
+  for (const el of [0,30,60]) { g.beginPath(); g.arc(c,c,(90-el)/90*rr,0,7); g.stroke(); if (el) g.fillText(el+"°", c+4, c-(90-el)/90*rr+10); }
+  g.beginPath(); g.moveTo(c-rr,c); g.lineTo(c+rr,c); g.moveTo(c,c-rr); g.lineTo(c,c+rr); g.stroke();
+  g.setLineDash([5,5]); g.strokeStyle = css("--mute"); g.beginPath(); g.arc(c,c,(90-M.mask_deg)/90*rr,0,7); g.stroke(); g.setLineDash([]);
+  for (const [l,a] of [["N",0],["E",90],["S",180],["W",270]]) { const [x,y]=Pt(a,-4); g.fillText(l,x,y); }
+  const now = active(t);
+  for (const p of P) {            // tracks: grey where not on water, colour where on water
+    const dim = selected && selected !== p.sid;
+    let prev = null;
+    for (const s of p.samples) {
+      const [x,y] = Pt(s[1], s[2]);
+      if (prev) { g.beginPath(); g.moveTo(prev[0],prev[1]); g.lineTo(x,y);
+        g.strokeStyle = stCol(p, s[7]); g.lineWidth = s[7]===2 ? 4 : 1.4; g.globalAlpha = dim ? .08 : s[7]===2 ? .95 : s[7]===1 ? .7 : .35; g.stroke(); }
+      prev = [x,y];
+    }
+  }
+  g.globalAlpha = 1;
+  for (const p of now) {
+    const s = at(p,t), [x,y] = Pt(s[1],s[2]), on = s[7] === 2, col = css("--"+p.constellation);
+    g.beginPath(); g.arc(x,y,on?8:6,0,7);
+    if (on) { g.fillStyle = col; g.fill(); g.strokeStyle = css("--ink"); g.lineWidth = 2; g.stroke(); }
+    else { g.strokeStyle = stCol(p, s[7]); g.lineWidth = 2; g.stroke(); }
+    g.fillStyle = on ? css("--ink") : css("--mute"); g.fillText(p.sid, x, y-17);
+  }
+  g.textAlign = "start";
+}
+
+/* ---- availability timeline ---- */
+const order = [...P].sort((a,b)=>a.sid<b.sid?-1:a.sid>b.sid?1:a.start_s-b.start_s);
+const rowOf = new Map(); let rows = 0;
+for (const p of order) if (!rowOf.has(p.sid)) rowOf.set(p.sid, rows++);
+function drawTimeline(t) {
+  const cv = $("tl"), g = cv.getContext("2d"), Wd = cv.width, left = 56, top = 26, rh = Math.min(22, (cv.height-top-6)/Math.max(rows,1));
+  cv.height = top + rows*rh + 8; g.clearRect(0,0,Wd,cv.height);
+  g.font = "13px system-ui"; g.textBaseline = "middle";
+  const X = s => left + s/M.duration_s*(Wd-left-10);
+  g.strokeStyle = css("--grid"); g.fillStyle = css("--mute");
+  const stepMin = M.duration_s > 7200 ? 30 : 15;
+  for (let s=0; s<=M.duration_s; s+=stepMin*60) { g.beginPath(); g.moveTo(X(s),top-6); g.lineTo(X(s),cv.height); g.stroke(); g.textAlign = "center"; g.fillText(clockStr(s).slice(0,5), X(s), 10); }
+  g.textAlign = "left";
+  for (const [sid, r] of rowOf) { g.fillStyle = css("--mute"); g.fillText(sid, 4, top + r*rh + rh/2); }
+  for (const p of P) {
+    const y = top + rowOf.get(p.sid)*rh + 3, h = rh - 6, S = p.samples, dim = selected && selected !== p.sid;
+    for (let i=0;i<S.length;i++) {
+      const x0 = X(S[i][0]), x1 = X(i+1<S.length ? S[i+1][0] : S[i][0] + (S[1]?S[1][0]-S[0][0]:10));
+      g.globalAlpha = dim ? .15 : 1; g.fillStyle = stCol(p, S[i][7]); if (S[i][7] !== 2) g.globalAlpha *= S[i][7]===1 ? .7 : .35;
+      g.fillRect(x0, y, Math.max(x1-x0, 1), h);
+    }
+  }
+  g.globalAlpha = 1; g.strokeStyle = css("--ink"); g.lineWidth = 2; g.beginPath(); g.moveTo(X(t),top-6); g.lineTo(X(t),cv.height); g.stroke();
+}
+$("tl").onclick = ev => { const r = ev.target.getBoundingClientRect(), x = (ev.clientX-r.left)/r.width*ev.target.width; setT((x-56)/(ev.target.width-66)*M.duration_s); };
+
+/* ---- table ---- */
+const COLS = [
+  ["sid","Satellite",r=>r.sid],
+  ["body","Water body",r=>r.body],
+  ["start_s","Start (local)",r=>r.start_local],
+  ["stop_s","Stop (local)",r=>r.stop_local],
+  ["duration_min","Duration (min)",r=>r.duration_min.toFixed(1)],
+  ["el_start_deg","Elevation start → stop (°)",r=>`${r.el_start_deg} → ${r.el_stop_deg}`],
+  ["inc_start_deg","Incidence start → stop (°)",r=>`${r.inc_start_deg} → ${r.inc_stop_deg}`],
+  ["inc_max_deg","Incidence min–max (°)",r=>`${r.inc_min_deg}–${r.inc_max_deg}`],
+  ["az_start_deg","Azimuth start → stop (°)",r=>`${r.az_start_deg} → ${r.az_stop_deg}`],
+  ["water_frac_mean","Water share of zone",r=>Math.round(r.water_frac_mean*100)+"%"],
+  ["fresnel_across_max_m","Fresnel max across × along (m)",r=>`${r.fresnel_across_max_m} × ${r.fresnel_along_max_m}`],
+];
+let sortKey = "start_s", sortDir = 1;
+const tb = document.querySelector("#tbl tbody");
+document.querySelector("#tbl thead").innerHTML = "<tr>"+COLS.map(c=>`<th data-k="${c[0]}">${c[1]}</th>`).join("")+"</tr>";
+document.querySelectorAll("#tbl th").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; sortDir = k===sortKey?-sortDir:1; sortKey=k; buildTable(); update(); });
+function buildTable() {
+  tb.innerHTML = "";
+  if (!W.length) { tb.innerHTML = `<tr><td colspan="${COLS.length}" style="text-align:left">No reflection windows on water.</td></tr>`; return; }
+  [...W].sort((a,b)=>(a[sortKey]>b[sortKey]?1:a[sortKey]<b[sortKey]?-1:0)*sortDir).forEach(r=>{
+    const tr = document.createElement("tr"); tr._d = r;
+    tr.innerHTML = COLS.map(c=>`<td>${c[2](r)}</td>`).join("");
+    tr.onclick = () => { selected = selected===r.sid ? null : r.sid; if (selected) setT(r.start_s); else update(); };
+    tb.appendChild(tr);
+  });
+}
+const markRows = t => { for (const tr of tb.children) if (tr._d) { tr.classList.toggle("on", t>=tr._d.start_s && t<=tr._d.stop_s); tr.classList.toggle("sel", tr._d.sid===selected); } };
+
+/* ---- clock and controls ---- */
+const slider = $("t"); slider.max = M.duration_s;
+let t = 0, timer = null, last = 0;
+function update() {
+  slider.value = t;
+  const act = active(t), on = act.filter(p => at(p,t)[7] === 2).length;
+  $("clock").textContent = `${clockStr(t)} local · ${on} on water · ${act.length} above mask`;
+  drawMap(t); drawSky(t); drawTimeline(t); markRows(t);
+}
+function setT(v) { t = Math.max(0, Math.min(M.duration_s, v)); update(); }
+slider.oninput = () => setT(+slider.value);
+$("offw").onchange = update;
+$("play").onclick = function () {
+  if (timer) { cancelAnimationFrame(timer); timer = null; this.textContent = "Play"; return; }
+  this.textContent = "Pause"; last = performance.now(); if (t >= M.duration_s) t = 0;
+  const tick = now => {
+    t += (now-last)/1000 * +$("speed").value; last = now;
+    if (t >= M.duration_s) { t = M.duration_s; update(); timer = null; $("play").textContent = "Play"; return; }
+    update(); timer = requestAnimationFrame(tick);
+  };
+  timer = requestAnimationFrame(tick);
+};
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change", update);
+buildTable(); update();
+window.addEventListener("load", () => { initMap(); update(); });
+</script>
+</body>
+</html>

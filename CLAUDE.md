@@ -61,6 +61,12 @@ You are a test engineer on this project. Obey these rules at all times:
   tracking, navigation), with HERON edits its README lists. It reads a
   flight directory as one "experiment" through `metadata.yml` (D-022).
   `gnss_processing/submodules/gnss-tools` is a git submodule.
+- `Specular_Planner/` — Jack Abrams' flight planner (web app, orbit and
+  specular-point engine). Reference for the orbit code; do not modify
+  without asking him.
+- `Ground_Test_Sim/` — Ground test simulation (D-031): specular tracks
+  and Fresnel zones of a fixed receiver. Own `uv` project; reuses
+  `Specular_Planner/engine`. See its `README.md`.
 - `Hardware/` — HERON hardware design files.
   - `clock_board/` — The 10 MHz + PPS distribution board (D-025,
     D-026). Python generators make the KiCad 7 files; see its

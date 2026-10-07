@@ -24,7 +24,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # No window: the tool only writes a file.
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle  # noqa: E402
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle  # noqa: E402
 
 # Drawing style. These are looks of the figure, not design values.
 COLORS = {"ant": "#dcebf7", "tee": "#fde9c9", "sdr": "#dff0d8", "aux": "#eeeeee"}
@@ -139,65 +139,66 @@ def draw_detailed(data: dict) -> plt.Figure:
     return fig
 
 
-# Presentation style: flat colors, large text, 16:9. Looks only, not design values.
+# Presentation style: flat colors, big numbers, very little text, 16:9.
+# These are looks of the figure, not design values.
 P_COLORS = {"ant": "#2b6cb0", "tee": "#c05621", "sdr": "#2f855a", "aux": "#4a5568",
-            "dc": "#c05621", "bg": "#f7fafc", "ink": "#1a202c", "muted": "#4a5568"}
+            "dc": "#c05621", "bg": "#f7fafc", "ink": "#1a202c", "muted": "#4a5568",
+            "bad": "#c53030"}
 
 
 def minus(text: str) -> str:
-    """Use the true minus sign in a label, so negative levels read well on a slide."""
+    """Use the true minus sign before a number, so negative values read well on a slide."""
     return re.sub(r"-(?=\d)", "−", text)
 
 
-def p_wrap(text: str, width: int) -> str:
-    """Wrap a part description. Part numbers with hyphens stay in one piece."""
-    return textwrap.fill(text, width, break_long_words=False, break_on_hyphens=False)
-
-
-def p_block(ax, x, y, w, h, title, lines, color, title_size=14, body_size=12):
-    """Flat block with a colored header band, a white body, and centered text lines."""
-    band = 5.5
+def p_block(ax, x, y, w, h, title, color, title_size=16):
+    """Flat block with a colored header band and a white body. Returns the body center."""
+    band = 6.0
     ax.add_patch(Rectangle((x, y), w, h, fc="white", ec=color, lw=2.5, zorder=2))
     ax.add_patch(Rectangle((x, y + h - band), w, band, fc=color, ec=color, lw=2.5, zorder=3))
     ax.text(x + w / 2, y + h - band / 2, title, ha="center", va="center", color="white",
             fontsize=title_size, fontweight="bold", zorder=4)
-    if lines:
-        ax.text(x + w / 2, y + (h - band) / 2, NL.join(lines), ha="center", va="center",
-                fontsize=body_size, color=P_COLORS["ink"], linespacing=1.45, zorder=4)
+    return x + w / 2, y + (h - band) / 2
 
 
-def p_arrow(ax, p0, p1, label="", color="#1a202c", dashed=False, head=22, label_size=11.5,
-            side=False):
-    """Thick arrow with an optional label above (or beside) its middle."""
-    ax.add_patch(FancyArrowPatch(p0, p1, arrowstyle="-|>", mutation_scale=head, lw=3.0,
-                                 ls=(0, (4, 3)) if dashed else "-", color=color, zorder=5))
-    if label:
-        mx, my = (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2
-        if side:
-            ax.text(mx + 1.5, my, label, ha="left", va="center", fontsize=label_size,
-                    color=color, fontweight="bold", zorder=6)
-        else:
-            ax.text(mx, my + 1.3, label, ha="center", va="bottom", fontsize=label_size,
-                    color=color, fontweight="bold", zorder=6)
+def p_name_box(ax, x, y, w, h, text, color):
+    """Small flat box with one centered white label."""
+    ax.add_patch(Rectangle((x, y), w, h, fc=color, ec=color, zorder=3))
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", color="white", fontsize=12,
+            fontweight="bold", zorder=4)
 
 
-def p_card(ax, x, y, w, h, title, metrics, foot, margin=None, margin_ok=True):
-    """Result card: a title, three big numbers with small labels, a margin line, a footnote."""
-    ax.add_patch(Rectangle((x, y), w, h, fc="white", ec="#cbd5e0", lw=2, zorder=2))
-    ax.text(x + 2, y + h - 1.6, title, fontsize=14, fontweight="bold", va="top",
-            color=P_COLORS["ink"], zorder=4)
-    step = w / len(metrics)
-    for i, (value, label) in enumerate(metrics):
-        cx = x + step * (i + 0.5)
-        ax.text(cx, y + h * 0.57, value, ha="center", va="center", fontsize=24,
-                fontweight="bold", color=P_COLORS["ant"], zorder=4)
-        ax.text(cx, y + h * 0.40, label, ha="center", va="center", fontsize=10.5,
-                color=P_COLORS["muted"], zorder=4)
-    if margin:
-        ax.text(x + w / 2, y + 3.9, margin, ha="center", va="bottom", fontsize=11,
-                fontweight="bold", color=P_COLORS["sdr"] if margin_ok else "#c53030", zorder=4)
-    ax.text(x + w / 2, y + 1.0, foot, ha="center", va="bottom", fontsize=10,
+def p_arrow(ax, p0, p1, color="#1a202c", head=24):
+    """Thick arrow."""
+    ax.add_patch(FancyArrowPatch(p0, p1, arrowstyle="-|>", mutation_scale=head, lw=3.4,
+                                 color=color, zorder=5))
+
+
+def p_amplifier(ax, cx, cy, gain_db, color):
+    """Amplifier triangle with the gain as one big number beside it."""
+    ax.add_patch(Polygon([(cx - 15, cy - 6.5), (cx - 15, cy + 6.5), (cx - 3, cy)], closed=True,
+                         fc=color, ec=color, zorder=3))
+    ax.plot([cx - 21, cx - 15], [cy, cy], color=color, lw=3.4, zorder=3)
+    ax.plot([cx - 3, cx + 1], [cy, cy], color=color, lw=3.4, zorder=3)
+    ax.text(cx + 4, cy + 1.2, minus(f"{gain_db:+.0f}"), ha="left", va="center", fontsize=40,
+            fontweight="bold", color=color, zorder=4)
+    ax.text(cx + 4, cy - 6.2, "dB LNA gain", ha="left", va="center", fontsize=12,
             color=P_COLORS["muted"], zorder=4)
+
+
+def p_card(ax, x, y, w, h, title, cn0, margin_text, margin_ok):
+    """Result card: title, one big C/N0 number, and one margin line."""
+    ax.add_patch(Rectangle((x, y), w, h, fc="white", ec="#cbd5e0", lw=2, zorder=2))
+    ax.text(x + 2.5, y + h - 2, title, fontsize=16, fontweight="bold", va="top",
+            color=P_COLORS["ink"], zorder=4)
+    ax.text(x + w * 0.36, y + h * 0.50, f"{cn0:.1f}", ha="center", va="center", fontsize=38,
+            fontweight="bold", color=P_COLORS["ant"], zorder=4)
+    ax.text(x + w * 0.66, y + h * 0.50, "dB-Hz C/N0", ha="left", va="center", fontsize=14,
+            color=P_COLORS["muted"], zorder=4)
+    if margin_text:
+        ax.text(x + w / 2, y + 1.4, margin_text, ha="center", va="bottom", fontsize=14,
+                fontweight="bold", color=P_COLORS["sdr"] if margin_ok else P_COLORS["bad"],
+                zorder=4)
 
 
 def margin_text(req: dict | None) -> tuple[str | None, bool]:
@@ -205,97 +206,73 @@ def margin_text(req: dict | None) -> tuple[str | None, bool]:
     if req is None:
         return None, True
     if req["required_gain_db"] is None:
-        return "no LNA gain is enough for the target", False
-    ok = req["margin_db"] >= 0
-    return minus(f"LNA gain margin {req['margin_db']:+.1f} dB "
-                 f"(needs {req['required_gain_db']:.1f} dB)"), ok
+        return "target not reachable", False
+    return minus(f"{req['margin_db']:+.0f} dB gain margin"), req["margin_db"] >= 0
 
 
 def draw_presentation(data: dict) -> plt.Figure:
     """Build the slide-style figure from the JSON data."""
     cfg, results = data["config"], data["results"]
-    chains, comps = cfg["chains"], cfg["components"]
+    chains = cfg["chains"]
     fig, ax = plt.subplots(figsize=(16, 9))
     fig.patch.set_facecolor(P_COLORS["bg"])
     ax.set_xlim(0, 160)
     ax.set_ylim(0, 90)
     ax.axis("off")
-    ax.text(3, 87, "HERON RF front end", fontsize=26, fontweight="bold", va="center",
+    ax.text(3, 86.5, "HERON RF front end", fontsize=30, fontweight="bold", va="center",
             color=P_COLORS["ink"])
-    first_band = chains[0]["bands"][0]
     target = (cfg.get("requirements") or {}).get("target_cn0_dbhz")
-    target_text = "" if target is None else f"   |   C/N0 target {target:g} dB-Hz"
-    ax.text(3, 82.2, f"Antenna → bias tee → Ettus B210   |   {cfg['environment']['case']} "
-            f"case   |   arrow labels: {first_band} signal level{target_text}", fontsize=13,
+    target_text = "" if target is None else f"     target {target:g} dB-Hz"
+    ax.text(3, 80.5, f"Antenna → bias tee → B210{target_text}", fontsize=16,
             va="center", color=P_COLORS["muted"])
 
-    lane_y = [69.0, 35.0]  # Lane centers, top lane first.
-    sdr = comps[chains[0]["sdr"]]
-    p_block(ax, 113, 24, 26, 56, "Ettus USRP B210", [], P_COLORS["sdr"])
-    lo, hi = sdr["gain_range_db"]
-    max_in = minus(format(sdr["max_input_dbm"], "g"))
-    ax.text(126, 52, f"RX gain {lo:g} to {hi:g} dB{NL}NF about "
-            f"{next(iter(sdr['nf_db'].values())):g} dB{NL}max input {max_in} dBm{NL}{NL}"
-            f"ADC · FPGA · USB 3.0",
-            ha="center", va="center", fontsize=11, color=P_COLORS["ink"], linespacing=1.5,
-            zorder=4)
-    p_block(ax, 146, 40, 13, 14, "Computer", ["heron_", "recorder"], P_COLORS["aux"],
-            title_size=11, body_size=10.5)
-    p_arrow(ax, (139.6, 47), (145.4, 47), "USB", color=P_COLORS["muted"], head=18, label_size=10)
-    p_block(ax, 146, 60, 13, 14, "Clock", ["10 MHz", "+ PPS"], P_COLORS["aux"],
-            title_size=11, body_size=10.5)
-    p_arrow(ax, (146, 67), (139.6, 67), color=P_COLORS["muted"], head=18)
+    lane_y = [64.0, 36.0]  # Lane centers, top lane first.
+    p_block(ax, 108, 22, 32, 58, "Ettus B210", P_COLORS["sdr"])
+    p_name_box(ax, 145, 46, 14, 8, "Computer", P_COLORS["aux"])
+    p_arrow(ax, (140.6, 50), (144.4, 50), color=P_COLORS["muted"], head=18)
+    p_name_box(ax, 145, 62, 14, 8, "Clock", P_COLORS["aux"])
+    p_arrow(ax, (145, 66), (140.6, 66), color=P_COLORS["muted"], head=18)
 
     for lane, chain in zip(lane_y, chains, strict=False):
         res = results[chain["name"]]
-        ant, tee = comps[chain["active_antenna"]], comps[chain["bias_tee"]]
-        band0 = chain["bands"][0]
-        rows0 = res[band0]["rows"]
+        rows0 = res[chain["bands"][0]]["rows"]
         lna = stage(rows0, chain["stages"][0])
         tee_row = stage(rows0, chain["bias_tee"])
-        gains = " · ".join(f"{b} {stage(res[b]['rows'], chain['stages'][0])['gain_db']:+.1f}"
-                                for b in chain["bands"])
-        p_block(ax, 3, lane - 9, 40, 18, chain["name"],
-                [p_wrap(ant["description"].replace(" (LNA)", ""), 32),
-                 f"LNA gain {gains} dB", f"LNA NF {lna['nf_db']:g} dB"], P_COLORS["ant"])
-        p_block(ax, 62, lane - 9, 32, 18, "Bias tee",
-                [p_wrap(tee["description"].replace(" bias tee", ""), 30),
-                 f"loss {-tee_row['gain_db']:g} dB"], P_COLORS["tee"])
-        p_arrow(ax, (43.6, lane), (61.4, lane), minus(f"{lna['signal_dbm']:.1f} dBm"))
-        p_arrow(ax, (94.6, lane), (112.4, lane), minus(f"{tee_row['signal_dbm']:.1f} dBm"))
-        port = "RF A · RX2" if lane == lane_y[0] else "RF B · RX2"
-        ax.add_patch(Rectangle((116, lane - 5.5), 20, 11, fc=P_COLORS["sdr"], ec="none",
+        short = chain["name"].split(" (")[0]
+        cx, cy = p_block(ax, 3, lane - 11, 52, 22, f"{short} antenna", P_COLORS["ant"])
+        p_amplifier(ax, cx - 4, cy - 0.5, lna["gain_db"], P_COLORS["ant"])
+        bx, by = p_block(ax, 66, lane - 11, 32, 22, "Bias tee", P_COLORS["tee"])
+        ax.text(bx, by + 1.5, minus(f"{tee_row['gain_db']:+.1f} dB"), ha="center", va="center",
+                fontsize=26, fontweight="bold", color=P_COLORS["tee"], zorder=4)
+        ax.text(bx, by - 5.2, "loss", ha="center", va="center", fontsize=12,
+                color=P_COLORS["muted"], zorder=4)
+        p_arrow(ax, (55.6, lane), (65.4, lane))
+        p_arrow(ax, (98.6, lane), (113.4, lane))
+        port = "RF A" if lane == lane_y[0] else "RF B"
+        ax.add_patch(Rectangle((114, lane - 8.5), 22, 17, fc=P_COLORS["sdr"], ec="none",
                                zorder=3))
-        ax.text(126, lane + 1.7, port, ha="center", va="center", color="white", fontsize=13,
+        ax.text(125, lane + 3.2, port, ha="center", va="center", color="white", fontsize=17,
                 fontweight="bold", zorder=4)
-        ax.text(126, lane - 2.3, f"SDR gain {chain['sdr_gain_db']:g} dB", ha="center",
-                va="center", color="white", fontsize=11.5, zorder=4)
+        ax.text(125, lane - 3.0, f"SDR {chain['sdr_gain_db']:g} dB", ha="center", va="center",
+                color="white", fontsize=15, zorder=4)
 
-    volts = [c.get("supply_voltage_v") for c in chains]
-    shown = "TBD" if all(v is None for v in volts) else ", ".join(
-        f"{v:g} V" for v in volts if v is not None)
-    p_block(ax, 62, 48, 32, 8, "Jackery power", [f"voltage: {shown}"], P_COLORS["aux"],
-            title_size=11, body_size=10.5)
-    p_arrow(ax, (78, 47.8), (78, 44.4), "DC", color=P_COLORS["dc"], dashed=True, head=14,
-            label_size=10, side=True)
-    p_arrow(ax, (78, 56.2), (78, 59.6), "DC", color=P_COLORS["dc"], dashed=True, head=14,
-            label_size=10, side=True)
+    # Power: a small badge between the lanes, joined to both bias tees.
+    mid = (lane_y[0] + lane_y[1]) / 2
+    ax.add_patch(Rectangle((66, mid - 2.2), 32, 4.4, fc=P_COLORS["aux"], ec="none", zorder=3))
+    ax.text(82, mid, "Jackery power", ha="center", va="center", color="white", fontsize=12,
+            fontweight="bold", zorder=4)
+    for y0, y1 in ((mid + 2.2, lane_y[0] - 11), (mid - 2.2, lane_y[1] + 11)):
+        ax.plot([82, 82], [y0, y1], color=P_COLORS["dc"], lw=3.0, ls=(0, (3, 2)), zorder=4)
 
     cards = [(c["name"], b) for c in chains for b in c["bands"]]
     gap = 3.0
     width = (154 - gap * (len(cards) - 1)) / len(cards)
     for i, (name, band) in enumerate(cards):
-        r = results[name][band]
-        margin, margin_ok = margin_text(data.get("requirements", {}).get(name, {}).get(band))
-        p_card(ax, 3 + i * (width + gap), 3.5, width, 19.5, f"{name.split(' (')[0]} · {band}",
-               [(f"{r['cn0_dbhz']:.1f}", "C/N0 dB-Hz"),
-                (f"{r['nf_total_db']:.2f}", "NF dB"),
-                (f"{r['gain_to_sdr_input_db']:+.1f}", "gain dB")],
-               minus(f"noise {r['noise_at_sdr_input_dbm']:.1f} dBm · "
-                     f"headroom {r['headroom_db']:.0f} dB"), margin, margin_ok)
-    ax.text(3, 0.9, "Minimum GPS signal at a 0 dBic antenna · noise kTB at 290 K · "
-            "SMA link loss provisional (0 dB) · numbers from rf_chain.example.toml",
-            fontsize=9, color=P_COLORS["muted"], va="center")
+        text, ok = margin_text(data.get("requirements", {}).get(name, {}).get(band))
+        p_card(ax, 3 + i * (width + gap), 3.0, width, 17.5,
+               f"{name.split(' (')[0]} · {band}", results[name][band]["cn0_dbhz"], text, ok)
+    ax.text(3, 0.9, "Minimum GPS signal level · typical case", fontsize=10,
+            color=P_COLORS["muted"], va="center")
     return fig
 
 

@@ -1,0 +1,125 @@
+# Settings for scripts/oct01_story_figures.py.
+# Every value the script uses that is not a physical constant is set here.
+# The script checks this file at start-up and stops with a clear message when a
+# key is missing or wrong.
+
+experiment: 20261001_URSP_Testing
+output_subdir: _oct01_story        # made under <collects>/<experiment>/Figures/
+
+# Time lengths used by the tracking runs that notebook 01 wrote.
+track_start_offset_ms: 0
+track_duration_ms: 120000
+
+# Reference site (latitude deg, longitude deg, height m). Not surveyed.
+reference_geo: [40.009956, -105.243613, 1655.0]
+
+# Position solutions are formed on this grid.
+epoch_interval_ms: 100.0
+
+# A channel counts as "settled" this long after it (re)starts and only while it
+# is in PLL mode. From the pre-fix pseudorange plots, the pull-in ramp after a
+# reacquisition lasts about 1 s; 2 s leaves margin.
+settle_s: 2.0
+
+# Overflow handling. Two overflows closer than `cluster_gap_s` count as one event.
+# The quiet window used to measure each satellite's pseudorange level starts
+# `quiet_start_s` after the last overflow of an event and ends `quiet_end_s`
+# before the next one.
+cluster_gap_s: 4.0
+quiet_start_s: 2.0
+quiet_end_s: 0.5
+
+# After removing the step common to all satellites at an event, a satellite whose
+# running offset exceeds this many km is flagged as inconsistent and left out from
+# that event on. Good events show offsets under 25 km; 300 km is about 1 ms.
+consistency_threshold_km: 300.0
+
+# Hours of broadcast-ephemeris span either side of the collect.
+ephemeris_span_hours: 2.0
+
+# Collects (one folder per recording; each holds one stream per antenna).
+collects:
+  - {folder: dual_L1CA_20261001_112454, label: "L1CA 11:25"}
+  - {folder: dual_L5_20261001_112820,   label: "L5 11:28"}
+  - {folder: dual_L1CA_20261001_144923, label: "L1CA 14:49"}
+  - {folder: dual_L5_20261001_145411,   label: "L5 14:54"}
+
+# D-029: which antenna was really on each stream. The recorder wrote crossed
+# labels (the wizard sorted the two antennas by their saved subdev, and the saved
+# subdev of each antenna was the wrong way round). The user confirmed on 2026-10-02:
+# Patch on the RF A connector (stream chA, subdev A:A), Flight on RF B (chB, A:B).
+# The gain prompts then gave 70 dB to RF A (Patch) and 50 dB to RF B (Flight), as planned.
+# Key = stream folder name in the recorder output; value = the real antenna.
+physical_antenna:
+  chA_Flight_antenna: Patch
+  chB_Patch_antenna: Flight
+
+# Run of tracking_runs that figure 5 shows (a collect_id).
+before_after_run: 20261001_205422_l5_flight_120s
+
+# Gain-calibration sweeps (after the 14:54 collect), one folder per antenna. The
+# sweep folders carry the recorder's labels too. "Flight_antenna" ran on subdev A:A
+# (RF A, the Patch) and "Patch_antenna" ran on A:B (RF B, the Flight). This assumes the
+# cables were the same as in the dual-stream collects (to be confirmed).
+gain_calibration:
+  Patch: Flight_antenna_L5_20261001_150054
+  Flight: Patch_antenna_L5_20261001_145732
+
+# Tracking runs to show. `folder` and `stream_dir` locate the matching raw
+# stream (for the USRP overflow log). `signal` is a class in
+# utils.signal_interfaces. `navigate: false` skips the position solution.
+tracking_runs:
+  - {collect_id: 20261001_204944_l1ca_patch_120s, signal: GpsL1CA, antenna: Flight,
+     folder: dual_L1CA_20261001_144923, stream_dir: chB_Patch_antenna, navigate: true}
+  - {collect_id: dual_L1CA_20261001_144923_flight, signal: GpsL1CA, antenna: Patch,
+     folder: dual_L1CA_20261001_144923, stream_dir: chA_Flight_antenna, navigate: false}
+  - {collect_id: 20261001_205422_l5_flight_120s, signal: GpsL5, antenna: Patch,
+     folder: dual_L5_20261001_145411, stream_dir: chA_Flight_antenna, navigate: true}
+  - {collect_id: 20261001_205422_l5_patch_120s, signal: GpsL5, antenna: Flight,
+     folder: dual_L5_20261001_145411, stream_dir: chB_Patch_antenna, navigate: true}
+
+# Result of the acquisition sweep on the 14:49 L1CA Patch stream (stream chA; the
+# script that made it, acq_sweep_l1ca_flight.py, used the old recorder label).
+# Same data and code as notebook 01, only the dwell length and file position changed.
+# margin_db = loudest peak minus detection threshold; above 0 means detected.
+acquisition_sweep_l1ca_patch:
+  - {start_s: 0,  dwell_ms: 20,  peak_db: 7.98, threshold_db: 9.13, detected: []}
+  - {start_s: 0,  dwell_ms: 100, peak_db: 5.27, threshold_db: 5.05, detected: [G04]}
+  - {start_s: 0,  dwell_ms: 250, peak_db: 4.87, threshold_db: 3.44, detected: [G04, G16]}
+  - {start_s: 0,  dwell_ms: 500, peak_db: 4.27, threshold_db: 2.54, detected: [G04, G16]}
+  - {start_s: 30, dwell_ms: 20,  peak_db: 7.98, threshold_db: 9.13, detected: []}
+  - {start_s: 30, dwell_ms: 100, peak_db: 4.87, threshold_db: 5.05, detected: []}
+  - {start_s: 30, dwell_ms: 250, peak_db: 4.23, threshold_db: 3.44, detected: [G04, G16]}
+  - {start_s: 30, dwell_ms: 500, peak_db: 3.75, threshold_db: 2.54, detected: [G04, G16]}
+  - {start_s: 60, dwell_ms: 20,  peak_db: 8.04, threshold_db: 9.13, detected: []}
+  - {start_s: 60, dwell_ms: 100, peak_db: 4.21, threshold_db: 5.05, detected: []}
+
+# What the runs showed, for the scorecard figure. These are results of notebook 01
+# (acquisition and tracking), not measured here. `acquired` and `tracking` are text.
+scorecard:
+  - {folder: dual_L1CA_20261001_112454, antenna: Patch,  acquired: "0 (best peak 7.7 dB, threshold 9.1)", tracking: "none"}
+  - {folder: dual_L1CA_20261001_112454, antenna: Flight, acquired: "0 (no signal in the file)",           tracking: "none"}
+  - {folder: dual_L5_20261001_112820,   antenna: Patch,  acquired: "0 (best peak 9.2 dB, threshold 9.9)", tracking: "none"}
+  - {folder: dual_L5_20261001_112820,   antenna: Flight, acquired: "0 (best peak 9.2 dB, threshold 9.9)", tracking: "none"}
+  - {folder: dual_L1CA_20261001_144923, antenna: Patch,  acquired: "2 (needs a 250 ms dwell)",           tracking: "lost within 1 s"}
+  - {folder: dual_L1CA_20261001_144923, antenna: Flight, acquired: "5",                                    tracking: "full 120 s, 0 lock losses"}
+  - {folder: dual_L5_20261001_145411,   antenna: Patch,  acquired: "4",                                    tracking: "full 120 s, 7 re-locks"}
+  - {folder: dual_L5_20261001_145411,   antenna: Flight, acquired: "5",                                    tracking: "full 120 s, 7 re-locks"}
+
+# Half-width of the satellite image in the position map [m].
+map_half_extent_m: 350.0
+
+# Settings of scripts/l1ca_dwell_figure.py: the same acquisition as notebook 01,
+# on both 14:49 L1CA streams (recorded together), with a longer and longer dwell.
+dwell_study:
+  streams:
+    - {antenna: Patch,  collect_id: dual_L1CA_20261001_144923_flight}
+    - {antenna: Flight, collect_id: 20261001_204944_l1ca_patch_120s}
+  start_s: 0
+  coherent_replica_ms: 1
+  coherent_sample_ms: 5
+  dwell_ms: [20, 100, 250, 500]
+  highlight_prns: [G04, G16]
+  doppler_search_hz: 5000
+  p_fa_total: 1.0e-5
+  fine_search: {delay_factor: 2, doppler_factor: 2, delay_halfwidth_bins: 3, doppler_halfwidth_bins: 1}

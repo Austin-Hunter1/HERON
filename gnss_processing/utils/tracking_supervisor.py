@@ -442,6 +442,22 @@ class ChannelSupervisor:
                 stacklevel=2,
             )
 
+        # `result.acq_code_phase_ms` is wrapped into one code period (see
+        # `AcquisitionResult.acq_code_phase_seconds`); `predicted_ms` is the
+        # cumulative, UNWRAPPED extrapolation from the last known-good phase, and
+        # `implied_gap_ms` is already the correctly-unwrapped residual between the
+        # two (computed above for the warning). Their sum is therefore the
+        # unwrapped code phase at this reacquisition instant -- what the new
+        # segment actually needs to seed `code_phase_ms` with, since everything
+        # downstream (`TrackingSignalState.propagate_phase`,
+        # `TimeAnchor.transmit_time_s` in `observables.py`) treats it as an
+        # ever-growing cumulative counter, never a wrapped one. Seeding from the
+        # raw wrapped result instead silently drops however many whole code
+        # periods elapsed before the gap -- for L5's 20 ms CNAV ambiguity late in
+        # a long run, thousands of periods, which turns into a pseudorange error
+        # of thousands of kilometres for every epoch of that segment.
+        unwrapped_code_phase_ms = predicted_ms + implied_gap_ms
+
         new_adapters = signal_interfaces.create_tracking_channels(
             signal_type,
             signals={self.signal_id: signal},
@@ -450,6 +466,7 @@ class ChannelSupervisor:
             loop_params=loop_params,
             output_capacity=output_capacity,
             cn0_params=cn0_params,
+            code_phase_ms_overrides={self.signal_id: unwrapped_code_phase_ms},
         )
         new_adapter = new_adapters[self.signal_id]
 
@@ -462,7 +479,11 @@ class ChannelSupervisor:
         self.next_cn0_check_index = 0
         self.last_good_uptime_ms = samples_start_uptime_ms
         self.last_good_doppler_hz = result.acq_doppler_hz
-        self.last_good_code_phase_ms = result.acq_code_phase_ms
+        # The unwrapped value, not `result.acq_code_phase_ms` -- so a loss on the
+        # very next epoch (before `check_lock` can refresh this from the new
+        # segment's own live, correctly-cumulative `outputs.code_phase_ms`) still
+        # predicts from a cumulative-consistent baseline, not a wrapped one.
+        self.last_good_code_phase_ms = unwrapped_code_phase_ms
         return True
 
 
