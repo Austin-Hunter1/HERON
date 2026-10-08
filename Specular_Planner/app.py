@@ -8,6 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
@@ -38,6 +39,7 @@ from engine.catalog import (
     sync_source,
 )
 from engine.gnss import counts_by_const, filter_sats, load_l5_sats
+from engine.ground import LEGION_OVERLOOK, geoid_height, ground_reflections, usgs_elevation
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -222,6 +224,56 @@ def api_plan():
         "mission": check,
     }
     result["stamp"] = stamp
+    return jsonify(result)
+
+
+@app.get("/api/ground/defaults")
+def api_ground_defaults():
+    return jsonify(LEGION_OVERLOOK)
+
+
+@app.get("/api/elevation")
+def api_elevation():
+    lat = float(request.args["lat"])
+    lon = float(request.args["lon"])
+    try:
+        ground = usgs_elevation(lat, lon)
+    except Exception as e:
+        return jsonify({"error": f"USGS elevation lookup failed: {e}"}), 502
+    try:
+        geoid = geoid_height(lat, lon)
+    except Exception:
+        geoid = None
+    return jsonify({"lat": lat, "lon": lon, "ground_m": ground, "geoid_m": geoid, "source": "USGS 3DEP (NAVD88)"})
+
+
+@app.post("/api/ground")
+def api_ground():
+    body = request.get_json(force=True) or {}
+    tz = ZoneInfo(body.get("tz") or "America/Denver")
+    try:
+        start = datetime.fromisoformat(body["start_local"]).replace(tzinfo=tz)
+        end = datetime.fromisoformat(body["end_local"]).replace(tzinfo=tz)
+        consts = body.get("constellations") or ["G", "E", "C"]
+        result = ground_reflections(
+            filter_sats(sats(), consts),
+            lake(),
+            lat=float(body["lat"]),
+            lon=float(body["lon"]),
+            ground_m=float(body["ground_m"]),
+            antenna_m=float(body.get("antenna_m", 1.5)),
+            water_m=float(body["water_m"]),
+            geoid_m=float(body.get("geoid_m", LEGION_OVERLOOK["geoid_m"])),
+            start=start,
+            end=end,
+            step_s=int(body.get("step_s", 30)),
+            mask=float(body.get("mask", 2.0)),
+            water_lat=body.get("water_lat"),
+            water_lon=body.get("water_lon"),
+        )
+    except (KeyError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+    result["tz"] = str(tz)
     return jsonify(result)
 
 

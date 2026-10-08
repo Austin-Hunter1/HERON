@@ -92,6 +92,7 @@ def specular_point(
     drone_lon: float,
     water_h: float,
     h_agl: float,
+    min_el: float = 5.0,
 ) -> tuple[float, float, float, float]:
     """
     Bounce lat/lon on a flat water plane at water_h.
@@ -99,7 +100,7 @@ def specular_point(
     """
     drone_ecef = lla_to_ecef(drone_lat, drone_lon, water_h + h_agl)
     az, el = az_el(sat_ecef, drone_ecef, drone_lat, drone_lon)
-    if el <= 5.0:
+    if el <= min_el:
         return drone_lat, drone_lon, float("nan"), float("nan")
 
     rho = h_agl / math.tan(math.radians(el))
@@ -119,18 +120,22 @@ def specular_point(
         return d_sat + d_rx, sp
 
     best, _ = path(lat, lon)
+    # At low elevation the minimum sits in a long, nearly flat valley along the azimuth,
+    # so step along and across it and keep going until the step is small.
+    along_n, along_e = math.cos(az_r), math.sin(az_r)
+    moves = ((along_n, along_e), (-along_n, -along_e), (-along_e, along_n), (along_e, -along_n))
     step = 25.0
-    for _ in range(14):
+    for _ in range(400):
         improved = False
-        for north, east in ((step, 0), (-step, 0), (0, step), (0, -step)):
-            la, lo = offset_ll(lat, lon, north, east, water_h)
+        for dn, de in moves:
+            la, lo = offset_ll(lat, lon, step * dn, step * de, water_h)
             cand, _ = path(la, lo)
             if cand < best:
                 best, lat, lon = cand, la, lo
                 improved = True
         if not improved:
             step *= 0.5
-            if step < 0.4:
+            if step < 0.05:
                 break
 
     extra_m, sp = path(lat, lon)

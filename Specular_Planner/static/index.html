@@ -7,7 +7,7 @@
   <title>HERON Ground Control</title>
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css?v=aim39" />
+  <link rel="stylesheet" href="/static/style.css?v=ground4" />
   <link rel="stylesheet" href="/static/flight.css?v=12" />
 </head>
 <body class="click-wps" data-view="plan">
@@ -55,7 +55,7 @@
     </header>
 
     <form id="form">
-      <section class="form-section" aria-labelledby="flight-heading">
+      <section class="form-section flight-setup" aria-labelledby="flight-heading">
         <div class="section-heading">
           <span class="section-number">01</span>
           <div>
@@ -113,6 +113,7 @@
         </div>
 
         <div class="mode-row" role="group" aria-label="Flight pattern">
+          <button type="button" id="modeGround" class="mode mode-ground" aria-pressed="false"><b>Ground</b><span>Stand on the shore</span></button>
           <button type="button" id="modeClick" class="mode on" aria-pressed="true"><b>Route</b><span>Place waypoints</span></button>
           <button type="button" id="modeAreas" class="mode" aria-pressed="false"><b>Area</b><span>Sweep a boundary</span></button>
           <button type="button" id="modeSurvey" class="mode" aria-pressed="false"><b>Water</b><span>Follow a surface</span></button>
@@ -132,6 +133,20 @@
           <div id="surveyTools" class="hidden">
             <p class="tool-guidance">For a river, choose a start and end. For a lake, choose the surface once. The drone tracks the satellite closest to the aim elevation.</p>
             <div class="tool-actions"><span id="nSurveyPicks" class="selection-count">No water selected</span><button type="button" id="btnClearSurvey">Clear</button></div>
+          </div>
+
+          <div id="groundTools" class="hidden">
+            <p class="tool-guidance">Click land to move where you stand. Click a lake only to use its surface height. Reflections are drawn on every nearby lake.</p>
+            <div class="field-grid compact-grid">
+              <label class="field"><span>From</span><input type="datetime-local" id="g_from" /></label>
+              <label class="field"><span>To</span><input type="datetime-local" id="g_to" /></label>
+            </div>
+            <div class="field-grid compact-grid">
+              <label class="field"><span>Ground height</span><div class="input-unit"><input type="number" id="g_ground" step="0.1" /><em>m</em></div></label>
+              <label class="field"><span>Antenna above ground</span><div class="input-unit"><input type="number" id="g_ant" step="0.1" min="0" /><em>m</em></div></label>
+              <label class="field"><span>Water surface</span><div class="input-unit"><input type="number" id="g_water" step="0.1" /><em>m</em></div></label>
+              <label class="field"><span>Lowest satellite</span><div class="input-unit"><input type="number" id="g_mask" step="0.5" min="0.5" max="60" /><em>deg</em></div></label>
+            </div>
           </div>
 
           <div id="tileTools" class="hidden">
@@ -373,8 +388,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=aim40"></script>
+  <script src="/static/app.js?v=ground6"></script>
   <script src="/static/instruments.js?v=2"></script>
-  <script src="/static/flight.js?v=13"></script>
+  <script src="/static/flight.js?v=15"></script>
 </body>
 </html>

@@ -119,7 +119,6 @@ const surveyPickLayer = L.layerGroup().addTo(map);
 const draftLayer = L.layerGroup().addTo(map);
 const clickWpLayer = L.layerGroup().addTo(map);
 const satLayer = L.layerGroup().addTo(map);
-
 map.createPane("archive");
 map.getPane("archive").style.zIndex = 350;
 map.getPane("archive").style.pointerEvents = "none";
@@ -241,16 +240,29 @@ function wrapOffsets() {
   return [0];
 }
 
-function lngVisible(lng) {
+function lonInView(lon) {
+  const center = map.getCenter().lng;
+  let x = lon;
+  while (x - center > 180) x -= 360;
+  while (center - x > 180) x += 360;
+  return x;
+}
+
+function lonsOnMap(lon) {
+  let west = -180;
+  let east = 180;
   try {
-    if (map.getZoom() <= 5) return true;
     const b = map.getBounds();
-    const span = Math.max(1, b.getEast() - b.getWest());
-    const pad = Math.max(12, span * 0.4);
-    return lng >= b.getWest() - pad && lng <= b.getEast() + pad;
-  } catch (_) {
-    return true;
-  }
+    west = b.getWest();
+    east = b.getEast();
+  } catch (_) {}
+  const span = Math.max(1, east - west);
+  const pad = Math.min(30, Math.max(2, span * 0.08));
+  const base = lonInView(lon);
+  const copies = [base];
+  if (span > 320) copies.push(base - 360, base + 360);
+  const visible = copies.filter((x) => x >= west - pad && x <= east + pad);
+  return visible.length ? visible : [base];
 }
 
 function addWrappedCopies(layer, points, style) {
@@ -300,8 +312,7 @@ function paintSats(rows, liveSet) {
     }
     seen.add(row.sid);
     const isLive = live.has(row.sid);
-    const lons = offs.map((off) => row.lon + off).filter((lon) => lngVisible(lon));
-    const useLons = lons.length ? lons : [row.lon];
+    const useLons = lonsOnMap(row.lon);
     const iconKey = `${isLive ? 1 : 0}|${row.used ? 1 : 0}|${satBand(row)}`;
     const zOff = isLive ? 900 : row.used ? 700 : row.above_mask ? 400 : 150;
     let rec = satMarks.get(row.sid);
@@ -340,7 +351,7 @@ function paintSats(rows, liveSet) {
     if (wantRays && padLL && (isLive || row.used) && row.el > 5) {
       const pts = shortPts([
         [padLL.lat, padLL.lng],
-        [row.lat, row.lon],
+        [row.lat, lonInView(row.lon)],
       ]);
       const style = {
         color: isLive ? "#ffe66a" : "#7ee0ff",
@@ -973,6 +984,11 @@ document.getElementById("btnClear").onclick = () => {
 
 map.on("click", (e) => {
   if (document.body.dataset.view !== "plan") return;
+  if (missionMode === "ground") {
+    L.DomEvent.stop(e);
+    groundClick(e.latlng);
+    return;
+  }
   if (missionMode === "survey") {
     pickWater(e.latlng);
     return;
@@ -1170,6 +1186,7 @@ function setMode(m) {
     ["modeClick", m === "click"],
     ["modeAreas", m === "areas"],
     ["modeSurvey", m === "survey"],
+    ["modeGround", m === "ground"],
   ];
   modeStates.forEach(([id, active]) => {
     const button = document.getElementById(id);
@@ -1183,6 +1200,11 @@ function setMode(m) {
   document.getElementById("tileTools").classList.toggle("hidden", m !== "survey" && m !== "areas");
   document.body.classList.toggle("survey", m === "survey");
   document.body.classList.toggle("click-wps", m === "click");
+  document.getElementById("groundTools").classList.toggle("hidden", m !== "ground");
+  document.body.classList.toggle("ground", m === "ground");
+  document.querySelector("#go span").textContent = m === "ground" ? "Show reflections" : "Build mission";
+  if (m === "ground") groundEnter();
+  else groundLayer.clearLayers();
   if (m !== "survey") {
     surveyStart = null;
     surveyEnd = null;
@@ -1886,12 +1908,272 @@ function showPlan(plan) {
   setStatus("");
 }
 
+const GROUND_TZ = "America/Denver";
+const groundLayer = L.layerGroup().addTo(map);
+const groundNowLayer = L.layerGroup();
+const ground = { rx: null, water: null, geoid: null, result: null, times: [], byTime: new Map(), idx: 0, gen: 0, sky: [] };
+
+function groundClock(iso, opts) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: GROUND_TZ, hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(new Date(iso));
+}
+
+function nextMondayLocal() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: GROUND_TZ, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value])
+  );
+  const d = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (dow === 1 ? 0 : (8 - dow) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+function groundNum(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function paintGroundPlace() {
+  groundLayer.clearLayers();
+  if (ground.result) {
+    L.geoJSON(ground.result.water.geojson, { style: { color: "#ffe66a", weight: 2, fill: false }, interactive: false }).addTo(groundLayer);
+  }
+  if (ground.rx) {
+    L.marker([ground.rx.lat, ground.rx.lon], {
+      icon: L.divIcon({ className: "", html: '<div class="ground-rx"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+      title: "Receiver",
+    }).addTo(groundLayer);
+  }
+  if (ground.water && !ground.result) {
+    L.circleMarker([ground.water.lat, ground.water.lon], { radius: 6, color: "#14110b", weight: 2, fillColor: "#ffe66a", fillOpacity: 1 }).addTo(groundLayer);
+  }
+  groundNowLayer.addTo(groundLayer);
+}
+
+async function groundLookup(lat, lon) {
+  const r = await fetch(`/api/elevation?lat=${lat}&lon=${lon}`);
+  const d = await r.json();
+  if (!r.ok || d.ground_m == null) throw new Error(d.error || "No elevation at that point.");
+  return d;
+}
+
+let groundDefaults = null;
+async function groundEnter(reset) {
+  if (!groundDefaults) groundDefaults = await (await fetch("/api/ground/defaults")).json();
+  const d = groundDefaults;
+  if (reset || !ground.rx) {
+    ground.rx = { lat: d.lat, lon: d.lon, name: d.name };
+    ground.water = null;
+    ground.geoid = d.geoid_m;
+    ground.result = null;
+    document.getElementById("g_ground").value = d.ground_m;
+    document.getElementById("g_ant").value = d.antenna_m;
+    document.getElementById("g_water").value = d.water_m;
+    document.getElementById("g_mask").value = 2;
+    const day = nextMondayLocal();
+    document.getElementById("g_from").value = `${day}T08:00`;
+    document.getElementById("g_to").value = `${day}T12:00`;
+  }
+  paintGroundPlace();
+  map.setView([ground.rx.lat + 0.003, ground.rx.lon - 0.002], 16);
+}
+
+async function groundClick(latlng) {
+  let onLake = false;
+  lakeLayer.eachLayer((layer) => {
+    if (!onLake && layer instanceof L.Polygon && clickOnLayer(layer, latlng)) onLake = true;
+  });
+  if (onLake) {
+    ground.water = { lat: latlng.lat, lon: latlng.lng };
+  } else {
+    ground.rx = { lat: latlng.lat, lon: latlng.lng, name: "Receiver" };
+  }
+  ground.result = null;
+  paintGroundPlace();
+  setStatus(onLake ? "Looking up the water surface height…" : "Looking up the ground height…");
+  try {
+    const d = await groundLookup(latlng.lat, latlng.lng);
+    document.getElementById(onLake ? "g_water" : "g_ground").value = d.ground_m.toFixed(1);
+    if (!onLake && d.geoid_m != null) ground.geoid = d.geoid_m;
+    setStatus(onLake ? `Water surface ${d.ground_m.toFixed(1)} m from USGS lidar.` : `Ground ${d.ground_m.toFixed(1)} m from USGS lidar.`);
+  } catch (e) {
+    setStatus(`${e.message} Type the height in by hand.`, true);
+  }
+  computeGround();
+}
+
+async function computeGround() {
+  if (!ground.rx) return;
+  const gen = ++ground.gen;
+  stopPlay();
+  const btn = document.getElementById("go");
+  btn.disabled = true;
+  setStatus("Finding reflections on the lake…");
+  try {
+    const body = {
+      lat: ground.rx.lat,
+      lon: ground.rx.lon,
+      ground_m: groundNum("g_ground"),
+      antenna_m: groundNum("g_ant"),
+      water_m: groundNum("g_water"),
+      geoid_m: ground.geoid,
+      mask: groundNum("g_mask"),
+      start_local: document.getElementById("g_from").value,
+      end_local: document.getElementById("g_to").value,
+      tz: GROUND_TZ,
+      step_s: 30,
+      constellations: selectedConsts(),
+    };
+    const r = await fetch("/api/ground", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Ground test failed.");
+    if (gen !== ground.gen) return;
+    showGround(data);
+    setStatus("");
+  } catch (e) {
+    if (gen === ground.gen) setStatus(String(e.message || e), true);
+  } finally {
+    if (gen === ground.gen) btn.disabled = false;
+  }
+}
+
+function showGround(res) {
+  ground.result = res;
+  ground.sky = res.sky || [];
+  const t0 = new Date(res.start_utc).getTime();
+  const t1 = new Date(res.end_utc).getTime();
+  ground.times = [];
+  for (let t = t0; t <= t1; t += res.step_s * 1000) ground.times.push(new Date(t).toISOString());
+  ground.byTime = new Map();
+  for (const p of res.points) {
+    const k = Math.round((new Date(p.utc).getTime() - t0) / (res.step_s * 1000));
+    if (!ground.byTime.has(k)) ground.byTime.set(k, []);
+    ground.byTime.get(k).push(p);
+  }
+  paintGroundPlace();
+
+  const sum = document.getElementById("summary");
+  const rows = res.sats
+    .map(
+      (s) => `<tr data-sid="${escHtml(s.sid)}"><td style="color:${sidColor(s.sid)}">${escHtml(s.sid)}</td>
+        <td>${groundClock(s.first_utc)}–${groundClock(s.last_utc)}</td><td>${s.minutes}</td>
+        <td>${s.el_min}–${s.el_max}</td><td>${s.az_first}–${s.az_last}</td><td>${s.dist_min_m}–${s.dist_max_m}</td></tr>`
+    )
+    .join("");
+  const day = groundClock(res.start_utc, { weekday: "short", month: "short", day: "numeric", hour: undefined, minute: undefined });
+  sum.innerHTML = `
+    <div class="sum-top"><div class="sum-mode">Ground test</div><div class="sum-when">${escHtml(day)} · Boulder time</div></div>
+    <div class="stat-grid">
+      ${statCell("Antenna above water", res.receiver.height_above_water_m, "m")}
+      ${statCell("Minutes with a reflection", res.minutes_with_reflection, "min")}
+      ${statCell("Satellites", res.sats.length)}
+    </div>
+    <p>Reflections on <b>${escHtml(res.water.name)}</b> from ${groundClock(res.start_utc)} to ${groundClock(res.end_utc)}. Every nearby lake is included.</p>
+    ${res.sats.length ? `<table class="grid ground-table"><thead><tr><th>Sat</th><th>Time</th><th>Min</th><th>El °</th><th>Az °</th><th>Out m</th></tr></thead><tbody>${rows}</tbody></table>` : `<p>No reflections land on nearby lakes in that window. Try a lower satellite limit, a higher spot, or a longer window.</p>`}`;
+  sum.classList.remove("hidden");
+
+  const slider = document.getElementById("slider");
+  document.getElementById("sliderWrap").classList.remove("hidden");
+  slider.min = 0;
+  slider.max = ground.times.length - 1;
+  slider.step = 1;
+  const first = res.points.length ? Math.round((new Date(res.points[0].utc).getTime() - t0) / (res.step_s * 1000)) : 0;
+  slider.value = first;
+  slider.oninput = () => {
+    stopPlay();
+    renderGround(Number(slider.value));
+  };
+  document.getElementById("btnPlay").onclick = groundPlay;
+  const bounds = L.geoJSON(res.water.geojson).getBounds();
+  bounds.extend([res.receiver.lat, res.receiver.lon]);
+  if (bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [420, 40], paddingBottomRight: [40, 120] });
+  renderGround(first);
+}
+
+function renderGround(i) {
+  ground.idx = i;
+  const res = ground.result;
+  if (!res) return;
+  const slider = document.getElementById("slider");
+  if (document.activeElement !== slider) slider.value = String(i);
+  const iso = ground.times[i];
+  const now = ground.byTime.get(i) || [];
+  document.getElementById("playElapsed").textContent = groundClock(iso);
+  document.getElementById("playPhase").textContent = now.length ? `${now.length} on the water` : "no reflection";
+  document.getElementById("playClock").innerHTML = `<em>${escHtml(groundClock(iso, { weekday: "short", hour: undefined, minute: undefined }))}</em>Boulder`;
+  groundNowLayer.clearLayers();
+  const h = res.receiver.height_above_water_m;
+  const lam = 299792458 / 1176.45e6;
+  for (const p of now) {
+    const col = sidColor(p.sid);
+    const s = Math.sin((Math.max(p.el, 0.5) * Math.PI) / 180);
+    const across = Math.sqrt((lam * h) / s);
+    const along = Math.sqrt((lam * h) / (s * s * s));
+    L.polygon(fresnelRing(p.lat, p.lon, along, across, p.az, 48), { color: col, weight: 1.5, fillColor: col, fillOpacity: 0.25, interactive: false }).addTo(groundNowLayer);
+    L.polyline([[res.receiver.lat, res.receiver.lon], [p.lat, p.lon]], { color: col, weight: 1.2, opacity: 0.55, dashArray: "3 5", interactive: false }).addTo(groundNowLayer);
+    L.circleMarker([p.lat, p.lon], { radius: 5, color: "#fff", weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(groundNowLayer);
+    L.marker([p.lat, p.lon], {
+      interactive: false,
+      icon: L.divIcon({
+        className: "",
+        iconSize: null,
+        iconAnchor: [-12, 11],
+        html: `<div class="spec-tag" style="--c:${col}"><b>${escHtml(p.sid)}</b><span>${p.el.toFixed(1)}° · ${Math.round(p.dist_m)} m</span></div>`,
+      }),
+    }).addTo(groundNowLayer);
+  }
+  const live = new Set(now.map((p) => p.sid));
+  document.querySelectorAll(".ground-table tbody tr").forEach((tr) => tr.classList.toggle("now", live.has(tr.dataset.sid)));
+  if (ground.sky.length) {
+    const tSec = i * res.step_s;
+    let j = 0;
+    while (j < ground.sky.length - 2 && ground.sky[j + 1].t <= tSec) j++;
+    const a = ground.sky[j];
+    const b = ground.sky[Math.min(j + 1, ground.sky.length - 1)];
+    const u = b.t > a.t ? Math.min(1, Math.max(0, (tSec - a.t) / (b.t - a.t))) : 0;
+    const used = new Set(res.sats.map((s) => s.sid));
+    const rows = lerpSats(a.sats, b.sats, u).map((r) => ({ ...r, used: used.has(r.sid) }));
+    paintSats(rows, live);
+  }
+}
+
+function groundPlay() {
+  if (playing) {
+    stopPlay();
+    return;
+  }
+  if (!ground.result) return;
+  playing = true;
+  const btn = document.getElementById("btnPlay");
+  btn.classList.add("playing");
+  btn.setAttribute("aria-label", "Pause");
+  if (ground.idx >= ground.times.length - 1) ground.idx = 0;
+  let pos = ground.idx;
+  let last = performance.now();
+  const tick = (now) => {
+    if (!playing) return;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    pos += (dt * playRate * 30) / ground.result.step_s;
+    if (pos >= ground.times.length - 1) {
+      renderGround(ground.times.length - 1);
+      stopPlay();
+      return;
+    }
+    renderGround(Math.floor(pos));
+    playTimer = requestAnimationFrame(tick);
+  };
+  playTimer = requestAnimationFrame(tick);
+}
+
 document.getElementById("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  computePlan();
+  if (missionMode === "ground") computeGround();
+  else computePlan();
 });
 
 document.getElementById("modeClick").onclick = () => setMode("click");
+document.getElementById("modeGround").onclick = () => setMode("ground");
 document.getElementById("modeAreas").onclick = () => setMode("areas");
 document.getElementById("modeSurvey").onclick = () => setMode("survey");
 document.getElementById("btnUndoWp").onclick = () => {
