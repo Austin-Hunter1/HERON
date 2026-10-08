@@ -1917,6 +1917,20 @@ function groundClock(iso, opts) {
   return new Intl.DateTimeFormat("en-US", { timeZone: GROUND_TZ, hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(new Date(iso));
 }
 
+function groundZone(dateStr) {
+  const day = String(dateStr || "").slice(0, 10) || "2026-10-12";
+  const probe = new Date(`${day}T18:00:00Z`);
+  const part = (style) => new Intl.DateTimeFormat("en-US", { timeZone: GROUND_TZ, timeZoneName: style })
+    .formatToParts(probe).find((p) => p.type === "timeZoneName").value;
+  return { abbr: part("short"), long: part("long") };
+}
+
+function paintGroundZone() {
+  const z = groundZone(document.getElementById("g_from").value);
+  document.getElementById("g_tz").textContent = `Times are ${z.long} (${z.abbr}).`;
+  return z;
+}
+
 function nextMondayLocal() {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-CA", { timeZone: GROUND_TZ, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })
@@ -1974,6 +1988,7 @@ async function groundEnter(reset) {
     document.getElementById("g_from").value = `${day}T08:00`;
     document.getElementById("g_to").value = `${day}T12:00`;
   }
+  paintGroundZone();
   paintGroundPlace();
   map.setView([ground.rx.lat + 0.003, ground.rx.lon - 0.002], 16);
 }
@@ -2053,6 +2068,7 @@ function showGround(res) {
   paintGroundPlace();
 
   const sum = document.getElementById("summary");
+  const zone = groundZone(res.start_utc);
   const rows = res.sats
     .map(
       (s) => `<tr data-sid="${escHtml(s.sid)}"><td style="color:${sidColor(s.sid)}">${escHtml(s.sid)}</td>
@@ -2062,14 +2078,14 @@ function showGround(res) {
     .join("");
   const day = groundClock(res.start_utc, { weekday: "short", month: "short", day: "numeric", hour: undefined, minute: undefined });
   sum.innerHTML = `
-    <div class="sum-top"><div class="sum-mode">Ground test</div><div class="sum-when">${escHtml(day)} · Boulder time</div></div>
+    <div class="sum-top"><div class="sum-mode">Ground test</div><div class="sum-when">${escHtml(day)} · ${escHtml(zone.long)} (${escHtml(zone.abbr)})</div></div>
     <div class="stat-grid">
       ${statCell("Antenna above water", res.receiver.height_above_water_m, "m")}
       ${statCell("Minutes with a reflection", res.minutes_with_reflection, "min")}
       ${statCell("Satellites", res.sats.length)}
     </div>
-    <p>Reflections on <b>${escHtml(res.water.name)}</b> from ${groundClock(res.start_utc)} to ${groundClock(res.end_utc)}. Every nearby lake is included.</p>
-    ${res.sats.length ? `<table class="grid ground-table"><thead><tr><th>Sat</th><th>Time</th><th>Min</th><th>El °</th><th>Az °</th><th>Out m</th></tr></thead><tbody>${rows}</tbody></table>` : `<p>No reflections land on nearby lakes in that window. Try a lower satellite limit, a higher spot, or a longer window.</p>`}`;
+    <p>Reflections on <b>${escHtml(res.water.name)}</b> from ${groundClock(res.start_utc)} to ${groundClock(res.end_utc)} ${escHtml(zone.abbr)}. Every nearby lake is included.</p>
+    ${res.sats.length ? `<table class="grid ground-table"><thead><tr><th>Sat</th><th>Time (${escHtml(zone.abbr)})</th><th>Min</th><th>El °</th><th>Az °</th><th>Out m</th></tr></thead><tbody>${rows}</tbody></table>` : `<p>No reflections land on nearby lakes in that window. Try a lower satellite limit, a higher spot, or a longer window.</p>`}`;
   sum.classList.remove("hidden");
 
   const slider = document.getElementById("slider");
@@ -2098,9 +2114,10 @@ function renderGround(i) {
   if (document.activeElement !== slider) slider.value = String(i);
   const iso = ground.times[i];
   const now = ground.byTime.get(i) || [];
-  document.getElementById("playElapsed").textContent = groundClock(iso);
+  const zone = groundZone(iso);
+  document.getElementById("playElapsed").textContent = `${groundClock(iso)} ${zone.abbr}`;
   document.getElementById("playPhase").textContent = now.length ? `${now.length} on the water` : "no reflection";
-  document.getElementById("playClock").innerHTML = `<em>${escHtml(groundClock(iso, { weekday: "short", hour: undefined, minute: undefined }))}</em>Boulder`;
+  document.getElementById("playClock").innerHTML = `<em>${escHtml(groundClock(iso, { weekday: "short", hour: undefined, minute: undefined }))}</em>${escHtml(zone.abbr)}`;
   groundNowLayer.clearLayers();
   const h = res.receiver.height_above_water_m;
   const lam = 299792458 / 1176.45e6;
@@ -2174,6 +2191,7 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
 
 document.getElementById("modeClick").onclick = () => setMode("click");
 document.getElementById("modeGround").onclick = () => setMode("ground");
+document.getElementById("g_from").addEventListener("change", paintGroundZone);
 document.getElementById("modeAreas").onclick = () => setMode("areas");
 document.getElementById("modeSurvey").onclick = () => setMode("survey");
 document.getElementById("btnUndoWp").onclick = () => {
