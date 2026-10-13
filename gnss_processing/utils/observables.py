@@ -154,7 +154,11 @@ class Observables:
 
 
 def _interpolate_code_phase(
-    outputs, epoch_uptime_ms: np.ndarray
+    outputs,
+    epoch_uptime_ms: np.ndarray,
+    *,
+    max_gap_factor: float | None = None,
+    guard_after_gap_ms: float = 0.0,
 ) -> np.ndarray:
     """
     Code phase at arbitrary receiver-clock instants.
@@ -164,6 +168,23 @@ def _interpolate_code_phase(
     the curvature over one interval is far below a millimetre of range.  Requests
     outside the tracked span return NaN rather than extrapolating -- an
     extrapolated code phase is a fabricated measurement.
+
+    The same rule applies INSIDE the tracked span when a channel lost lock and
+    was re-acquired (`utils.tracking_supervisor`).  The merged record then has a
+    hole of several hundred milliseconds in `uptime_epoch_ms`, and the code
+    phase after the hole carries the code periods the dropped samples took with
+    them -- up to a full code period of jump (c x 1 ms = 300 km on L1 C/A).  A
+    straight line across that hole puts a made-up, satellite-dependent fraction
+    of the jump into every request that lands in it, which is a fabricated
+    measurement just as much as an extrapolated one.  So:
+
+    - `max_gap_factor`: an interval between two consecutive epochs that is longer
+      than this many times the MEDIAN epoch spacing is a hole, and requests
+      inside it return NaN.  Relative to the median, not an absolute time, so
+      one value fits 5 ms (L1 C/A) and 20 ms (L5) epochs alike.  `None` keeps
+      the old behaviour (interpolate across everything).
+    - `guard_after_gap_ms`: also return NaN for this long after the hole ends,
+      while the freshly seeded loop settles.  0 disables it.
     """
     valid = outputs.valid
     uptime = outputs.uptime_epoch_ms[valid]
@@ -171,6 +192,19 @@ def _interpolate_code_phase(
     if len(uptime) < 2:
         return np.full(len(epoch_uptime_ms), np.nan)
     out = np.interp(epoch_uptime_ms, uptime, code_phase, left=np.nan, right=np.nan)
+
+    if max_gap_factor is None:
+        return out
+    spacing = np.diff(uptime)
+    hole_limit_ms = max_gap_factor * float(np.median(spacing))
+    hole_indices = np.nonzero(spacing > hole_limit_ms)[0]
+    for i in hole_indices:
+        # Hole is the open interval between epoch i and epoch i+1; the guard
+        # extends it past the far end.
+        in_hole = (epoch_uptime_ms > uptime[i]) & (
+            epoch_uptime_ms < uptime[i + 1] + guard_after_gap_ms
+        )
+        out[in_hole] = np.nan
     return out
 
 
@@ -181,6 +215,8 @@ def form_observables(
     epoch_uptime_ms: np.ndarray | None = None,
     epoch_interval_ms: float = 100.0,
     week: int | None = None,
+    max_gap_factor: float | None = None,
+    guard_after_gap_ms: float = 0.0,
 ) -> Observables:
     """
     Build pseudoranges for every anchored satellite on one common grid.
@@ -193,6 +229,10 @@ def form_observables(
     channels share.  100 ms is a deliberate choice: fast enough to show the
     receiver clock drifting, slow enough that a minute of tracking is a few hundred
     fixes rather than tens of thousands.
+
+    `max_gap_factor` and `guard_after_gap_ms` control what happens at a hole left
+    by a lost-and-reacquired channel; see `_interpolate_code_phase`.  Both
+    default to the old behaviour (interpolate across holes), so a caller opts in.
     """
     sat_ids = sorted(set(tracking_outputs) & set(anchors))
     if not sat_ids:
@@ -227,7 +267,12 @@ def form_observables(
     n, m = len(epoch_uptime_ms), len(sat_ids)
     transmit = np.full((n, m), np.nan)
     for j, sat_id in enumerate(sat_ids):
-        code_phase = _interpolate_code_phase(tracking_outputs[sat_id], epoch_uptime_ms)
+        code_phase = _interpolate_code_phase(
+            tracking_outputs[sat_id],
+            epoch_uptime_ms,
+            max_gap_factor=max_gap_factor,
+            guard_after_gap_ms=guard_after_gap_ms,
+        )
         transmit[:, j] = anchors[sat_id].transmit_time_s(code_phase)
 
     # Anchor the nominal receiver clock so pseudoranges land near their true

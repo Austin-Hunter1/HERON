@@ -45,6 +45,25 @@ from .nav.ephemeris import OMEGA_E_DOT, SPEED_OF_LIGHT, Ephemeris
 # Only ever used to place an initial guess, so the spherical value is ample.
 WGS84_MEAN_RADIUS_M = 6371000.0
 
+# A fix farther than this from the earth's surface (above or below) is not a fix
+# of a receiver on or near the ground; it is a least-squares iteration that ran
+# away -- typically because a pseudorange is wrong by thousands of kilometres.
+# `solve_series` does not accept such an epoch. That matters because it seeds
+# each epoch with the previous fix: one diverged epoch that was accepted would
+# poison the seed of every epoch after it.  (`solve_epoch` itself still reports
+# it as converged: the satellite exclusion in `solve_epoch_with_raim` needs the
+# runaway solution's residuals to find the satellite that caused it.)
+MAX_PLAUSIBLE_ALTITUDE_M = 1.0e6
+
+
+def is_plausible_fix(solution: "EpochSolution") -> bool:
+    """True when the fix is within `MAX_PLAUSIBLE_ALTITUDE_M` of the earth's surface."""
+    return bool(
+        np.all(np.isfinite(solution.position_ecef_m))
+        and abs(np.linalg.norm(solution.position_ecef_m) - WGS84_MEAN_RADIUS_M)
+        <= MAX_PLAUSIBLE_ALTITUDE_M
+    )
+
 
 @dataclass
 class CorrectionSettings:
@@ -123,6 +142,15 @@ class SolutionSeries:
 
     sat_ids: list[str]
     dop: dict[str, np.ndarray] = field(default_factory=dict)
+    excluded_sat_ids: list[list[str]] = field(default_factory=list)
+    """One entry per epoch, same length and order as every other per-epoch
+    array on this class (`position_ecef_m`, `clock_bias_m`, ...) -- the
+    satellite IDs `solve_series`'s RAIM gate (`residual_gate_m`) dropped
+    before accepting that epoch's fix, or `[]` for an epoch where nothing was
+    dropped. `solve_clock_series` never excludes anything, but still fills
+    this with one `[]` per epoch, for the same reason: so a caller can zip it
+    against any other per-epoch field without checking which solver produced
+    this series."""
 
     @property
     def valid(self) -> np.ndarray:
@@ -451,6 +479,71 @@ def solve_epoch(
     )
 
 
+def solve_epoch_with_raim(
+    corrected_pseudoranges: np.ndarray,
+    satellite_positions_ecef_m: np.ndarray,
+    sat_ids: list[str],
+    *,
+    initial_position: np.ndarray | None = None,
+    initial_clock_bias: float = 0.0,
+    residual_gate_m: float = 100.0,
+    max_exclusions: int = 3,
+) -> tuple[EpochSolution | None, list[str]]:
+    """
+    `solve_epoch`, plus iterative post-fit residual screening (receiver
+    autonomous integrity monitoring, RAIM): a satellite whose residual is
+    still large after the fit converges is the single most likely one to be
+    wrong -- a reacquisition that seeded an inconsistent cumulative code
+    phase (see `utils/tracking_supervisor.py`), a bad ephemeris, undetected
+    multipath -- and leaving it in drags every other satellite's residual,
+    and the fix itself, off with it.
+
+    Drops the satellite with the largest `|residual|` and re-solves, up to
+    `max_exclusions` times, stopping as soon as the largest residual clears
+    `residual_gate_m` or fewer than 5 satellites remain (so an exclusion
+    never leaves fewer than 4 -- an exactly-determined fit has zero
+    residuals by construction and nothing left to screen).
+
+    Returns `(solution, excluded_sat_ids)` -- `excluded_sat_ids` is `[]`
+    when nothing was dropped, including when `solution` is `None` or did
+    not converge: a non-converged epoch has all-NaN residuals, and
+    `NaN > residual_gate_m` is `False`, so this never fires on one. That is
+    deliberate, not a gap to close here -- this catches a fit that
+    converged to a confident, wrong answer because of one bad input, not
+    one that failed to converge at all.
+    """
+    ids = list(sat_ids)
+    ranges = np.asarray(corrected_pseudoranges, dtype=float)
+    positions = np.asarray(satellite_positions_ecef_m, dtype=float)
+    position_seed = initial_position
+    bias_seed = initial_clock_bias
+
+    solution = solve_epoch(
+        ranges, positions, ids,
+        initial_position=position_seed, initial_clock_bias=bias_seed,
+    )
+    excluded: list[str] = []
+    for _ in range(max_exclusions):
+        if solution is None or not solution.converged or len(solution.sat_ids) < 5:
+            break
+        abs_residuals = np.abs(solution.residuals_m)
+        worst = int(np.argmax(abs_residuals))
+        if abs_residuals[worst] <= residual_gate_m:
+            break
+        worst_id = solution.sat_ids[worst]
+        excluded.append(worst_id)
+        keep = [i for i, sid in enumerate(ids) if sid != worst_id]
+        ids = [ids[i] for i in keep]
+        ranges = ranges[keep]
+        positions = positions[keep]
+        position_seed, bias_seed = solution.position_ecef_m, solution.clock_bias_m
+        solution = solve_epoch(
+            ranges, positions, ids,
+            initial_position=position_seed, initial_clock_bias=bias_seed,
+        )
+    return solution, excluded
+
+
 def solve_series(
     observables: obs.Observables,
     ephemerides: dict[str, Ephemeris],
@@ -460,6 +553,8 @@ def solve_series(
     initial_position_ecef_m: np.ndarray | None = None,
     iono_alpha: tuple[float, float, float, float] | None = None,
     iono_beta: tuple[float, float, float, float] | None = None,
+    residual_gate_m: float | None = None,
+    max_exclusions: int = 3,
 ) -> SolutionSeries:
     """
     Solve every measurement epoch, seeding each fix with the previous one.
@@ -468,6 +563,13 @@ def solve_series(
     method and converges from the earth's centre in a handful of iterations -- but
     it also keeps the series from wandering between equivalent solutions on a
     marginal epoch.
+
+    `residual_gate_m`, when set, routes each epoch through
+    `solve_epoch_with_raim` instead of bare `solve_epoch` -- see that
+    function. Left at its default `None`, this function's behaviour is
+    exactly what it was before that gate existed; this default is
+    deliberate, not a placeholder for "should be on" -- a caller opts in
+    explicitly (the reference figure is 100.0 m).
     """
     settings = settings or CorrectionSettings()
     corrected, _ = correct_pseudoranges(
@@ -491,20 +593,32 @@ def solve_series(
     out_bias = np.full(n, np.nan)
     out_count = np.zeros(n, dtype=int)
     out_residuals = np.full((n, m), np.nan)
+    out_excluded: list[list[str]] = [[] for _ in range(n)]
     dop_names = ("gdop", "pdop", "hdop", "vdop", "tdop")
     dop = {name: np.full(n, np.nan) for name in dop_names}
 
     seed = initial_position_ecef_m
     seed_bias = 0.0
     for i in range(n):
-        solution = solve_epoch(
-            corrected[i],
-            positions[i],
-            observables.sat_ids,
-            initial_position=seed,
-            initial_clock_bias=seed_bias,
-        )
-        if solution is None or not solution.converged:
+        if residual_gate_m is None:
+            solution = solve_epoch(
+                corrected[i],
+                positions[i],
+                observables.sat_ids,
+                initial_position=seed,
+                initial_clock_bias=seed_bias,
+            )
+        else:
+            solution, out_excluded[i] = solve_epoch_with_raim(
+                corrected[i],
+                positions[i],
+                observables.sat_ids,
+                initial_position=seed,
+                initial_clock_bias=seed_bias,
+                residual_gate_m=residual_gate_m,
+                max_exclusions=max_exclusions,
+            )
+        if solution is None or not solution.converged or not is_plausible_fix(solution):
             continue
         out_position[i] = solution.position_ecef_m
         out_bias[i] = solution.clock_bias_m
@@ -525,6 +639,7 @@ def solve_series(
         residuals_m=out_residuals,
         sat_ids=list(observables.sat_ids),
         dop=dop,
+        excluded_sat_ids=out_excluded,
     )
 
 
@@ -599,6 +714,7 @@ def solve_clock_series(
         receive_time_s=observables.receive_time_s,
         position_ecef_m=out_position,
         clock_bias_m=out_bias,
+        excluded_sat_ids=[[] for _ in range(n)],
         num_satellites=out_count,
         residuals_m=out_residuals,
         sat_ids=list(observables.sat_ids),

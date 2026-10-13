@@ -179,6 +179,17 @@ class ChannelSupervisor:
     # of how much real time one overflow actually dropped.
     last_implied_gap_ms: float = 0.0
     implied_gap_ms_by_segment: list = field(default_factory=list)
+    # One entry per successful re-acquisition, parallel to
+    # `implied_gap_ms_by_segment`: (stream time of the last known-good epoch,
+    # stream time of the samples the re-acquisition ran on). This is the hole
+    # the gap sits in. `utils.gap_consensus` compares holes across channels.
+    hole_bounds_ms_by_segment: list = field(default_factory=list)
+    # The PRN code's own repeat period, which is the modulus every implied gap
+    # is only known to. Set by the first successful re-acquisition.
+    ambiguity_ms: float | None = None
+    # Indices into `segments` that `build_merged_adapter` leaves out. Filled by
+    # `utils.gap_consensus` for segments whose code phase it cannot vouch for.
+    dropped_segments: set = field(default_factory=set)
 
     def __post_init__(self) -> None:
         self.segments.append(self.adapter)
@@ -474,6 +485,10 @@ class ChannelSupervisor:
         self.segments.append(new_adapter)
         self.last_implied_gap_ms = implied_gap_ms
         self.implied_gap_ms_by_segment.append(implied_gap_ms)
+        self.hole_bounds_ms_by_segment.append(
+            (self.last_good_uptime_ms, samples_start_uptime_ms)
+        )
+        self.ambiguity_ms = ambiguity_ms
         self.status = "TRACKING"
         self.bad_streak = 0
         self.next_cn0_check_index = 0
@@ -612,8 +627,17 @@ class MergedTrackingChannelAdapter:
 
 
 def build_merged_adapter(supervisor: ChannelSupervisor) -> MergedTrackingChannelAdapter:
-    merged_outputs = merge_segments(supervisor.segments)
-    last = supervisor.segments[-1]
+    """
+    One merged record for a PRN, without the segments in
+    `supervisor.dropped_segments`. A dropped segment is simply another hole in
+    the record: downstream, `utils.observables` forms no measurement inside one.
+    """
+    kept = [
+        seg for i, seg in enumerate(supervisor.segments)
+        if i not in supervisor.dropped_segments
+    ]
+    merged_outputs = merge_segments(kept)
+    last = kept[-1]
     view = _MergedChannelView(
         outputs=merged_outputs,
         loop_params=last.channel.loop_params,
@@ -666,7 +690,11 @@ def summary_rows(supervisors: dict[str, ChannelSupervisor]) -> list[list[str]]:
     """
     rows = []
     for signal_id, sup in sorted(supervisors.items()):
-        total_epochs = sum(seg.outputs.output_index for seg in sup.segments)
+        total_epochs = sum(
+            seg.outputs.output_index
+            for i, seg in enumerate(sup.segments)
+            if i not in sup.dropped_segments
+        )
         gaps = ", ".join(f"{g:+.0f}" for g in sup.implied_gap_ms_by_segment) or "-"
         rows.append([
             signal_id,

@@ -18,6 +18,28 @@ made for HERON's UAS GNSS-R work that are not upstream:
   to track garbage or drop out for the rest of the run. See the module's own
   docstring for the mechanism, and `notebooks/01-acquisition-and-tracking.ipynb`
   (section 6) for how it's wired into the tracking loop.
+- `utils/gap_consensus.py` (new) -- after tracking, makes the channels of one
+  recording agree on how much time each overflow dropped. A re-acquisition
+  measures that time only modulo the PRN code period, so one channel can land on
+  a different whole-period branch than the rest (thousands of km of pseudorange
+  error for that channel). The channels vote per overflow episode; the minority
+  is moved by whole periods, and what the vote cannot settle is left alone and
+  reported. Run from `01-acquisition-and-tracking.ipynb`.
+- `utils/observables.py` -- `form_observables` can leave out the measurement
+  epochs that fall inside a hole of a lost-and-reacquired channel
+  (`max_gap_factor`, `guard_after_gap_ms`) instead of interpolating a made-up
+  code phase across it. On, in `02-navigation.ipynb`.
+- `utils/period_ambiguity.py` (new) -- when six or more satellites share an
+  epoch, finds which whole-code-period shift of each satellite's code phase makes
+  the set fit best (an integer search, scored in one matrix product) and applies
+  it only when the fit is good and clearly unique. Used by `02-navigation.ipynb`
+  before the corrections.
+- `utils/navigation.py` -- optional post-fit residual gate (`residual_gate_m`,
+  receiver autonomous integrity monitoring) that drops the worst satellite of an
+  epoch and re-solves; `solve_series` also skips a fix that is nowhere near the
+  earth instead of seeding the next epoch with it.
+- `scripts/run_notebook.py` -- runs notebook 00/01/02 headless with parameter
+  overrides (see its docstring).
 - `notebooks/00-raw-signal-diagnostics.ipynb`, `01-acquisition-and-tracking.ipynb`,
   `02-navigation.ipynb` -- updated to use the above, plus per-run figure saving and
   a `CHANNEL_INDEX` disambiguation fix for collects with more than one capture per band.
