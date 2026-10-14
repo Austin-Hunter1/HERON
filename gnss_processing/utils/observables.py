@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import time_systems
 from .nav.ephemeris import SPEED_OF_LIGHT, BdsEphemeris, CnavEphemeris, Ephemeris, LnavEphemeris
 
 # Nominal carrier frequencies, for scaling a single-frequency ionospheric delay
@@ -172,6 +173,15 @@ class Observables:
     week: int | None = None
     anchors: dict[str, TimeAnchor] = field(default_factory=dict)
 
+    time_system: str = "GPST"
+    """The time scale of `receive_time_s` and `transmit_time_s`: "GPST" or "BDT".
+    A set built from BeiDou anchors alone is in BDT; a combined set is in GPST."""
+
+    signal_type_ids: dict[str, str] = field(default_factory=dict)
+    """Satellite id -> signal type id (e.g. "GPS_L5", "BDS_B2A"), for a combined set
+    whose satellites were tracked on different signals.  A satellite with no entry
+    takes the `signal_type_id` the caller passes to the solver."""
+
     @property
     def num_epochs(self) -> int:
         return len(self.epoch_uptime_ms)
@@ -249,9 +259,16 @@ def form_observables(
     week: int | None = None,
     max_gap_factor: float | None = None,
     guard_after_gap_ms: float = 0.0,
+    time_system: str | None = None,
 ) -> Observables:
     """
     Build pseudoranges for every anchored satellite on one common grid.
+
+    `time_system` is the scale the result is expressed in.  Left at None it is the
+    scale of the anchors when they all agree (a BeiDou-only set is then in BDT), and
+    GPST when they do not.  Satellites whose anchor is in another scale are moved by
+    the constant 14 s offset, so every transmit time and the receive time share one
+    scale -- which is what makes `receive - transmit` a range.
 
     `tracking_outputs` maps satellite id to a `SignalTrackingOutputs`.  Only
     satellites that also appear in `anchors` contribute -- an unanchored channel
@@ -296,6 +313,10 @@ def form_observables(
         epoch_uptime_ms = np.arange(start, stop, epoch_interval_ms)
     epoch_uptime_ms = np.asarray(epoch_uptime_ms, dtype=float)
 
+    if time_system is None:
+        scales = {anchors[sat_id].time_system for sat_id in sat_ids}
+        time_system = scales.pop() if len(scales) == 1 else "GPST"
+
     n, m = len(epoch_uptime_ms), len(sat_ids)
     transmit = np.full((n, m), np.nan)
     for j, sat_id in enumerate(sat_ids):
@@ -305,7 +326,9 @@ def form_observables(
             max_gap_factor=max_gap_factor,
             guard_after_gap_ms=guard_after_gap_ms,
         )
-        transmit[:, j] = anchors[sat_id].transmit_time_s(code_phase)
+        transmit[:, j] = time_systems.convert_time_of_week(
+            anchors[sat_id].transmit_time_s(code_phase), anchors[sat_id].time_system, time_system
+        )
 
     # Anchor the nominal receiver clock so pseudoranges land near their true
     # magnitude.  The offset is arbitrary and the clock bias absorbs it; picking a
@@ -325,7 +348,137 @@ def form_observables(
         pseudorange_m=pseudorange,
         week=week,
         anchors={s: anchors[s] for s in sat_ids},
+        time_system=time_system,
     )
+
+
+def common_epoch_grid(
+    tracking_outputs: list[dict],
+    epoch_interval_ms: float = 100.0,
+) -> np.ndarray:
+    """
+    One receiver-instant grid for several tracking runs of one recording.
+
+    `form_observables` picks its own grid from the channels it is given, so two runs
+    formed separately get different grids and cannot be combined
+    (`combine_observables`).  This takes every channel of every run and returns the
+    grid over the span all of them share, which both runs are then formed on.
+    """
+    starts, stops = [], []
+    for outputs_by_sat in tracking_outputs:
+        for outputs in outputs_by_sat.values():
+            uptime = outputs.uptime_epoch_ms[outputs.valid]
+            if len(uptime) >= 2:
+                starts.append(uptime[0])
+                stops.append(uptime[-1])
+    if not starts:
+        raise ValueError("no channel has enough epochs to interpolate")
+    start, stop = max(starts), min(stops)
+    if stop <= start:
+        raise ValueError("the tracked channels do not overlap in time; no common grid exists")
+    return np.arange(start, stop, epoch_interval_ms)
+
+
+def combine_observables(
+    parts: list[Observables],
+    signal_type_ids: list[str],
+    *,
+    time_system: str = "GPST",
+) -> Observables:
+    """
+    Join observables of several tracking runs (for example GPS L5 and BeiDou B2a of
+    one collect) into one set on one measurement grid (D-058).
+
+    The parts must be measured at the same receiver instants: same
+    `epoch_uptime_ms`, which means both runs started at the same `START_OFFSET_MS` on
+    the same sample clock, and the caller passed one grid to `form_observables` for
+    both.  If the grids differ the receiver clock of one part is not the receiver
+    clock of the other, and joining them would put a false offset into every
+    pseudorange, so it is refused.
+
+    Each part's `receive_time_s` was set separately, to a nominal 75 ms after its own
+    latest satellite, so the parts disagree by an arbitrary constant.  They are put on
+    the first part's receive time here, shifting the pseudoranges by the same amount;
+    what remains between the systems is the real receiver inter-system bias, which
+    the solver estimates (D-057).
+
+    `signal_type_ids` names the signal each part was tracked on, in the same order.
+    """
+    if not parts:
+        raise ValueError("no observables to combine")
+    if len(signal_type_ids) != len(parts):
+        raise ValueError("give one signal type id for each part")
+    reference = parts[0]
+    for number, part in enumerate(parts[1:], start=1):
+        if not np.array_equal(part.epoch_uptime_ms, reference.epoch_uptime_ms):
+            raise ValueError(
+                f"part {number} is measured at different receiver instants than part 0; "
+                "run both with the same START_OFFSET_MS and pass one epoch grid to "
+                "form_observables"
+            )
+
+    def to_scale(part: Observables):
+        shift = time_systems.convert_time_of_week(0.0, part.time_system, time_system)
+        return part.receive_time_s + shift, part.transmit_time_s + shift
+
+    common_receive, _ = to_scale(reference)
+    sat_ids: list[str] = []
+    transmit_columns, pseudorange_columns = [], []
+    anchors: dict[str, TimeAnchor] = {}
+    types: dict[str, str] = {}
+    for part, signal_type_id in zip(parts, signal_type_ids):
+        receive, transmit = to_scale(part)
+        for column, sat_id in enumerate(part.sat_ids):
+            if sat_id in sat_ids:
+                raise ValueError(f"satellite {sat_id} appears in more than one part")
+            sat_ids.append(sat_id)
+            types[sat_id] = part.signal_type_ids.get(sat_id, signal_type_id)
+        transmit_columns.append(transmit)
+        # Same range as before, measured against the common receive time.
+        pseudorange_columns.append(
+            part.pseudorange_m + SPEED_OF_LIGHT * (common_receive - receive)[:, None]
+        )
+        anchors.update(part.anchors)
+    return Observables(
+        epoch_uptime_ms=reference.epoch_uptime_ms,
+        receive_time_s=common_receive,
+        sat_ids=sat_ids,
+        transmit_time_s=np.hstack(transmit_columns),
+        pseudorange_m=np.hstack(pseudorange_columns),
+        week=reference.week,
+        anchors=anchors,
+        time_system=time_system,
+        signal_type_ids=types,
+    )
+
+
+def cn0_on_grid(outputs, epoch_uptime_ms: np.ndarray, component: int) -> np.ndarray:
+    """
+    The C/N0 estimate of one channel at the receiver instants of a grid, in dB-Hz.
+
+    Tracking writes a C/N0 estimate every few hundred milliseconds
+    (`cn0_uptime_ms`, `cn0_dbhz`).  This interpolates it onto the grid; outside the
+    span it covers the value is NaN, not an extrapolation.  `component` is the one the
+    loops ran on (the pilot).
+    """
+    block = outputs.cn0_valid
+    times = np.asarray(outputs.cn0_uptime_ms)[block]
+    values = np.asarray(outputs.cn0_dbhz)[block, component]
+    if len(times) < 1:
+        return np.full(len(epoch_uptime_ms), np.nan)
+    return np.interp(epoch_uptime_ms, times, values, left=np.nan, right=np.nan)
+
+
+def ephemeris_time_s(ephemeris: Ephemeris, time_s, time_system: str):
+    """
+    A time of week in the scale the ephemeris is defined in.
+
+    GPS ephemerides are functions of GPST and the BeiDou one of BDT.  `time_system` is
+    the scale `time_s` is in; the result is what to hand to `orbit_state` and
+    `clock_correction_s`.
+    """
+    native = "BDT" if isinstance(ephemeris, BdsEphemeris) else "GPST"
+    return time_systems.convert_time_of_week(time_s, time_system, native)
 
 
 # ---------------------------------------------------------------------------
@@ -390,12 +543,16 @@ def satellite_clock_corrections(
         eph = ephemerides.get(sat_id)
         if eph is None:
             continue
-        delay = signal_group_delay_s(eph, signal_type_id) if apply_group_delay else 0.0
+        sat_signal = observables.signal_type_ids.get(sat_id, signal_type_id)
+        delay = signal_group_delay_s(eph, sat_signal) if apply_group_delay else 0.0
         for i in range(n):
             t_sv = observables.transmit_time_s[i, j]
             if not np.isfinite(t_sv):
                 continue
-            out[i, j] = eph.clock_correction_s(t_sv) + delay
+            # The ephemeris wants its own system's time, which differs by 14 s for
+            # BeiDou in a GPST set.  The clock polynomial and the orbit both use it.
+            t_native = ephemeris_time_s(eph, t_sv, observables.time_system)
+            out[i, j] = eph.clock_correction_s(t_native) + delay
     return out
 
 

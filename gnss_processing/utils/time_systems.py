@@ -111,3 +111,21 @@ def wrap_time_of_week(delta_s: float) -> float:
     if delta_s < -half:
         return delta_s + SECONDS_PER_WEEK
     return delta_s
+
+
+def convert_time_of_week(tow_s, from_system: str, to_system: str):
+    """
+    Move a time of week (a float or an array) between "GPST" and "BDT".
+
+    The result is **not** wrapped into 0..604800, so a time just past the end of the
+    week stays continuous.  Pseudoranges are differences of times of week, and a
+    wrap would put a week into them.  Week numbers do not enter: the offset is a
+    constant of 14 s, and whoever needs the week uses `gpst_to_bdt` or `bdt_to_gpst`.
+    """
+    offsets = {"GPST": 0.0, "BDT": -float(GPST_MINUS_BDT_S)}
+    for name in (from_system, to_system):
+        if name not in offsets:
+            raise ValueError(f"time system must be 'GPST' or 'BDT', got {name!r}")
+    # A time in BDT reads GPST_MINUS_BDT_S less than the same instant in GPST.
+    return tow_s + offsets[to_system] - offsets[from_system]
+

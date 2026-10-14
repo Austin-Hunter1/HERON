@@ -29,6 +29,16 @@ moves the fix by 1-3 m on this data and leaves every diagnostic looking clean.
 than re-implemented.  What this module adds around it is the geometry matrix,
 residuals and DOP -- the quantities that say whether a fix should be believed,
 which the bare solver does not return.
+
+**More than one constellation** (D-057).  Satellites of different systems share the
+receiver position but not the receiver clock as the pseudorange sees it: each system
+has its own time scale and its own signal path, so each system after the first gets
+one extra bias unknown, the inter-system bias.  GPS plus BeiDou is therefore five
+unknowns and needs five satellites.  The system of a satellite is the letter of its id
+("G01", "C13").  A set with one system, and no weights, takes the original path
+through `gnss_tools`, so its results do not change.  Only when that does not apply
+does `_solve_weighted` run: a Gauss-Newton solve with the extra columns and an
+optional weight per satellite.
 """
 
 from __future__ import annotations
@@ -40,7 +50,7 @@ from gnss_tools.coords.utils import ecf2enu, ecf2geo, ecf2sky, geo2ecf, rotate_p
 from gnss_tools.misc.pvt_estimation import compute_least_squares_position_and_clock
 
 from . import observables as obs
-from .nav.ephemeris import OMEGA_E_DOT, SPEED_OF_LIGHT, Ephemeris
+from .nav.ephemeris import OMEGA_E_DOT, SPEED_OF_LIGHT, BdsEphemeris, Ephemeris
 
 # Only ever used to place an initial guess, so the spherical value is ample.
 WGS84_MEAN_RADIUS_M = 6371000.0
@@ -63,6 +73,43 @@ def is_plausible_fix(solution: "EpochSolution") -> bool:
         and abs(np.linalg.norm(solution.position_ecef_m) - WGS84_MEAN_RADIUS_M)
         <= MAX_PLAUSIBLE_ALTITUDE_M
     )
+
+
+@dataclass(frozen=True)
+class WeightMap:
+    """
+    A weight for each satellite from its C/N0: linear between two corner points,
+    flat outside them.
+
+    The defaults are the MATLAB receiver's map (`setWLS.m`: 35 dB-Hz -> 0.1 and
+    52 dB-Hz -> 3).  They are values to tune, so a notebook builds its own `WeightMap`
+    from its config cell.  A satellite with no C/N0 estimate gets the low weight: not
+    trusted, not dropped.
+    """
+
+    low_cn0_dbhz: float = 35.0
+    high_cn0_dbhz: float = 52.0
+    low_weight: float = 0.1
+    high_weight: float = 3.0
+
+    def __post_init__(self) -> None:
+        if not self.low_cn0_dbhz < self.high_cn0_dbhz:
+            raise ValueError("low_cn0_dbhz must be below high_cn0_dbhz")
+        if not 0.0 < self.low_weight <= self.high_weight:
+            raise ValueError("weights must be positive, with low_weight <= high_weight")
+
+    def __call__(self, cn0_dbhz: np.ndarray) -> np.ndarray:
+        cn0 = np.asarray(cn0_dbhz, dtype=float)
+        fraction = (cn0 - self.low_cn0_dbhz) / (self.high_cn0_dbhz - self.low_cn0_dbhz)
+        weights = self.low_weight + np.clip(fraction, 0.0, 1.0) * (
+            self.high_weight - self.low_weight
+        )
+        return np.where(np.isfinite(cn0), weights, self.low_weight)
+
+
+def system_letter(sat_id: str) -> str:
+    """The constellation of a satellite id: its first letter ("G", "C", ...)."""
+    return sat_id[0]
 
 
 @dataclass
@@ -98,19 +145,32 @@ class EpochSolution:
     geometry_matrix: np.ndarray
     converged: bool
 
+    inter_system_bias_m: dict[str, float] = field(default_factory=dict)
+    """Bias of each system other than the reference, relative to the reference
+    system's clock (`clock_bias_m`).  Empty for a one-system fix."""
+
+    fixed_inter_system_biases: tuple[str, ...] = ()
+    """Systems whose bias was held at a given value instead of estimated."""
+
     @property
     def num_satellites(self) -> int:
         return len(self.sat_ids)
 
     @property
+    def num_unknowns(self) -> int:
+        """Position (3), the clock, and one bias for each estimated extra system."""
+        return 4 + len(self.inter_system_bias_m) - len(self.fixed_inter_system_biases)
+
+    @property
     def is_overdetermined(self) -> bool:
         """
-        False when there are exactly four satellites.
+        False when there are exactly as many satellites as unknowns.
 
-        Worth surfacing rather than hiding: with four, the residuals are zero by
-        construction and say nothing at all about measurement quality.
+        Worth surfacing rather than hiding: with four (five for two systems), the
+        residuals are zero by construction and say nothing at all about measurement
+        quality.
         """
-        return self.num_satellites > 4
+        return self.num_satellites > self.num_unknowns
 
     @property
     def dop(self) -> "DilutionOfPrecision":
@@ -142,6 +202,14 @@ class SolutionSeries:
 
     sat_ids: list[str]
     dop: dict[str, np.ndarray] = field(default_factory=dict)
+    inter_system_bias_m: dict[str, np.ndarray] = field(default_factory=dict)
+    """(N,) bias of each non-reference system relative to the reference system, in
+    metres, NaN where there is no fix.  Empty when only one system was solved."""
+
+    inter_system_bias_fixed: np.ndarray | None = None
+    """(N,) True for an epoch whose inter-system bias was held at the series median
+    because too few satellites were in view to estimate it (D-057)."""
+
     excluded_sat_ids: list[list[str]] = field(default_factory=list)
     """One entry per epoch, same length and order as every other per-epoch
     array on this class (`position_ecef_m`, `clock_bias_m`, ...) -- the
@@ -244,8 +312,13 @@ def satellite_positions(
             # hours, so the sub-millisecond difference between the two arguments is
             # utterly negligible there -- the loop that some receivers run is not
             # worth its complexity.
-            t_gps = t_tx - eph.clock_correction_s(t_tx)
-            position = eph.orbit_state(t_gps).position_ecef_m
+            #
+            # The ephemeris is a function of its own system's time, so `t_tx` (in the
+            # set's scale) is first moved into that: 14 s for BeiDou in a GPST set.
+            t_native = obs.ephemeris_time_s(eph, t_tx, observables.time_system)
+            clock_s = eph.clock_correction_s(t_native)
+            t_gps = t_tx - clock_s  # in the set's scale; used for the Sagnac transit
+            position = eph.orbit_state(t_native - clock_s).position_ecef_m
             if apply_sagnac:
                 if receiver_position_ecef_m is None:
                     # Fallback: carries the receiver clock bias with it.  See the
@@ -306,7 +379,7 @@ def correct_pseudoranges(
         clock_s = obs.satellite_clock_corrections(
             observables,
             ephemerides,
-            signal_type_id=signal_type_id,
+            signal_type_id=signal_type_id,  # per-satellite types in the set override it
             apply_group_delay=settings.group_delay,
         )
         # t = t_sv - dt_sv, so the true transmit time is earlier and the true range
@@ -352,18 +425,28 @@ def correct_pseudoranges(
             corrected = corrected - np.nan_to_num(tropo, nan=0.0)
 
         if settings.ionosphere and iono_alpha is not None and iono_beta is not None:
-            frequency = obs.BAND_FREQ_HZ.get(signal_type_id, obs.L1_FREQ_HZ)
-            delay_s = obs.klobuchar_delay_s(
-                iono_alpha,
-                iono_beta,
-                latitude_semicircles=float(latitude_deg) / 180.0,
-                longitude_semicircles=float(longitude_deg) / 180.0,
-                elevation_semicircles=elevation / 180.0,
-                azimuth_semicircles=azimuth / 180.0,
-                gps_time_of_week_s=observables.receive_time_s[:, None],
-                frequency_hz=frequency,
+            # Klobuchar is GPS's model, in GPS time.  BeiDou satellites get no
+            # ionosphere correction (D-053), and each GPS satellite is scaled to the
+            # frequency of its own signal.
+            gps_time = obs.time_systems.convert_time_of_week(
+                observables.receive_time_s, observables.time_system, "GPST"
             )
-            iono = SPEED_OF_LIGHT * delay_s
+            iono = np.zeros((n, m))
+            for j, sat_id in enumerate(observables.sat_ids):
+                if isinstance(ephemerides.get(sat_id), BdsEphemeris):
+                    continue
+                sat_signal = observables.signal_type_ids.get(sat_id, signal_type_id)
+                delay_s = obs.klobuchar_delay_s(
+                    iono_alpha,
+                    iono_beta,
+                    latitude_semicircles=float(latitude_deg) / 180.0,
+                    longitude_semicircles=float(longitude_deg) / 180.0,
+                    elevation_semicircles=elevation[:, j] / 180.0,
+                    azimuth_semicircles=azimuth[:, j] / 180.0,
+                    gps_time_of_week_s=gps_time,
+                    frequency_hz=obs.BAND_FREQ_HZ.get(sat_signal, obs.L1_FREQ_HZ),
+                )
+                iono[:, j] = SPEED_OF_LIGHT * delay_s
             terms["ionosphere"] = -iono
             corrected = corrected - np.nan_to_num(iono, nan=0.0)
 
@@ -406,6 +489,89 @@ def dilution_of_precision(
     return DilutionOfPrecision(gdop, pdop, hdop, vdop, tdop)
 
 
+def _initial_position(positions: np.ndarray, initial_position: np.ndarray | None) -> np.ndarray:
+    """
+    A starting point for Newton's method.  Never the earth's centre.
+
+    The geometry matrix there is built from directions that all point outward from
+    a single point, and the solver returns NaN rather than converging.  The centroid
+    of the satellite directions, dropped onto the earth's surface, is a far better
+    guess and costs nothing -- it is within a few thousand kilometres of any receiver
+    that can see them.  It is also what keeps a surveyed antenna position out of the
+    solution: the fix never needs to be told where the antenna is.
+    """
+    if initial_position is not None:
+        return np.asarray(initial_position, dtype=float)
+    centroid = positions.mean(axis=0)
+    norm = np.linalg.norm(centroid)
+    return centroid / norm * WGS84_MEAN_RADIUS_M if norm > 0 else np.zeros(3)
+
+
+def _solve_weighted(
+    ranges: np.ndarray,
+    positions: np.ndarray,
+    system_index: np.ndarray,
+    num_systems: int,
+    weights: np.ndarray | None,
+    initial_position: np.ndarray,
+    initial_clock_bias: float,
+    *,
+    max_iterations: int = 20,
+    tolerance_m: float = 1.0e-4,
+) -> tuple[np.ndarray, float, np.ndarray, np.ndarray] | None:
+    """
+    Gauss-Newton position, clock and inter-system biases, with optional weights.
+
+    The unknowns are the position (3), the reference system's clock, and one bias for
+    each other system.  Each pseudorange row is the geometric range plus the clock
+    plus, for a satellite of another system, that system's bias.  With weights `w`
+    the minimised sum is `sum(w * residual^2)`.
+
+    Returns `(position, clock, biases, geometry)` or None if the iteration fails.
+    `biases` has `num_systems - 1` entries, in system order.
+    """
+    n = len(ranges)
+    position = np.array(initial_position, dtype=float)
+    # Start the clocks where the data says they are, at the starting position, so
+    # that a clock offset of thousands of kilometres does not look like geometry.
+    geometric = np.linalg.norm(positions - position, axis=1)
+    offsets = ranges - geometric
+    clock = float(np.mean(offsets[system_index == 0])) if np.any(system_index == 0) else float(initial_clock_bias)
+    biases = np.zeros(num_systems - 1)
+    for k in range(1, num_systems):
+        mask = system_index == k
+        biases[k - 1] = float(np.mean(offsets[mask])) - clock if mask.any() else 0.0
+    root_weights = np.ones(n) if weights is None else np.sqrt(np.asarray(weights, dtype=float))
+
+    for _ in range(max_iterations):
+        delta = positions - position
+        geometric = np.linalg.norm(delta, axis=1)
+        design = np.zeros((n, 4 + num_systems - 1))
+        design[:, :3] = -delta / geometric[:, None]
+        design[:, 3] = 1.0
+        for k in range(1, num_systems):
+            design[system_index == k, 3 + k] = 1.0
+        # Row r's bias: none for the reference system, else that system's.
+        predicted = geometric + clock + np.concatenate(([0.0], biases))[system_index]
+        residual = ranges - predicted
+        step, *_ = np.linalg.lstsq(design * root_weights[:, None], residual * root_weights, rcond=None)
+        if not np.all(np.isfinite(step)):
+            return None
+        position = position + step[:3]
+        clock += float(step[3])
+        biases = biases + step[4:]
+        if np.linalg.norm(step[:3]) < tolerance_m and abs(step[3]) < tolerance_m:
+            break
+    delta = positions - position
+    geometric = np.linalg.norm(delta, axis=1)
+    geometry = np.zeros((n, 4 + num_systems - 1))
+    geometry[:, :3] = -delta / geometric[:, None]
+    geometry[:, 3] = 1.0
+    for k in range(1, num_systems):
+        geometry[system_index == k, 3 + k] = 1.0
+    return position, clock, biases, geometry
+
+
 def solve_epoch(
     corrected_pseudoranges: np.ndarray,
     satellite_positions_ecef_m: np.ndarray,
@@ -413,13 +579,24 @@ def solve_epoch(
     *,
     initial_position: np.ndarray | None = None,
     initial_clock_bias: float = 0.0,
+    weights: np.ndarray | None = None,
+    fixed_inter_system_bias_m: dict[str, float] | None = None,
+    reference_system: str | None = None,
 ) -> EpochSolution | None:
     """
     One epoch's least-squares position and clock, or None if it cannot be solved.
 
-    Returns None rather than a NaN-filled solution when fewer than four satellites
-    are available: four unknowns need four equations, and an under-determined
-    "fix" is not a degraded answer but a meaningless one.
+    Returns None rather than a NaN-filled solution when there are fewer satellites
+    than unknowns -- four for one system, five for two: an under-determined "fix" is
+    not a degraded answer but a meaningless one.
+
+    With several systems (the first letter of each satellite id) each system after the
+    reference gets a bias unknown.  `fixed_inter_system_bias_m` holds a system's bias
+    at a given value instead (its pseudoranges are corrected and it joins the
+    reference clock), which is how an epoch with too few satellites is still solved
+    (D-057).  `reference_system` defaults to "G" if GPS is present, else the first
+    system.  `weights` is one per satellite (see `WeightMap`); with none, and one
+    system, the original `gnss_tools` solve runs and gives the same numbers as before.
     """
     usable = np.isfinite(corrected_pseudoranges) & np.isfinite(
         satellite_positions_ecef_m[:, 0]
@@ -430,45 +607,76 @@ def solve_epoch(
     ranges = np.ascontiguousarray(corrected_pseudoranges[usable], dtype=float)
     positions = np.ascontiguousarray(satellite_positions_ecef_m[usable], dtype=float)
     used_ids = [sat_ids[i] for i in np.nonzero(usable)[0]]
+    used_weights = None if weights is None else np.asarray(weights, dtype=float)[usable]
 
-    if initial_position is None:
-        # Never start Newton's method at the earth's centre.  The geometry matrix
-        # there is built from directions that all point outward from a single
-        # point, and `compute_least_squares_position_and_clock` returns NaN rather
-        # than converging.  The centroid of the satellite directions, dropped onto
-        # the earth's surface, is a far better guess and costs nothing -- it is
-        # within a few thousand kilometres of any receiver that can see them.
-        centroid = positions.mean(axis=0)
-        norm = np.linalg.norm(centroid)
-        initial_position = (
-            centroid / norm * WGS84_MEAN_RADIUS_M if norm > 0 else np.zeros(3)
+    letters = [system_letter(sid) for sid in used_ids]
+    present = list(dict.fromkeys(letters))
+    if reference_system is None:
+        reference_system = "G" if "G" in present else present[0]
+    ordered = [reference_system] + [x for x in present if x != reference_system]
+    if reference_system not in present:
+        ordered = present
+        reference_system = present[0]
+
+    # Systems with a given bias are folded into the reference clock first.
+    fixed = dict(fixed_inter_system_bias_m or {})
+    fixed_here = tuple(x for x in ordered if x != reference_system and x in fixed)
+    for letter in fixed_here:
+        mask = np.array([x == letter for x in letters])
+        ranges[mask] = ranges[mask] - fixed[letter]
+    estimated = [x for x in ordered if x == reference_system or x not in fixed_here]
+    system_index = np.array([estimated.index(x) if x in estimated else 0 for x in letters])
+    num_systems = len(estimated)
+
+    if len(used_ids) < 3 + num_systems:
+        return None
+
+    initial_position = _initial_position(positions, initial_position)
+
+    use_original_path = num_systems == 1 and used_weights is None
+    if use_original_path:
+        x_hat, b_hat = compute_least_squares_position_and_clock(
+            ranges,
+            positions,
+            initial_position=np.asarray(initial_position, dtype=float),
+            initial_clock_bias=float(initial_clock_bias),
         )
+        x_hat = np.asarray(x_hat, dtype=float)
+        solved = (x_hat, float(b_hat), np.zeros(0), None) if (
+            np.all(np.isfinite(x_hat)) and np.isfinite(b_hat)
+        ) else None
+    else:
+        solved = _solve_weighted(
+            ranges, positions, system_index, num_systems, used_weights,
+            initial_position, initial_clock_bias,
+        )
+        if solved is not None and not (
+            np.all(np.isfinite(solved[0])) and np.isfinite(solved[1])
+        ):
+            solved = None
 
-    x_hat, b_hat = compute_least_squares_position_and_clock(
-        ranges,
-        positions,
-        initial_position=(
-            None if initial_position is None else np.asarray(initial_position, dtype=float)
-        ),
-        initial_clock_bias=float(initial_clock_bias),
-    )
-    x_hat = np.asarray(x_hat, dtype=float)
-    converged = bool(np.all(np.isfinite(x_hat)) and np.isfinite(b_hat))
-    if not converged:
+    extra_ids = tuple(x for x in estimated if x != reference_system)
+    if solved is None:
         return EpochSolution(
             position_ecef_m=np.full(3, np.nan),
             clock_bias_m=float("nan"),
             residuals_m=np.full(len(used_ids), np.nan),
             sat_ids=used_ids,
-            geometry_matrix=np.zeros((len(used_ids), 4)),
+            geometry_matrix=np.zeros((len(used_ids), 4 + len(extra_ids))),
             converged=False,
+            inter_system_bias_m={x: float("nan") for x in (*extra_ids, *fixed_here)},
+            fixed_inter_system_biases=fixed_here,
         )
 
+    x_hat, b_hat, biases, geometry = solved
     delta = positions - x_hat
     geometric_range = np.linalg.norm(delta, axis=1)
-    geometry = np.column_stack([-delta / geometric_range[:, None], np.ones(len(used_ids))])
-    residuals = ranges - geometric_range - b_hat
+    if geometry is None:
+        geometry = np.column_stack([-delta / geometric_range[:, None], np.ones(len(used_ids))])
+    residuals = ranges - geometric_range - b_hat - np.concatenate(([0.0], biases))[system_index]
 
+    bias_report = {x: float(biases[k]) for k, x in enumerate(extra_ids)}
+    bias_report.update({x: float(fixed[x]) for x in fixed_here})
     return EpochSolution(
         position_ecef_m=x_hat,
         clock_bias_m=float(b_hat),
@@ -476,6 +684,8 @@ def solve_epoch(
         sat_ids=used_ids,
         geometry_matrix=geometry,
         converged=True,
+        inter_system_bias_m=bias_report,
+        fixed_inter_system_biases=fixed_here,
     )
 
 
@@ -488,6 +698,9 @@ def solve_epoch_with_raim(
     initial_clock_bias: float = 0.0,
     residual_gate_m: float = 100.0,
     max_exclusions: int = 3,
+    weights: np.ndarray | None = None,
+    fixed_inter_system_bias_m: dict[str, float] | None = None,
+    reference_system: str | None = None,
 ) -> tuple[EpochSolution | None, list[str]]:
     """
     `solve_epoch`, plus iterative post-fit residual screening (receiver
@@ -500,9 +713,9 @@ def solve_epoch_with_raim(
 
     Drops the satellite with the largest `|residual|` and re-solves, up to
     `max_exclusions` times, stopping as soon as the largest residual clears
-    `residual_gate_m` or fewer than 5 satellites remain (so an exclusion
-    never leaves fewer than 4 -- an exactly-determined fit has zero
-    residuals by construction and nothing left to screen).
+    `residual_gate_m` or no satellite beyond the number of unknowns remains (so an
+    exclusion never leaves the fit exactly determined -- zero residuals by
+    construction and nothing left to screen).
 
     Returns `(solution, excluded_sat_ids)` -- `excluded_sat_ids` is `[]`
     when nothing was dropped, including when `solution` is `None` or did
@@ -515,16 +728,23 @@ def solve_epoch_with_raim(
     ids = list(sat_ids)
     ranges = np.asarray(corrected_pseudoranges, dtype=float)
     positions = np.asarray(satellite_positions_ecef_m, dtype=float)
+    weight_array = None if weights is None else np.asarray(weights, dtype=float)
     position_seed = initial_position
     bias_seed = initial_clock_bias
+    options = dict(fixed_inter_system_bias_m=fixed_inter_system_bias_m, reference_system=reference_system)
 
     solution = solve_epoch(
         ranges, positions, ids,
         initial_position=position_seed, initial_clock_bias=bias_seed,
+        weights=weight_array, **options,
     )
     excluded: list[str] = []
     for _ in range(max_exclusions):
-        if solution is None or not solution.converged or len(solution.sat_ids) < 5:
+        if (
+            solution is None
+            or not solution.converged
+            or len(solution.sat_ids) <= solution.num_unknowns
+        ):
             break
         abs_residuals = np.abs(solution.residuals_m)
         worst = int(np.argmax(abs_residuals))
@@ -536,10 +756,13 @@ def solve_epoch_with_raim(
         ids = [ids[i] for i in keep]
         ranges = ranges[keep]
         positions = positions[keep]
+        if weight_array is not None:
+            weight_array = weight_array[keep]
         position_seed, bias_seed = solution.position_ecef_m, solution.clock_bias_m
         solution = solve_epoch(
             ranges, positions, ids,
             initial_position=position_seed, initial_clock_bias=bias_seed,
+            weights=weight_array, **options,
         )
     return solution, excluded
 
@@ -555,6 +778,9 @@ def solve_series(
     iono_beta: tuple[float, float, float, float] | None = None,
     residual_gate_m: float | None = None,
     max_exclusions: int = 3,
+    weights: np.ndarray | None = None,
+    fixed_inter_system_bias_m: dict[str, float] | None = None,
+    reference_system: str | None = None,
 ) -> SolutionSeries:
     """
     Solve every measurement epoch, seeding each fix with the previous one.
@@ -562,7 +788,9 @@ def solve_series(
     Seeding matters less for convergence than for speed -- the solver is Newton's
     method and converges from the earth's centre in a handful of iterations -- but
     it also keeps the series from wandering between equivalent solutions on a
-    marginal epoch.
+    marginal epoch.  The seed of the first epoch is `initial_position_ecef_m` if
+    given, else the satellite centroid: a surveyed antenna position is never needed
+    and should not be passed in to make a fix look better.
 
     `residual_gate_m`, when set, routes each epoch through
     `solve_epoch_with_raim` instead of bare `solve_epoch` -- see that
@@ -570,6 +798,14 @@ def solve_series(
     exactly what it was before that gate existed; this default is
     deliberate, not a placeholder for "should be on" -- a caller opts in
     explicitly (the reference figure is 100.0 m).
+
+    More than one system (D-057).  Each system after the reference gets a bias
+    estimated every epoch.  An epoch with at least four satellites but too few to
+    estimate the bias (four satellites, two systems) is solved afterwards with the
+    bias held at the median of the epochs that did estimate it, and is marked in
+    `inter_system_bias_fixed`.  `fixed_inter_system_bias_m` holds a bias at a given
+    value in every epoch instead.  `weights` is `(N, M)`, one per satellite and
+    epoch (see `WeightMap`); `None` is equal weights.
     """
     settings = settings or CorrectionSettings()
     corrected, _ = correct_pseudoranges(
@@ -589,37 +825,35 @@ def solve_series(
     )
 
     n, m = corrected.shape
+    if weights is not None and np.shape(weights) != (n, m):
+        raise ValueError(f"weights must be shaped {(n, m)}, got {np.shape(weights)}")
     out_position = np.full((n, 3), np.nan)
     out_bias = np.full(n, np.nan)
     out_count = np.zeros(n, dtype=int)
     out_residuals = np.full((n, m), np.nan)
     out_excluded: list[list[str]] = [[] for _ in range(n)]
+    out_isb: dict[str, np.ndarray] = {}
+    out_isb_fixed = np.zeros(n, dtype=bool)
     dop_names = ("gdop", "pdop", "hdop", "vdop", "tdop")
     dop = {name: np.full(n, np.nan) for name in dop_names}
 
-    seed = initial_position_ecef_m
-    seed_bias = 0.0
-    for i in range(n):
+    def solve_one(i, seed, seed_bias, fixed):
+        row_weights = None if weights is None else np.asarray(weights)[i]
+        options = dict(
+            initial_position=seed,
+            initial_clock_bias=seed_bias,
+            weights=row_weights,
+            fixed_inter_system_bias_m=fixed,
+            reference_system=reference_system,
+        )
         if residual_gate_m is None:
-            solution = solve_epoch(
-                corrected[i],
-                positions[i],
-                observables.sat_ids,
-                initial_position=seed,
-                initial_clock_bias=seed_bias,
-            )
-        else:
-            solution, out_excluded[i] = solve_epoch_with_raim(
-                corrected[i],
-                positions[i],
-                observables.sat_ids,
-                initial_position=seed,
-                initial_clock_bias=seed_bias,
-                residual_gate_m=residual_gate_m,
-                max_exclusions=max_exclusions,
-            )
-        if solution is None or not solution.converged or not is_plausible_fix(solution):
-            continue
+            return solve_epoch(corrected[i], positions[i], observables.sat_ids, **options), []
+        return solve_epoch_with_raim(
+            corrected[i], positions[i], observables.sat_ids,
+            residual_gate_m=residual_gate_m, max_exclusions=max_exclusions, **options,
+        )
+
+    def record(i, solution):
         out_position[i] = solution.position_ecef_m
         out_bias[i] = solution.clock_bias_m
         out_count[i] = solution.num_satellites
@@ -628,7 +862,33 @@ def solve_series(
         values = solution.dop
         for name in dop_names:
             dop[name][i] = getattr(values, name)
+        for letter, value in solution.inter_system_bias_m.items():
+            out_isb.setdefault(letter, np.full(n, np.nan))[i] = value
+        out_isb_fixed[i] = bool(solution.fixed_inter_system_biases)
+
+    seed = initial_position_ecef_m
+    seed_bias = 0.0
+    unsolved: list[int] = []
+    for i in range(n):
+        solution, out_excluded[i] = solve_one(i, seed, seed_bias, fixed_inter_system_bias_m)
+        if solution is None or not solution.converged or not is_plausible_fix(solution):
+            unsolved.append(i)
+            continue
+        record(i, solution)
         seed, seed_bias = solution.position_ecef_m, solution.clock_bias_m
+
+    # Second pass: epochs with the satellites for a fix but not for the bias.
+    if unsolved and out_isb and fixed_inter_system_bias_m is None:
+        held = {
+            letter: float(np.nanmedian(values[~out_isb_fixed]))
+            for letter, values in out_isb.items()
+            if np.isfinite(values[~out_isb_fixed]).any()
+        }
+        for i in unsolved:
+            solution, out_excluded[i] = solve_one(i, None, 0.0, held)
+            if solution is None or not solution.converged or not is_plausible_fix(solution):
+                continue
+            record(i, solution)
 
     return SolutionSeries(
         epoch_uptime_ms=observables.epoch_uptime_ms,
@@ -640,6 +900,8 @@ def solve_series(
         sat_ids=list(observables.sat_ids),
         dop=dop,
         excluded_sat_ids=out_excluded,
+        inter_system_bias_m=out_isb,
+        inter_system_bias_fixed=out_isb_fixed if out_isb else None,
     )
 
 

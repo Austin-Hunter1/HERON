@@ -488,6 +488,11 @@ class BdsEphemeris:
         """For the relativistic clock term, which is defined in terms of sqrt(A)."""
         return float(np.sqrt(self.semi_major_axis_at_toe_m))
 
+    @property
+    def af0(self) -> float:
+        """`a0` under the name the GPS ephemerides use, for code that tabulates both."""
+        return self.a0
+
     def orbit_state(self, t_bdt_sec: float) -> OrbitState:
         """
         Antenna phase centre in BDCS at BDT time of week `t_bdt_sec` (ICD Table 7-9).

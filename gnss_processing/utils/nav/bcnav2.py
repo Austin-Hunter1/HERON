@@ -125,6 +125,12 @@ class Bcnav2DecodeResult:
     def synced(self) -> bool:
         return len(self.frames) > 0
 
+    @property
+    def inverted(self) -> bool:
+        """Whether the first frame arrived upside down (the same for every frame of a
+        run, since one carrier loop produced them).  False when nothing decoded."""
+        return bool(self.frames and self.frames[0].inverted)
+
     def of_type(self, message_type: int) -> list[Bcnav2Frame]:
         return [f for f in self.frames if f.message_type == message_type]
 
