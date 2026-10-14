@@ -1,0 +1,16 @@
+# Source facts for the test slice. Copied from the collect's own .yml file.
+# This is NOT a HERON metadata.yml (D-029, D-030). The user has not yet
+# agreed the schema for this slice. See BDS_PORT_PLAN.md, Phase 3, step 6.
+file: l5_flight_antenna_first_1p5s.dat
+source_collect: 20261001URSP_Testing/dual_L5_20261001_112820
+source_file: chA_Flight_antenna/20261001_172832_000200_Flight_antenna.dat
+slice: first 75000000 bytes of the source file (1.5 s)
+sample_format: sc8        # interleaved signed 8-bit I, Q
+sample_rate_hz: 25000000.0
+center_freq_hz: 1176450000.0
+bandwidth_hz: 40000000.0
+gain_db: 70.0
+antenna: Flight_antenna (RX2)
+device: serial=31C03F6
+clock_ref: internal
+note: The source collect has 8 meta error records per channel. This slice was not checked for them.
