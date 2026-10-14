@@ -9,7 +9,7 @@ link's nominal frequency for a BOC sidelobe -- not the case for any signal
 built here yet, but `Signal.carrier_freq_hz` is independent of `Link` for when
 it is.
 
-A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5` -- IS the class-based
+A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a` -- IS the class-based
 definition of one signal: instantiating it for a PRN builds that satellite's
 spreading-code components (see `utils.code_components`) into a `CodeSet`.
 Acquisition and tracking are configured separately, in `ACQUISITION_POLICIES`
@@ -44,6 +44,7 @@ import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
 from . import ambiguity_resolution
+from . import bds_b2a
 from . import bpsk_acquisition
 from . import sample_streaming
 from . import secondary_code
@@ -142,10 +143,15 @@ class Signal(ABC):
     # Duration of one full pass through the primary code. Tiered-code
     # integration accumulates in units of it.
     primary_period_ms: ClassVar[int] = 1
+    # First letter of the per-satellite id ("G01", "C01"): RINEX constellation
+    # letter.  GPS is the default so that the GPS signals need no change.
+    sat_id_prefix: ClassVar[str] = "G"
+    # PRNs `build_signals` makes when the caller names none.
+    default_prns: ClassVar[tuple[int, ...]] = tuple(range(1, 33))
 
     def __init__(self, prn: int) -> None:
         self.prn = prn
-        self.signal_id = f"G{prn:02d}"
+        self.signal_id = f"{self.sat_id_prefix}{prn:02d}"
         self.code_set: CodeSet = build_code_set(
             self._build_components(prn),
             chip_rate_hz=self.tracking_code_rate_chips_per_sec,
@@ -258,6 +264,47 @@ class GpsL5(Signal):
         ]
 
 
+class BdsB2a(Signal):
+    """
+    BeiDou B2a (open service): a data component on I and a dataless pilot on
+    Q, a QPSK pair at 10.23 Mcps with equal power (ICD Table 4-2).  Like
+    GPS L5 it is two BPSK(10) codes 90 degrees apart, so the same correlator
+    serves both.
+
+    Each carries a secondary code that advances one chip per 1 ms primary
+    period.  The data code ``00010`` is exactly one 5 ms symbol long, so the
+    symbol edge is known once the pilot's 100-chip overlay is locked.  MEO
+    and IGSO satellites send B2a (PRN 1 to 63); GEO satellites do not.
+    """
+
+    signal_type_id = "BDS_B2A"
+    link = LINKS[LinkId.L5]
+    carrier_freq_hz = bds_b2a.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = bds_b2a.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = bds_b2a.PRIMARY_PERIOD_MS
+    sat_id_prefix = "C"
+    default_prns = tuple(range(bds_b2a.FIRST_PRN, bds_b2a.LAST_PRN + 1))
+
+    @staticmethod
+    def _build_components(prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        code_d = bds_b2a.generate_data_code(prn).copy()
+        code_p = bds_b2a.generate_pilot_code(prn).copy()
+        return [
+            CodeComponent(
+                name="B2aD", sequence=code_d, branch=Branch.I,
+                overlay=bds_b2a.data_secondary_code(),
+                symbol_period_ms=bds_b2a.DATA_SYMBOL_PERIOD_MS,
+            ),
+            # The pilot is dataless: no symbol period.  Its 100-chip overlay
+            # is the long code the overlay search locks.
+            CodeComponent(
+                name="B2aP", sequence=code_p, branch=Branch.Q,
+                overlay=bds_b2a.generate_pilot_secondary_code(prn),
+            ),
+        ]
+
+
 try:
     class GpsL1C(Signal):
         """
@@ -331,6 +378,7 @@ SIGNALS: dict[str, type[Signal]] = {
     GpsL1CA.signal_type_id: GpsL1CA,
     GpsL2C.signal_type_id: GpsL2C,
     GpsL5.signal_type_id: GpsL5,
+    BdsB2a.signal_type_id: BdsB2a,
 }
 if GpsL1C is not None:
     SIGNALS[GpsL1C.signal_type_id] = GpsL1C
@@ -680,8 +728,18 @@ class TrackingChannelAdapter:
         return self.outputs.late_corr[self.outputs.valid, component]
 
 
-def build_signals(signal_type: type[Signal], prns: Iterable[int] = range(1, 33)) -> dict[str, Signal]:
-    return {f"G{prn:02d}": signal_type(prn) for prn in prns}
+def build_signals(
+    signal_type: type[Signal], prns: Iterable[int] | None = None
+) -> dict[str, Signal]:
+    """Build one `Signal` per PRN, keyed by its satellite id.
+
+    With no `prns` the signal type's own `default_prns` are used (1-32 for GPS,
+    1-63 for BeiDou).
+    """
+    if prns is None:
+        prns = signal_type.default_prns
+    signals = (signal_type(prn) for prn in prns)
+    return {signal.signal_id: signal for signal in signals}
 
 
 def build_acquisition_code_params(
