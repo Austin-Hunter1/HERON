@@ -28,8 +28,9 @@ leap seconds and runs 14 s behind GPST; the week number is in message type 10 on
 
 Type 10 and 11 together are the ephemeris.  The ICD (7.4.3) pairs the ephemeris with
 the clock of type 30 by ``IODE == IODC & 0xFF``; `iode_matches_iodc` does that
-check.  How a type 11 frame is paired with its type 10 frame is **not** stated in
-the ICD, so this module does not guess: it returns each message on its own.
+check.  The ICD gives no key for pairing a type 11 frame with its type 10 frame; the
+rule used here is the user's (D-055): the two frames are next to each other, 600
+symbols apart, in either order.  `assemble_ephemeris` applies both rules.
 
 Soft symbols follow `utils.nav.primitives`: the sign carries the bit, positive for 0.
 Only message types 10, 11 and 30 are parsed so far.
@@ -44,6 +45,7 @@ import numpy as np
 from . import ldpc
 from . import primitives as prim
 from .cnav import set_field
+from .ephemeris import BdsEphemeris
 
 PREAMBLE_VALUE = 0xE24DE8
 PREAMBLE_SYMBOLS = 24
@@ -534,3 +536,77 @@ def set_data_field(bits: np.ndarray, start: int, length: int, value: int) -> np.
     The CRC is not updated; rebuild the message with `build_message` for that.
     """
     return set_field(bits, start, length, value)
+
+
+def assemble_ephemeris(
+    result: Bcnav2DecodeResult, sat_id: str | None = None
+) -> BdsEphemeris | None:
+    """
+    The newest complete ephemeris in a decode result, or None.
+
+    Complete means three things, and all must hold:
+
+    * a type 10 frame and a type 11 frame **next to each other** -- 600 symbols
+      apart, in either order (D-055).  A pair that is not adjacent could mix two
+      ephemeris issues across an update, which gives a plausible wrong orbit;
+    * a type 30 frame whose IODC low byte equals the type 10 IODE (ICD 7.4.3);
+    * all three from the same satellite.
+
+    During an update the IODE and IODC differ for a while, and the ICD tells the user
+    to keep the previous matched set.  This function does the same by looking at
+    every pair in the result and taking the newest one that has a matching clock.
+
+    Raises ValueError for a GEO or reserved SatType, which B2a never carries.
+    """
+    by_index = {frame.symbol_index: frame for frame in result.frames}
+    pairs: list[tuple[Bcnav2Frame, Bcnav2Frame]] = []
+    for frame in result.frames:
+        if frame.message_type != 10:
+            continue
+        for neighbour_index in (frame.symbol_index - FRAME_SYMBOLS, frame.symbol_index + FRAME_SYMBOLS):
+            neighbour = by_index.get(neighbour_index)
+            if neighbour is not None and neighbour.message_type == 11 and neighbour.prn == frame.prn:
+                pairs.append((frame, neighbour))
+    # Newest pair first, judged by the later of its two frames.
+    pairs.sort(key=lambda pair: max(pair[0].symbol_index, pair[1].symbol_index), reverse=True)
+
+    for frame_10, frame_11 in pairs:
+        type_10 = parse_type_10(frame_10)
+        for frame_30 in reversed(result.of_type(30)):
+            if frame_30.prn != frame_10.prn:
+                continue
+            type_30 = parse_type_30(frame_30)
+            if not iode_matches_iodc(type_10, type_30):
+                continue
+            type_11 = parse_type_11(frame_11)
+            return BdsEphemeris(
+                sat_id=sat_id or f"C{frame_10.prn:02d}",
+                week=type_10.wn,
+                toe=type_10.toe_s,
+                sat_type=type_10.sat_type,
+                delta_a=type_10.delta_a_m,
+                a_dot=type_10.a_dot_mps,
+                delta_n0=type_10.delta_n0_pi_per_s,
+                delta_n0_dot=type_10.delta_n0_dot_pi_per_s2,
+                M0=type_10.m0_pi,
+                e=type_10.e,
+                omega=type_10.omega_pi,
+                Omega0=type_11.omega0_pi,
+                Omega_dot=type_11.omega_dot_pi_per_s,
+                i0=type_11.i0_pi,
+                i_dot=type_11.i_dot_pi_per_s,
+                Cis=type_11.cis_rad, Cic=type_11.cic_rad,
+                Crs=type_11.crs_m, Crc=type_11.crc_m,
+                Cus=type_11.cus_rad, Cuc=type_11.cuc_rad,
+                toc=type_30.toc_s,
+                a0=type_30.a0_s, a1=type_30.a1_s_per_s, a2=type_30.a2_s_per_s2,
+                tgd_b2ap=type_30.tgd_b2ap_s,
+                isc_b2ad=type_30.isc_b2ad_s,
+                tgd_b1cp=type_30.tgd_b1cp_s,
+                iode=type_10.iode,
+                iodc=type_30.iodc,
+                # Unhealthy if either message says so.
+                health=max(type_11.hs, type_30.hs),
+            )
+    return None
+

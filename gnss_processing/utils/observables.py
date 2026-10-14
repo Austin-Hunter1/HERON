@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .nav.ephemeris import SPEED_OF_LIGHT, CnavEphemeris, Ephemeris, LnavEphemeris
+from .nav.ephemeris import SPEED_OF_LIGHT, BdsEphemeris, CnavEphemeris, Ephemeris, LnavEphemeris
 
 # Nominal carrier frequencies, for scaling a single-frequency ionospheric delay
 # between bands.  The Klobuchar model is defined for L1.
@@ -89,7 +89,9 @@ class TimeAnchor:
         return self.tow_s + (np.asarray(code_phase_ms) - self.code_phase_ms) * 1e-3
 
 
-def anchor_from_cnav(stream, message, sat_id: str | None = None) -> TimeAnchor:
+def anchor_from_cnav(
+    stream, message, sat_id: str | None = None, *, sat_id_prefix: str = "G"
+) -> TimeAnchor:
     """
     Build a `TimeAnchor` from a decoded CNAV message and the stream it came from.
 
@@ -103,7 +105,7 @@ def anchor_from_cnav(stream, message, sat_id: str | None = None) -> TimeAnchor:
             f"{len(stream.code_phase_ms)}-symbol stream"
         )
     return TimeAnchor(
-        sat_id=sat_id or f"G{message.prn:02d}",
+        sat_id=sat_id or f"{sat_id_prefix}{message.prn:02d}",
         tow_s=message.tow_at_message_start_s,
         code_phase_ms=float(stream.code_phase_ms[message.symbol_index]),
         source=f"CNAV type {message.message_type}, TOW count {message.tow_count}",
@@ -345,6 +347,15 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
     gets the T_GD part and no ISC.  That is a real limitation of the legacy message
     rather than a gap here, and it is worth a decimetre or two.
     """
+    if isinstance(ephemeris, BdsEphemeris):
+        # BeiDou states the pilot and data corrections itself (ICD 7-4 and 7-5).  The
+        # pilot's is used: it is the component tracking runs its carrier loop on.
+        if signal_type_id != "BDS_B2A":
+            raise ValueError(
+                f"a BeiDou ephemeris from B-CNAV2 has group delays for B2a only, "
+                f"not {signal_type_id!r}"
+            )
+        return ephemeris.group_delay_s("B2ap")
     tgd = ephemeris.tgd
     isc = 0.0
     if isinstance(ephemeris, CnavEphemeris):
