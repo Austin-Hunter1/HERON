@@ -821,7 +821,7 @@ user before changing any default that already exists for GPS.
 ## 10. Checklist for the new session
 
 - [ ] Read sections 0 to 5 and 11.
-- [ ] Phase 0 done; baseline saved; OQ-2, 3, 5, 12 asked and recorded.
+- [x] Phase 0 done; baseline saved; OQ-2, 3, 5, 12 asked and recorded.
 - [ ] Phase 1: B2a codes, `BdsB2a`, tests green.
 - [ ] Phase 2: B2a policies, synthetic tests green.
 - [ ] Phase 3: notebook 01 on real L5-band data.
