@@ -239,7 +239,7 @@ def _offset_survey_hovers(
     from shapely.geometry import Point
 
     climb = max(20.0, h_agl / 2.5)
-    min_leg = 3.0
+    min_leg = 0.8
     t = climb
     cur_lat, cur_lon = pad["lat"], pad["lon"]
     first = hovers[0]
@@ -260,7 +260,7 @@ def _offset_survey_hovers(
         dlat, dlon = slat, slon
         sat_row = None
         az = el = None
-        for _ in range(2):
+        for _ in range(12):
             fly = max(min_leg, haversine_m(cur_lat, cur_lon, dlat, dlon) / max(speed, 1.0))
             dt = start + timedelta(seconds=t + fly)
             vis = _visible(sats, dt, slat, slon, WATER_H + h_agl, mask)
@@ -271,9 +271,12 @@ def _offset_survey_hovers(
                 break
             sat_row = chosen
             _sat, xyz, az_sat, el_sat = chosen
+            old_lat, old_lon = dlat, dlon
             dlat, dlon, az, el = drone_to_hit_splash(xyz, slat, slon, WATER_H, h_agl)
             if el is None:
                 az, el = az_sat, el_sat
+            if haversine_m(old_lat, old_lon, dlat, dlon) < 0.01:
+                break
         if sat_row is None or az is None:
             hov["prn"] = None
             hov["el"] = None
@@ -300,6 +303,7 @@ def _offset_survey_hovers(
             dwell = loiter_s
         fly = max(min_leg, haversine_m(cur_lat, cur_lon, hov["lat"], hov["lon"]) / max(speed, 1.0))
         hov["t_in_window"] = 0
+        hov["geometry_s"] = t + fly
         t += fly + dwell
         cur_lat, cur_lon = hov["lat"], hov["lon"]
     return sids
@@ -324,6 +328,36 @@ def _attach_survey_aim(info: dict, hovers: list[dict], name: str) -> dict:
     info["last_el"] = None if last.get("el") is None else round(float(last["el"]), 1)
     info["last_az"] = None if last.get("az") is None else round(float(last["az"]), 1)
     return info
+
+
+def _sweep_tracking_check(sats, hovers, start, h_agl, mask):
+    """Sample reflection error between navigation checkpoints, excluding turns.
+
+    This is a geometric preview of straight flight, not a flight-dynamics test.
+    """
+    errors = []
+    unchecked = 0
+    for a, b in zip(hovers, hovers[1:]):
+        if a.get("pass_id") is None or a.get("pass_id") != b.get("pass_id"):
+            continue
+        if not a.get("prn") or a.get("prn") != b.get("prn"):
+            unchecked += 1
+            continue
+        for f in (0.25, 0.5, 0.75):
+            t = a["arrive_s"] + f * (b["arrive_s"] - a["arrive_s"])
+            lat = a["lat"] + f * (b["lat"] - a["lat"])
+            lon = a["lon"] + f * (b["lon"] - a["lon"])
+            visible = _visible(sats, start + timedelta(seconds=t), lat, lon, WATER_H + h_agl, mask)
+            chosen = next((v for v in visible if v[0].sid == a["prn"]), None)
+            if chosen is None:
+                unchecked += 1
+                continue
+            slat, slon, _, _ = specular_point(chosen[1], lat, lon, WATER_H, h_agl)
+            goal_lat = a["splash_lat"] + f * (b["splash_lat"] - a["splash_lat"])
+            goal_lon = a["splash_lon"] + f * (b["splash_lon"] - a["splash_lon"])
+            errors.append(haversine_m(slat, slon, goal_lat, goal_lon))
+    return {"sampled_tracking_error_m": round(max(errors), 2) if errors else None,
+            "tracking_samples": len(errors), "unchecked_tracking_segments": unchecked}
 
 
 def _peek_sat(sats, dt, lat, lon, h_agl, mask, target_el=None):
@@ -534,7 +568,25 @@ def plan(
     max_wp: int = 200,
     waypoints=None,
     target_el: float | None = None,
+    sweep_bearing: float | None = None,
+    survey_style: str = "hover",
+    max_leg_m: float = 500.0,
+    roi_mode: str = "per_point",
+    antenna_offset_deg: float = 0.0,
+    coverage_pct: float = 100.0,
 ) -> dict:
+    if survey_style not in ("continuous", "hover") or roi_mode not in ("none", "per_point", "body_yaw"):
+        raise ValueError("Invalid survey or pointing mode.")
+    if not math.isfinite(coverage_pct) or not 5 <= coverage_pct <= 200:
+        raise ValueError("Coverage must be between 5% and 200%.")
+    if not math.isfinite(antenna_offset_deg) or not -180 <= antenna_offset_deg <= 180:
+        raise ValueError("Antenna offset must be between -180 and 180 degrees.")
+    if not math.isfinite(max_leg_m) or not 20 <= max_leg_m <= 500:
+        raise ValueError("Checkpoint distance must be between 20 and 500 m.")
+    if sweep_bearing is not None and (not math.isfinite(sweep_bearing) or not 0 <= sweep_bearing < 180):
+        raise ValueError("Sweep bearing must be between 0 (inclusive) and 180 (exclusive).")
+    if tile_m is not None and (not math.isfinite(tile_m) or not 1 <= tile_m <= 400):
+        raise ValueError("Lane spacing must be between 1 and 400 m.")
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
     if constellations is None:
@@ -575,7 +627,7 @@ def plan(
         poly, orig, feat = waterbody_at(lake, click_lon, click_lat)
         if poly is None:
             raise ValueError("Click a lake, pond, or river.")
-        survey_loiter = loiter_s
+        survey_loiter = 0.0 if survey_style == "continuous" else loiter_s
         line = orig if orig is not None and orig.geom_type in ("LineString", "MultiLineString") else None
         if line is not None:
             if click_lat2 is None or click_lon2 is None:
@@ -595,6 +647,8 @@ def plan(
             spacing_m=tile_m,
             max_wp=max(20, min(int(max_wp), 400)),
             centerline=line,
+            sweep_bearing=sweep_bearing, survey_style=survey_style, max_leg_m=max_leg_m,
+            coverage_pct=coverage_pct,
         )
         if not hovers:
             raise ValueError("No water cells on that feature at this spacing.")
@@ -641,12 +695,12 @@ def plan(
         from shapely.ops import unary_union
 
         target_list = _normalize_targets(targets)
-        survey_loiter = loiter_s
+        survey_loiter = 0.0 if survey_style == "continuous" else loiter_s
         cap = max(20, min(int(max_wp), 400))
         all_hovers = []
         polys = []
         infos = []
-        for tgt in target_list:
+        for area_index, tgt in enumerate(target_list):
             poly = poly_from_ring(tgt["coordinates"])
             clon, clat = ring_centroid(tgt["coordinates"])
             az0, el0, _sid = _peek_sat(sats, start, clat, clon, h_agl, elev_mask, target_el)
@@ -659,14 +713,20 @@ def plan(
                 loiter_s=survey_loiter,
                 spacing_m=tile_m,
                 max_wp=cap,
+                sweep_bearing=sweep_bearing, survey_style=survey_style, max_leg_m=max_leg_m,
+                coverage_pct=coverage_pct,
             )
             if not part:
                 raise ValueError(f"No tiles fit in {tgt['name']}. Draw a larger box.")
             for hov in part:
                 hov["name"] = f"{tgt['name']} {hov['name']}"
+                if hov.get("pass_id") is not None:
+                    hov["pass_id"] = f"{area_index}:{hov['pass_id']}"
             all_hovers.extend(part)
             polys.append(poly)
             infos.append(info)
+        if len(all_hovers) > cap:
+            raise ValueError(f"Combined areas need {len(all_hovers)} waypoints; mission limit is {cap}.")
         hovers = all_hovers
         use = unary_union(polys) if len(polys) > 1 else polys[0]
         sids = _offset_survey_hovers(
@@ -686,11 +746,29 @@ def plan(
         if len(infos) > 1:
             survey_info["n_cells"] = sum(i.get("n_cells") or 0 for i in infos)
             survey_info["area_m2"] = sum(i.get("area_m2") or 0 for i in infos)
+            survey_info["n_passes"] = sum(i.get("n_passes", 0) for i in infos)
             survey_info["coarsened"] = any(i.get("coarsened") for i in infos)
         name = target_list[0]["name"] if len(target_list) == 1 else f"{len(target_list)} areas"
         _attach_survey_aim(survey_info, hovers, name)
         segs, total_s = _timeline(pad, hovers, h_agl, speed_mps, survey_loiter, min_leg_s=0.8)
         loiter_s = survey_loiter
+
+    if survey_info and survey_style == "continuous":
+        survey_info.update(_sweep_tracking_check(sats, hovers, start, h_agl, elev_mask))
+
+    for i, hov in enumerate(hovers):
+        if roi_mode == "body_yaw":
+            if hov.get("az") is None:
+                raise ValueError("Cannot command antenna heading: a survey waypoint has no visible tracking satellite.")
+            # Aim at the satellite/reflection azimuth near the middle of the inbound leg.
+            previous = pad if i == 0 else hovers[i-1]
+            departure = max(20.0, h_agl / 2.5) if i == 0 else previous["arrive_s"] + previous["loiter_s"]
+            mid_t = (departure + hov["arrive_s"]) / 2
+            lat = (previous["lat"] + hov["lat"]) / 2
+            lon = (previous["lon"] + hov["lon"]) / 2
+            visible = _visible(sats, start + timedelta(seconds=mid_t), lat, lon, WATER_H+h_agl, elev_mask)
+            chosen = next((s for s in visible if s[0].sid == hov["prn"]), None)
+            hov["yaw_deg"] = ((chosen[2] if chosen else hov["az"]) - antenna_offset_deg) % 360
 
     transit_m = 0.0
     prev = pad
@@ -723,6 +801,8 @@ def plan(
                         chosen[1], pin_lat, pin_lon, WATER_H, alt
                     )
         hdg = _heading_to_aim(dlat, dlon, phase, pad, hovers, last_hdg)
+        if roi_mode == "body_yaw" and (phase.startswith("to_") or phase.startswith("hover_")):
+            hdg = hovers[int(phase.split("_")[1])-1]["yaw_deg"]
         last_hdg = hdg
         vis = _visible(sats, dt, dlat, dlon, WATER_H + alt, elev_mask)
         specs = []
@@ -736,6 +816,11 @@ def plan(
                     aim_sid = hovers[idx].get("prn")
             except ValueError:
                 pass
+        measuring = phase.startswith("hover")
+        if survey_style == "continuous" and phase.startswith("to_"):
+            idx = int(phase.split("_")[1]) - 1
+            measuring = idx > 0 and (survey_line is not None or (
+                hovers[idx].get("pass_id") is not None and hovers[idx].get("pass_id") == hovers[idx-1].get("pass_id")))
         if alt >= 5.0:
             for sat, xyz, az, el in vis:
                 slat, slon, extra, samples = specular_point(xyz, dlat, dlon, WATER_H, alt)
@@ -745,9 +830,9 @@ def plan(
                 for tgt in target_list:
                     if point_in_ring(slon, slat, tgt["coordinates"]):
                         in_targets.append(tgt["name"])
-                        if phase.startswith("hover"):
+                        if measuring:
                             target_hits[tgt["name"]] += 1
-                if on_water and phase.startswith("hover"):
+                if on_water and measuring:
                     best_prns[sat.sid] = max(best_prns.get(sat.sid, 0), el)
                 aimed = bool(aim_sid) and sat.sid == aim_sid
                 specs.append(
@@ -774,6 +859,7 @@ def plan(
                 "t": t,
                 "iso": dt.isoformat(),
                 "phase": phase,
+                "measuring": measuring,
                 "drone": {
                     "lat": round(dlat, 6),
                     "lon": round(dlon, 6),
@@ -790,6 +876,11 @@ def plan(
             }
         )
 
+    if survey_info and roi_mode == "body_yaw":
+        pointing_errors = [abs((s["az"] - antenna_offset_deg - fr["drone"]["hdg"] + 180) % 360 - 180)
+                           for fr in frames if fr.get("measuring")
+                           for s in fr["speculars"] if s.get("aimed")]
+        survey_info["sampled_yaw_error_deg"] = round(max(pointing_errors), 2) if pointing_errors else None
     used_sids |= set(best_prns)
     for fr in frames:
         for row in fr.get("sats") or []:
@@ -840,6 +931,9 @@ def plan(
             "fallback_hovers": [h["name"] for h in hovers if h.get("fallback")],
             "hold_s": next((t1 - t0 for t0, t1, ph, *_ in segs if ph == "hold"), 0),
             "mode": mode,
+            "roi_mode": roi_mode,
+            "antenna_offset_deg": antenna_offset_deg,
+            "survey_style": survey_style,
             "survey": survey_info,
         },
         "pad": pad,
@@ -848,7 +942,7 @@ def plan(
         "targets": target_list,
         "path": path,
         "frames": frames,
-        "coverage": swept_coverage(frames),
+        "coverage": swept_coverage(frames, target_list, water=lake),
     }
 
 

@@ -119,7 +119,6 @@ const surveyPickLayer = L.layerGroup().addTo(map);
 const draftLayer = L.layerGroup().addTo(map);
 const clickWpLayer = L.layerGroup().addTo(map);
 const satLayer = L.layerGroup().addTo(map);
-
 map.createPane("archive");
 map.getPane("archive").style.zIndex = 350;
 map.getPane("archive").style.pointerEvents = "none";
@@ -241,16 +240,29 @@ function wrapOffsets() {
   return [0];
 }
 
-function lngVisible(lng) {
+function lonInView(lon) {
+  const center = map.getCenter().lng;
+  let x = lon;
+  while (x - center > 180) x -= 360;
+  while (center - x > 180) x += 360;
+  return x;
+}
+
+function lonsOnMap(lon) {
+  let west = -180;
+  let east = 180;
   try {
-    if (map.getZoom() <= 5) return true;
     const b = map.getBounds();
-    const span = Math.max(1, b.getEast() - b.getWest());
-    const pad = Math.max(12, span * 0.4);
-    return lng >= b.getWest() - pad && lng <= b.getEast() + pad;
-  } catch (_) {
-    return true;
-  }
+    west = b.getWest();
+    east = b.getEast();
+  } catch (_) {}
+  const span = Math.max(1, east - west);
+  const pad = Math.min(30, Math.max(2, span * 0.08));
+  const base = lonInView(lon);
+  const copies = [base];
+  if (span > 320) copies.push(base - 360, base + 360);
+  const visible = copies.filter((x) => x >= west - pad && x <= east + pad);
+  return visible.length ? visible : [base];
 }
 
 function addWrappedCopies(layer, points, style) {
@@ -300,8 +312,7 @@ function paintSats(rows, liveSet) {
     }
     seen.add(row.sid);
     const isLive = live.has(row.sid);
-    const lons = offs.map((off) => row.lon + off).filter((lon) => lngVisible(lon));
-    const useLons = lons.length ? lons : [row.lon];
+    const useLons = lonsOnMap(row.lon);
     const iconKey = `${isLive ? 1 : 0}|${row.used ? 1 : 0}|${satBand(row)}`;
     const zOff = isLive ? 900 : row.used ? 700 : row.above_mask ? 400 : 150;
     let rec = satMarks.get(row.sid);
@@ -340,7 +351,7 @@ function paintSats(rows, liveSet) {
     if (wantRays && padLL && (isLive || row.used) && row.el > 5) {
       const pts = shortPts([
         [padLL.lat, padLL.lng],
-        [row.lat, row.lon],
+        [row.lat, lonInView(row.lon)],
       ]);
       const style = {
         color: isLive ? "#ffe66a" : "#7ee0ff",
@@ -524,9 +535,10 @@ function paintSurveyLock(plan) {
   lock.classList.remove("hidden");
   lock.innerHTML = aimLockHtml(s);
   const hovers = plan.hovers || [];
+  // Moving sweeps are already drawn by their coverage strips; only mark hover stops.
   const step = hovers.length > 80 ? Math.ceil(hovers.length / 80) : 1;
   hovers.forEach((h, i) => {
-    if (h.splash_lat == null || h.splash_lon == null) return;
+    if (h.splash_lat == null || h.splash_lon == null || h.pass_id != null) return;
     if (i % step !== 0 && i !== 0 && i !== hovers.length - 1) return;
     L.circleMarker([h.splash_lat, h.splash_lon], {
       radius: 3,
@@ -710,12 +722,13 @@ function headingToWp(plan, lat, lon, phase, fallback) {
   const m = /^(to|hover)_(\d+)$/.exec(String(phase || ""));
   if (m) {
     const hov = hovers[Number(m[2]) - 1];
-    if (hov && hov.splash_lat != null && hov.splash_lon != null) {
+    if (hov && plan.meta.roi_mode === "body_yaw" && hov.yaw_deg != null) return hov.yaw_deg;
+    if (plan.meta.roi_mode === "per_point" && hov && hov.splash_lat != null && hov.splash_lon != null) {
       const lookSplash = courseHdg(lat, lon, hov.splash_lat, hov.splash_lon);
       if (lookSplash != null) return lookSplash;
     }
   }
-  if ((phase === "climb" || phase === "hold") && hovers[0] && hovers[0].splash_lat != null) {
+  if (plan.meta.roi_mode === "per_point" && (phase === "climb" || phase === "hold") && hovers[0] && hovers[0].splash_lat != null) {
     const look = courseHdg(lat, lon, hovers[0].splash_lat, hovers[0].splash_lon);
     if (look != null) return look;
   }
@@ -824,11 +837,68 @@ function paintTargets() {
       color: "#ffe66a",
       weight: 2,
       fillColor: "#ffe66a",
-      fillOpacity: 0.18,
+      fillOpacity: lastPlan ? 0 : 0.18,
     })
       .bindTooltip(t.name || `area ${i + 1}`, { sticky: true })
       .addTo(targetLayer);
   });
+  updateSweepHint();
+}
+
+function ringAreaM2(ring) {
+  const lat0 = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+  const mx = 111132.92 * Math.cos((lat0 * Math.PI) / 180);
+  const my = 111132.92;
+  let a = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    a += ring[i][0] * mx * ring[i + 1][1] * my - ring[i + 1][0] * mx * ring[i][1] * my;
+  }
+  return Math.abs(a) / 2;
+}
+
+function durationTxt(s) {
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function sweepLaneM() {
+  const h = Number(document.getElementById("h_agl").value) || 60;
+  const el = Math.min(90, Math.max(8, Number(document.getElementById("target_el").value) || 45));
+  const lambda = 299792458 / 1176.45e6;
+  const strip = 2 * Math.sqrt((lambda * h) / Math.sin((el * Math.PI) / 180));
+  const cov = document.getElementById("coverage").value;
+  const hover = document.getElementById("survey_style").value === "hover";
+  const custom = Number(document.getElementById("tile_m").value);
+  let lane = cov === "custom" ? custom : (strip * 100) / Number(cov);
+  if (cov !== "custom" && hover) lane /= Math.SQRT2;
+  return { h, el, strip, lane, hover, custom: cov === "custom" };
+}
+
+function updateSweepHint() {
+  const hint = document.getElementById("sweepHint");
+  if (!hint) return;
+  const { h, el, strip, lane, hover, custom } = sweepLaneM();
+  document.getElementById("tileField").classList.toggle("hidden", !custom);
+  if (!(lane > 0)) {
+    hint.textContent = "Enter a lane spacing.";
+    return;
+  }
+  const what = hover ? "Points every" : "Lanes every";
+  const share = custom ? ` · covers about ${Math.min(100, Math.round((100 * strip) / lane))}% of the area` : "";
+  let txt = `Reflection strip ≈ ${strip.toFixed(0)} m wide at ${h} m and ${el}°. ${what} ${lane.toFixed(0)} m${share}.`;
+  if (missionMode === "areas" && targets.length) {
+    const area = targets.reduce((a, t) => a + ringAreaM2(t.coordinates), 0);
+    const speed = Number(document.getElementById("speed").value) || 8;
+    if (hover) {
+      const n = Math.ceil(area / (lane * lane));
+      const dwell = Number(document.getElementById("loiter").value) || 0;
+      txt += ` About ${n} stops, ${durationTxt(n * dwell + (n * lane) / speed)} on the area.`;
+    } else {
+      const km = area / lane / 1000;
+      txt += ` About ${km < 10 ? km.toFixed(1) : km.toFixed(0)} km of passes, ${durationTxt((km * 1000) / speed)} at ${speed} m/s.`;
+    }
+  }
+  hint.textContent = txt;
 }
 
 function setDrawUi() {
@@ -913,6 +983,12 @@ document.getElementById("btnClear").onclick = () => {
 };
 
 map.on("click", (e) => {
+  if (document.body.dataset.view !== "plan") return;
+  if (missionMode === "ground") {
+    L.DomEvent.stop(e);
+    groundClick(e.latlng);
+    return;
+  }
   if (missionMode === "survey") {
     pickWater(e.latlng);
     return;
@@ -933,7 +1009,7 @@ map.on("click", (e) => {
   }
 });
 map.on("dblclick", (e) => {
-  if (missionMode !== "areas" || !drawing) return;
+  if (document.body.dataset.view !== "plan" || missionMode !== "areas" || !drawing) return;
   L.DomEvent.stop(e);
   if (draft.length >= 3) draft.pop();
   finishDraft();
@@ -1031,7 +1107,8 @@ function paintClickWps() {
   });
 }
 
-function resetMission() {
+function resetMission({ keepSelection = false } = {}) {
+  window.dispatchEvent(new Event("heron:plan-invalid"));
   planGen += 1;
   stopPlay();
   lastPlan = null;
@@ -1056,17 +1133,19 @@ function resetMission() {
     bouncePrn[prn].land.clearLayers();
     delete bouncePrn[prn];
   }
-  clickWps = [];
-  targets = [];
-  surveyStart = null;
-  surveyEnd = null;
-  surveySelLayer.clearLayers();
-  surveyPickLayer.clearLayers();
-  clickWpLayer.clearLayers();
+  if (!keepSelection) {
+    clickWps = [];
+    targets = [];
+    surveyStart = null;
+    surveyEnd = null;
+    surveySelLayer.clearLayers();
+    surveyPickLayer.clearLayers();
+    clickWpLayer.clearLayers();
+    stopAreaDraw();
+    paintClickWps();
+    paintSurveyPicks();
+  }
   targetLayer.clearLayers();
-  stopAreaDraw();
-  paintClickWps();
-  paintSurveyPicks();
   paintTargets();
   document.getElementById("layers").classList.add("hidden");
   document.getElementById("prnToggles").innerHTML = "";
@@ -1107,6 +1186,7 @@ function setMode(m) {
     ["modeClick", m === "click"],
     ["modeAreas", m === "areas"],
     ["modeSurvey", m === "survey"],
+    ["modeGround", m === "ground"],
   ];
   modeStates.forEach(([id, active]) => {
     const button = document.getElementById(id);
@@ -1120,6 +1200,11 @@ function setMode(m) {
   document.getElementById("tileTools").classList.toggle("hidden", m !== "survey" && m !== "areas");
   document.body.classList.toggle("survey", m === "survey");
   document.body.classList.toggle("click-wps", m === "click");
+  document.getElementById("groundTools").classList.toggle("hidden", m !== "ground");
+  document.body.classList.toggle("ground", m === "ground");
+  document.querySelector("#go span").textContent = m === "ground" ? "Show reflections" : "Build mission";
+  if (m === "ground") groundEnter();
+  else groundLayer.clearLayers();
   if (m !== "survey") {
     surveyStart = null;
     surveyEnd = null;
@@ -1134,6 +1219,7 @@ function setMode(m) {
   } else if (m === "areas") {
     startAreaDraw();
   }
+  updateSweepHint();
   setStatus("");
 }
 
@@ -1206,6 +1292,7 @@ function pickWater(latlng) {
 }
 
 async function computePlan() {
+  window.dispatchEvent(new Event("heron:plan-invalid"));
   const gen = ++planGen;
   if (missionMode === "survey" && !surveyStart) {
     setStatus("Select a waterbody first.", true);
@@ -1268,7 +1355,19 @@ async function computePlan() {
         }
       }
       body.max_wp = Number(document.getElementById("max_wp").value);
-      if (tileVal) body.tile_m = Number(tileVal);
+      body.survey_style = document.getElementById("survey_style").value;
+      body.roi_mode = document.getElementById("roi_mode").value;
+      body.antenna_offset_deg = Number(document.getElementById("antenna_offset_deg").value);
+      body.max_leg_m = Number(document.getElementById("max_leg_m").value);
+      const bearing = document.getElementById("sweep_bearing").value;
+      if (bearing !== "") body.sweep_bearing = Number(bearing);
+      const coverage = document.getElementById("coverage").value;
+      if (coverage === "custom") {
+        if (!(Number(tileVal) > 0)) throw new Error("Enter a lane spacing, or pick a Coverage preset.");
+        body.tile_m = Number(tileVal);
+      } else {
+        body.coverage_pct = Number(coverage);
+      }
     }
     if (missionMode === "click") body.waypoints = clickWps;
     const r = await fetch("/api/plan", {
@@ -1342,14 +1441,14 @@ function mixedAt(plan, tSec) {
     });
   }
   speculars.sort((x, y) => y.el - x.el);
-  const phase = u < 0.5 ? a.phase : b.phase;
+  const phase = u < 1 ? a.phase : b.phase;
   const lat = lerp(a.drone.lat, b.drone.lat, u);
   const lon = lerpLon(a.drone.lon, b.drone.lon, u);
   const spd = lerp(a.drone.speed_mps || 0, b.drone.speed_mps || 0, u);
   const satRows = lerpSats(satsWithData(frames, i, -1), satsWithData(frames, i + 1, 1), u);
   return {
     t: tSec,
-    iso: a.iso,
+    iso: new Date(Date.parse(plan.meta.start) + tSec * 1000).toISOString(),
     phase,
     drone: {
       lat,
@@ -1367,23 +1466,25 @@ function mixedAt(plan, tSec) {
   };
 }
 
-function pushTrail(prn, lat, lon) {
-  if (!trails[prn]) trails[prn] = [];
-  const arr = trails[prn];
-  const last = arr[arr.length - 1];
-  if (last && Math.abs(last[0] - lat) < 1e-6 && Math.abs(last[1] - lon) < 1e-6) return;
-  arr.push([lat, lon]);
-  if (arr.length > 18) arr.shift();
-}
-
-function drawTrails() {
+function drawTrails(plan, tSec, current) {
   trailLayer.clearLayers();
-  for (const prn of Object.keys(trails)) {
-    if (!prnEnabled(prn)) continue;
-    const pts = trails[prn];
-    if (pts.length < 2) continue;
-    addShortPolyline(trailLayer, pts, { color: "#7ee0ff", weight: 2, opacity: 0.45, interactive: false });
+  const runs = new Map();
+  function flush(prn) {
+    const pts = runs.get(prn) || [];
+    if (pts.length > 1 && prnEnabled(prn)) addShortPolyline(trailLayer, pts, { color: "#7ee0ff", weight: 2, opacity: 0.45, interactive: false });
+    runs.delete(prn);
   }
+  const frames = plan.frames.filter(f => f.t >= tSec - 60 && f.t <= tSec);
+  if (!frames.length || frames[frames.length-1].t < tSec) frames.push(current);
+  for (const frame of frames) {
+    const present = new Set(frame.speculars.map(s => s.prn));
+    for (const prn of runs.keys()) if (!present.has(prn)) flush(prn);
+    for (const s of frame.speculars) {
+      if (!runs.has(s.prn)) runs.set(s.prn, []);
+      runs.get(s.prn).push([s.lat, s.lon]);
+    }
+  }
+  for (const prn of [...runs.keys()]) flush(prn);
 }
 
 function prnLabIcon(prn, hit) {
@@ -1519,7 +1620,7 @@ function renderMixed(plan, tSec) {
     : "<em>—</em>";
 
   const want = headingToWp(plan, f.drone.lat, f.drone.lon, f.phase, f.drone.hdg);
-  const hdg = smoothHdg(want);
+  const hdg = playing ? smoothHdg(want) : want;
   f.drone.hdg = hdg;
   setDrone(f.drone.lat, f.drone.lon, hdg);
   const tb = document.getElementById("tbody");
@@ -1539,7 +1640,7 @@ function renderMixed(plan, tSec) {
     const hit = picked || wet;
     const col = hit ? "#ffe66a" : "#6b7584";
     upsertSpec(s, f.drone, hit, col);
-    pushTrail(s.prn, s.lat, s.lon);
+    // Trails are reconstructed from mission time, never from display refreshes.
     if (hit) live.add(s.prn);
     if (picked) hits.push(`${s.prn} ${s.el.toFixed(0)}°`);
 
@@ -1561,7 +1662,7 @@ function renderMixed(plan, tSec) {
   sweepSpecParts();
   if (!playing || now - lastTrailAt > 80) {
     lastTrailAt = now;
-    drawTrails();
+    drawTrails(plan, tSec, f);
   }
   if (paintTable && !f.speculars.length) {
     tb.innerHTML = '<tr><td colspan="7" class="no">no sats above mask</td></tr>';
@@ -1706,12 +1807,19 @@ function paintSummary(plan) {
     </div>
     <div class="stat-grid">
       ${statCell("Waypoints", m.n_hovers ?? "—")}
+      ${statCell("Mission items", plan.exports?.mission?.n ?? "—")}
       ${statCell("Duration", mins, "min")}
       ${statCell("Distance", distTxt, distUnit)}
       ${statCell("Speed", m.speed_mps ?? "—", "m/s")}
       ${statCell("Hover", Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
       ${statCell("L5 on water", prns.length)}
     </div>
+    ${m.survey?.sweep_bearing_deg != null ? `<p>${escHtml(String(m.survey.sweep_bearing_deg))}° sweep · ${m.survey.n_passes} passes · lanes every ${m.survey.lane_spacing_m} m · strip ≈ ${m.survey.footprint_m} m wide</p>` : ""}
+    ${m.survey?.sampled_yaw_error_deg != null ? `<p>Sampled heading-setpoint error: ${m.survey.sampled_yaw_error_deg}°. This excludes aircraft yaw lag and fixed mounting tilt.</p>` : ""}
+    ${m.survey?.sampled_tracking_error_m != null ? `<p>Sampled reflection error: ${m.survey.sampled_tracking_error_m} m between checkpoints. Geometry only; turns and aircraft response are not modeled.</p>` : ""}
+    ${plan.coverage?.target ? `<p><b>${plan.coverage.target.percent}% geometric target coverage</b> · pink shows missed area. Selected satellite, survey passes only; not a received-signal guarantee.</p>` : ""}
+    ${m.survey?.unchecked_tracking_segments ? `<p>Some legs could not be checked for reflection tracking because satellite visibility changed.</p>` : ""}
+    ${m.survey ? `<p>${m.roi_mode === "body_yaw" ? "Body yaw follows predicted reflection azimuth; antenna tilt is fixed." : m.roi_mode === "none" ? "No pointing commands; antenna heading is uncontrolled." : "Fixed-ground ROI; not continuous reflection tracking."} Verify the simulated reflection coverage before flight.</p>` : ""}
     <div class="sum-sats">
       <div class="sum-sats-label">L5 on water</div>
       <div class="sum-chips">${satChips(prns)}</div>
@@ -1721,6 +1829,7 @@ function paintSummary(plan) {
 
 function showPlan(plan) {
   lastPlan = plan;
+  window.dispatchEvent(new CustomEvent("heron:plan-ready", { detail: plan }));
   stopPlay();
   playT = 0;
   dispHdg = null;
@@ -1730,6 +1839,10 @@ function showPlan(plan) {
   clearSpecParts();
 
   const m = plan.meta;
+  paintTargets();
+  if (plan.coverage?.target?.uncovered) {
+    L.geoJSON(plan.coverage.target.uncovered, {style:{color:"#d83b65",weight:1,fillColor:"#d83b65",fillOpacity:0.3},interactive:false}).addTo(targetLayer);
+  }
   const hovers = plan.hovers || [];
   const pts = [[plan.pad.lat, plan.pad.lon], ...hovers.map((h) => [h.lat, h.lon]), [plan.pad.lat, plan.pad.lon]];
   setMissionPath(pts);
@@ -1758,7 +1871,7 @@ function showPlan(plan) {
         .bindTooltip(
           `${h.name}` +
             (h.prn ? `  ${h.prn} @ ${Math.round(h.el)}°` : "  centroid (no sat lined up)") +
-            (h.t_in_window != null ? `  geometry +${h.t_in_window}s` : ""),
+            ((h.geometry_s ?? h.t_in_window) != null ? `  geometry +${Math.round(h.geometry_s ?? h.t_in_window)}s` : ""),
           { direction: "top" }
         )
         .addTo(wpLayer);
@@ -1795,12 +1908,290 @@ function showPlan(plan) {
   setStatus("");
 }
 
+const GROUND_TZ = "America/Denver";
+const groundLayer = L.layerGroup().addTo(map);
+const groundNowLayer = L.layerGroup();
+const ground = { rx: null, water: null, geoid: null, result: null, times: [], byTime: new Map(), idx: 0, gen: 0, sky: [] };
+
+function groundClock(iso, opts) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: GROUND_TZ, hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(new Date(iso));
+}
+
+function groundZone(dateStr) {
+  const day = String(dateStr || "").slice(0, 10) || "2026-10-12";
+  const probe = new Date(`${day}T18:00:00Z`);
+  const part = (style) => new Intl.DateTimeFormat("en-US", { timeZone: GROUND_TZ, timeZoneName: style })
+    .formatToParts(probe).find((p) => p.type === "timeZoneName").value;
+  return { abbr: part("short"), long: part("long") };
+}
+
+function paintGroundZone() {
+  const z = groundZone(document.getElementById("g_from").value);
+  document.getElementById("g_tz").textContent = `Times are ${z.long} (${z.abbr}).`;
+  return z;
+}
+
+function nextMondayLocal() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: GROUND_TZ, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value])
+  );
+  const d = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (dow === 1 ? 0 : (8 - dow) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+function groundNum(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function paintGroundPlace() {
+  groundLayer.clearLayers();
+  if (ground.result) {
+    L.geoJSON(ground.result.water.geojson, { style: { color: "#ffe66a", weight: 2, fill: false }, interactive: false }).addTo(groundLayer);
+  }
+  if (ground.rx) {
+    L.marker([ground.rx.lat, ground.rx.lon], {
+      icon: L.divIcon({ className: "", html: '<div class="ground-rx"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+      title: "Receiver",
+    }).addTo(groundLayer);
+  }
+  if (ground.water && !ground.result) {
+    L.circleMarker([ground.water.lat, ground.water.lon], { radius: 6, color: "#14110b", weight: 2, fillColor: "#ffe66a", fillOpacity: 1 }).addTo(groundLayer);
+  }
+  groundNowLayer.addTo(groundLayer);
+}
+
+async function groundLookup(lat, lon) {
+  const r = await fetch(`/api/elevation?lat=${lat}&lon=${lon}`);
+  const d = await r.json();
+  if (!r.ok || d.ground_m == null) throw new Error(d.error || "No elevation at that point.");
+  return d;
+}
+
+let groundDefaults = null;
+async function groundEnter(reset) {
+  if (!groundDefaults) groundDefaults = await (await fetch("/api/ground/defaults")).json();
+  const d = groundDefaults;
+  if (reset || !ground.rx) {
+    ground.rx = { lat: d.lat, lon: d.lon, name: d.name };
+    ground.water = null;
+    ground.geoid = d.geoid_m;
+    ground.result = null;
+    document.getElementById("g_ground").value = d.ground_m;
+    document.getElementById("g_ant").value = d.antenna_m;
+    document.getElementById("g_water").value = d.water_m;
+    document.getElementById("g_mask").value = 2;
+    const day = nextMondayLocal();
+    document.getElementById("g_from").value = `${day}T08:00`;
+    document.getElementById("g_to").value = `${day}T12:00`;
+  }
+  paintGroundZone();
+  paintGroundPlace();
+  map.setView([ground.rx.lat + 0.003, ground.rx.lon - 0.002], 16);
+}
+
+async function groundClick(latlng) {
+  let onLake = false;
+  lakeLayer.eachLayer((layer) => {
+    if (!onLake && layer instanceof L.Polygon && clickOnLayer(layer, latlng)) onLake = true;
+  });
+  if (onLake) {
+    ground.water = { lat: latlng.lat, lon: latlng.lng };
+  } else {
+    ground.rx = { lat: latlng.lat, lon: latlng.lng, name: "Receiver" };
+  }
+  ground.result = null;
+  paintGroundPlace();
+  setStatus(onLake ? "Looking up the water surface height…" : "Looking up the ground height…");
+  try {
+    const d = await groundLookup(latlng.lat, latlng.lng);
+    document.getElementById(onLake ? "g_water" : "g_ground").value = d.ground_m.toFixed(1);
+    if (!onLake && d.geoid_m != null) ground.geoid = d.geoid_m;
+    setStatus(onLake ? `Water surface ${d.ground_m.toFixed(1)} m from USGS lidar.` : `Ground ${d.ground_m.toFixed(1)} m from USGS lidar.`);
+  } catch (e) {
+    setStatus(`${e.message} Type the height in by hand.`, true);
+  }
+  computeGround();
+}
+
+async function computeGround() {
+  if (!ground.rx) return;
+  const gen = ++ground.gen;
+  stopPlay();
+  const btn = document.getElementById("go");
+  btn.disabled = true;
+  setStatus("Finding reflections on the lake…");
+  try {
+    const body = {
+      lat: ground.rx.lat,
+      lon: ground.rx.lon,
+      ground_m: groundNum("g_ground"),
+      antenna_m: groundNum("g_ant"),
+      water_m: groundNum("g_water"),
+      geoid_m: ground.geoid,
+      mask: groundNum("g_mask"),
+      start_local: document.getElementById("g_from").value,
+      end_local: document.getElementById("g_to").value,
+      tz: GROUND_TZ,
+      step_s: 30,
+      constellations: selectedConsts(),
+    };
+    const r = await fetch("/api/ground", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Ground test failed.");
+    if (gen !== ground.gen) return;
+    showGround(data);
+    setStatus("");
+  } catch (e) {
+    if (gen === ground.gen) setStatus(String(e.message || e), true);
+  } finally {
+    if (gen === ground.gen) btn.disabled = false;
+  }
+}
+
+function showGround(res) {
+  ground.result = res;
+  ground.sky = res.sky || [];
+  const t0 = new Date(res.start_utc).getTime();
+  const t1 = new Date(res.end_utc).getTime();
+  ground.times = [];
+  for (let t = t0; t <= t1; t += res.step_s * 1000) ground.times.push(new Date(t).toISOString());
+  ground.byTime = new Map();
+  for (const p of res.points) {
+    const k = Math.round((new Date(p.utc).getTime() - t0) / (res.step_s * 1000));
+    if (!ground.byTime.has(k)) ground.byTime.set(k, []);
+    ground.byTime.get(k).push(p);
+  }
+  paintGroundPlace();
+
+  const sum = document.getElementById("summary");
+  const zone = groundZone(res.start_utc);
+  const rows = res.sats
+    .map(
+      (s) => `<tr data-sid="${escHtml(s.sid)}"><td style="color:${sidColor(s.sid)}">${escHtml(s.sid)}</td>
+        <td>${groundClock(s.first_utc)}–${groundClock(s.last_utc)}</td><td>${s.minutes}</td>
+        <td>${s.el_min}–${s.el_max}</td><td>${s.az_first}–${s.az_last}</td><td>${s.dist_min_m}–${s.dist_max_m}</td></tr>`
+    )
+    .join("");
+  const day = groundClock(res.start_utc, { weekday: "short", month: "short", day: "numeric", hour: undefined, minute: undefined });
+  sum.innerHTML = `
+    <div class="sum-top"><div class="sum-mode">Ground test</div><div class="sum-when">${escHtml(day)} · ${escHtml(zone.long)} (${escHtml(zone.abbr)})</div></div>
+    <div class="stat-grid">
+      ${statCell("Antenna above water", res.receiver.height_above_water_m, "m")}
+      ${statCell("Minutes with a reflection", res.minutes_with_reflection, "min")}
+      ${statCell("Satellites", res.sats.length)}
+    </div>
+    <p>Reflections on <b>${escHtml(res.water.name)}</b> from ${groundClock(res.start_utc)} to ${groundClock(res.end_utc)} ${escHtml(zone.abbr)}. Every nearby lake is included.</p>
+    ${res.sats.length ? `<table class="grid ground-table"><thead><tr><th>Sat</th><th>Time (${escHtml(zone.abbr)})</th><th>Min</th><th>El °</th><th>Az °</th><th>Out m</th></tr></thead><tbody>${rows}</tbody></table>` : `<p>No reflections land on nearby lakes in that window. Try a lower satellite limit, a higher spot, or a longer window.</p>`}`;
+  sum.classList.remove("hidden");
+
+  const slider = document.getElementById("slider");
+  document.getElementById("sliderWrap").classList.remove("hidden");
+  slider.min = 0;
+  slider.max = ground.times.length - 1;
+  slider.step = 1;
+  const first = res.points.length ? Math.round((new Date(res.points[0].utc).getTime() - t0) / (res.step_s * 1000)) : 0;
+  slider.value = first;
+  slider.oninput = () => {
+    stopPlay();
+    renderGround(Number(slider.value));
+  };
+  document.getElementById("btnPlay").onclick = groundPlay;
+  const bounds = L.geoJSON(res.water.geojson).getBounds();
+  bounds.extend([res.receiver.lat, res.receiver.lon]);
+  if (bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [420, 40], paddingBottomRight: [40, 120] });
+  renderGround(first);
+}
+
+function renderGround(i) {
+  ground.idx = i;
+  const res = ground.result;
+  if (!res) return;
+  const slider = document.getElementById("slider");
+  if (document.activeElement !== slider) slider.value = String(i);
+  const iso = ground.times[i];
+  const now = ground.byTime.get(i) || [];
+  const zone = groundZone(iso);
+  document.getElementById("playElapsed").textContent = `${groundClock(iso)} ${zone.abbr}`;
+  document.getElementById("playPhase").textContent = now.length ? `${now.length} on the water` : "no reflection";
+  document.getElementById("playClock").innerHTML = `<em>${escHtml(groundClock(iso, { weekday: "short", hour: undefined, minute: undefined }))}</em>${escHtml(zone.abbr)}`;
+  groundNowLayer.clearLayers();
+  const h = res.receiver.height_above_water_m;
+  const lam = 299792458 / 1176.45e6;
+  for (const p of now) {
+    const col = sidColor(p.sid);
+    const s = Math.sin((Math.max(p.el, 0.5) * Math.PI) / 180);
+    const across = Math.sqrt((lam * h) / s);
+    const along = Math.sqrt((lam * h) / (s * s * s));
+    L.polygon(fresnelRing(p.lat, p.lon, along, across, p.az, 48), { color: col, weight: 1.5, fillColor: col, fillOpacity: 0.25, interactive: false }).addTo(groundNowLayer);
+    L.polyline([[res.receiver.lat, res.receiver.lon], [p.lat, p.lon]], { color: col, weight: 1.2, opacity: 0.55, dashArray: "3 5", interactive: false }).addTo(groundNowLayer);
+    L.circleMarker([p.lat, p.lon], { radius: 5, color: "#fff", weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(groundNowLayer);
+    L.marker([p.lat, p.lon], {
+      interactive: false,
+      icon: L.divIcon({
+        className: "",
+        iconSize: null,
+        iconAnchor: [-12, 11],
+        html: `<div class="spec-tag" style="--c:${col}"><b>${escHtml(p.sid)}</b><span>${p.el.toFixed(1)}° · ${Math.round(p.dist_m)} m</span></div>`,
+      }),
+    }).addTo(groundNowLayer);
+  }
+  const live = new Set(now.map((p) => p.sid));
+  document.querySelectorAll(".ground-table tbody tr").forEach((tr) => tr.classList.toggle("now", live.has(tr.dataset.sid)));
+  if (ground.sky.length) {
+    const tSec = i * res.step_s;
+    let j = 0;
+    while (j < ground.sky.length - 2 && ground.sky[j + 1].t <= tSec) j++;
+    const a = ground.sky[j];
+    const b = ground.sky[Math.min(j + 1, ground.sky.length - 1)];
+    const u = b.t > a.t ? Math.min(1, Math.max(0, (tSec - a.t) / (b.t - a.t))) : 0;
+    const used = new Set(res.sats.map((s) => s.sid));
+    const rows = lerpSats(a.sats, b.sats, u).map((r) => ({ ...r, used: used.has(r.sid) }));
+    paintSats(rows, live);
+  }
+}
+
+function groundPlay() {
+  if (playing) {
+    stopPlay();
+    return;
+  }
+  if (!ground.result) return;
+  playing = true;
+  const btn = document.getElementById("btnPlay");
+  btn.classList.add("playing");
+  btn.setAttribute("aria-label", "Pause");
+  if (ground.idx >= ground.times.length - 1) ground.idx = 0;
+  let pos = ground.idx;
+  let last = performance.now();
+  const tick = (now) => {
+    if (!playing) return;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    pos += (dt * playRate * 30) / ground.result.step_s;
+    if (pos >= ground.times.length - 1) {
+      renderGround(ground.times.length - 1);
+      stopPlay();
+      return;
+    }
+    renderGround(Math.floor(pos));
+    playTimer = requestAnimationFrame(tick);
+  };
+  playTimer = requestAnimationFrame(tick);
+}
+
 document.getElementById("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  computePlan();
+  if (missionMode === "ground") computeGround();
+  else computePlan();
 });
 
 document.getElementById("modeClick").onclick = () => setMode("click");
+document.getElementById("modeGround").onclick = () => setMode("ground");
+document.getElementById("g_from").addEventListener("change", paintGroundZone);
 document.getElementById("modeAreas").onclick = () => setMode("areas");
 document.getElementById("modeSurvey").onclick = () => setMode("survey");
 document.getElementById("btnUndoWp").onclick = () => {
@@ -2075,3 +2466,16 @@ document.addEventListener("click", (ev) => {
   };
   L.DomEvent.disableClickPropagation(document.getElementById("fileSheet"));
 })();
+
+// Any planner edit invalidates the previous export and simulation.
+for (const id of ["survey_style", "coverage", "sweep_bearing", "max_leg_m", "roi_mode", "antenna_offset_deg", "tile_m", "max_wp", "target_el", "speed", "loiter", "h_agl"]) {
+  const el = document.getElementById(id);
+  el.addEventListener("input", updateSweepHint);
+  el.addEventListener("change", () => {
+    updateSweepHint();
+    if (!lastPlan) return;
+    resetMission({ keepSelection: true });
+    setStatus("Settings changed. Build mission to update the route and export.");
+  });
+}
+updateSweepHint();

@@ -105,6 +105,8 @@ def _gmst_rad(dt: datetime) -> float:
 def _tle_ecef(sat: NavSat, dt: datetime) -> tuple[float, float, float]:
     from sgp4.api import jday
 
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
     jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond * 1e-6)
     err, r, _v = sat.satrec.sgp4(jd, fr)
     if err:
@@ -238,6 +240,116 @@ def parse_beidou3_tle(path: Path) -> list[NavSat]:
     return out
 
 
+BDS_MU = 3.986004418e14
+BDS_OMEGA_E = 7.2921150e-5
+BDS_MATCH_M = 100_000.0
+
+
+def _rnx_float(s: str) -> float:
+    s = s.strip().replace("D", "E")
+    return float(s) if s else 0.0
+
+
+def parse_brdc_beidou(path: Path) -> dict[int, list[tuple[datetime, list[float]]]]:
+    """BeiDou records from a RINEX 3 nav file: PRN -> [(epoch, 31 values)]."""
+    import gzip
+
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", errors="replace") as fh:
+        lines = fh.read().splitlines()
+    i = next((k + 1 for k, l in enumerate(lines) if "END OF HEADER" in l), len(lines))
+    out: dict[int, list[tuple[datetime, list[float]]]] = {}
+    while i < len(lines):
+        line = lines[i]
+        n = 3 if line[:1] in ("R", "S") else 7
+        if line[:1] == "C" and i + n < len(lines):
+            try:
+                vals = [_rnx_float(line[23 + 19 * k : 42 + 19 * k]) for k in range(3)]
+                for k in range(1, n + 1):
+                    cont = lines[i + k]
+                    vals += [_rnx_float(cont[4 + 19 * j : 23 + 19 * j]) for j in range(4)]
+                ep = datetime(
+                    int(line[4:8]), int(line[9:11]), int(line[12:14]),
+                    int(line[15:17]), int(line[18:20]), int(line[21:23]), tzinfo=timezone.utc,
+                )
+                out.setdefault(int(line[1:3]), []).append((ep, vals))
+            except (ValueError, IndexError):
+                pass
+        i += n + 1
+    return out
+
+
+def bds_broadcast_ecef(vals: list[float], dt: datetime) -> tuple[float, float, float]:
+    """MEO/IGSO position from one BeiDou broadcast ephemeris record."""
+    (_, _, _, _, crs, dn, m0, cuc, e, cus, sqrt_a, toe, cic, om0, cis, i0, crc, w, om_dot, idot) = vals[:20]
+    week = int(vals[21])
+    gps_s = (dt.astimezone(timezone.utc) - datetime(1980, 1, 6, tzinfo=timezone.utc)).total_seconds() + 18.0
+    tk = gps_s - 14.0 - (week + 1356) * 604800.0 - toe
+    a = sqrt_a * sqrt_a
+    mk = m0 + (math.sqrt(BDS_MU / a**3) + dn) * tk
+    ek = _kepler(mk, e)
+    phi = math.atan2(math.sqrt(1 - e * e) * math.sin(ek), math.cos(ek) - e) + w
+    s2, c2 = math.sin(2 * phi), math.cos(2 * phi)
+    u = phi + cus * s2 + cuc * c2
+    r = a * (1 - e * math.cos(ek)) + crs * s2 + crc * c2
+    inc = i0 + idot * tk + cis * s2 + cic * c2
+    x, y = r * math.cos(u), r * math.sin(u)
+    om = om0 + (om_dot - BDS_OMEGA_E) * tk - BDS_OMEGA_E * toe
+    return (
+        x * math.cos(om) - y * math.cos(inc) * math.sin(om),
+        x * math.sin(om) + y * math.cos(inc) * math.cos(om),
+        y * math.sin(inc),
+    )
+
+
+def beidou_from_tle_and_brdc(tle_path: Path, brdc_path: Path) -> list[NavSat]:
+    """BeiDou-3 orbits from the TLEs, numbered by the PRN each one actually broadcasts.
+
+    Celestrak's (Cnn) names lag PRN reassignments, so each non-GEO TLE is matched to
+    the broadcast ephemeris by position. TLEs with no broadcasting match are dropped.
+    """
+    brdc = parse_brdc_beidou(brdc_path)
+    epochs = sorted(ep for recs in brdc.values() for ep, _ in recs)
+    if not epochs:
+        return parse_beidou3_tle(tle_path)
+    t = epochs[len(epochs) // 2]
+    bpos: dict[int, tuple[float, float, float]] = {}
+    for prn, recs in brdc.items():
+        ep, vals = min(recs, key=lambda r: abs((r[0] - t).total_seconds()))
+        if abs((ep - t).total_seconds()) > 4 * 3600 or vals[15] < math.radians(20):
+            continue
+        bpos[prn] = bds_broadcast_ecef(vals, t)
+
+    out: list[NavSat] = []
+    pairs = []
+    for name, rec in _parse_tle_file(tle_path):
+        geo = math.degrees(rec.inclo) < 20
+        if geo:
+            prn = _prn_from_name(name, CONST_BDS)
+            if "BEIDOU-3" in name.upper() and prn is not None and prn >= 19:
+                out.append(NavSat(sid=_sid(CONST_BDS, prn), constellation=CONST_BDS, prn=prn,
+                                  health=0, kind="tle", satrec=rec, source=tle_path.name))
+            continue
+        probe = NavSat(sid="", constellation=CONST_BDS, prn=0, health=0, kind="tle", satrec=rec)
+        p = _tle_ecef(probe, t)
+        for prn, b in bpos.items():
+            d = math.dist(p, b)
+            if d < BDS_MATCH_M:
+                pairs.append((d, prn, name, rec))
+    taken_prn: set[int] = set()
+    taken_tle: set[str] = set()
+    for _d, prn, name, rec in sorted(pairs, key=lambda x: x[0]):
+        if prn in taken_prn or name in taken_tle:
+            continue
+        taken_prn.add(prn)
+        taken_tle.add(name)
+        if prn < 19 and "BEIDOU-3" not in name.upper():
+            continue
+        out.append(NavSat(sid=_sid(CONST_BDS, prn), constellation=CONST_BDS, prn=prn,
+                          health=0, kind="tle", satrec=rec, source=tle_path.name))
+    return out
+
+
 def parse_qzss_tle(path: Path) -> list[NavSat]:
     out = []
     for name, rec in _parse_tle_file(path):
@@ -295,7 +407,8 @@ def load_l5_sats(data_dir: Path) -> list[NavSat]:
         sats.extend(parse_galileo_xml(gal))
     bds = gnss / "celestrak_beidou.tle" if gnss.exists() else None
     if bds and bds.exists():
-        sats.extend(parse_beidou3_tle(bds))
+        brdc = _latest(gnss, "BRDC*.rnx.gz")
+        sats.extend(beidou_from_tle_and_brdc(bds, brdc) if brdc else parse_beidou3_tle(bds))
     qz = gnss / "celestrak_qzss.tle" if gnss.exists() else None
     if qz and qz.exists():
         sats.extend(parse_qzss_tle(qz))

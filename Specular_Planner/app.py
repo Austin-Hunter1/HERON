@@ -8,10 +8,13 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from engine.export import qgc_wpl, run_card, validate_wpl
+from engine.flight import DEFAULT_SKIPPED_CHECKS, LIVE_TRANSPORTS, FlightService
+from engine.flight_api import flight_api
 from engine.planner import (
     DEFAULT_H_AGL,
     DEFAULT_HOVER,
@@ -36,6 +39,7 @@ from engine.catalog import (
     sync_source,
 )
 from engine.gnss import counts_by_const, filter_sats, load_l5_sats
+from engine.ground import LEGION_OVERLOOK, geoid_height, ground_reflections, usgs_elevation
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -43,6 +47,10 @@ STATIC = ROOT / "static"
 OUTPUT = ROOT / "output"
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
+flight = FlightService(LIVE_TRANSPORTS, DATA / "launch_checks_fly.json", DEFAULT_SKIPPED_CHECKS)
+sim = FlightService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_CHECKS)
+app.register_blueprint(flight_api(flight))
+app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
 
 _SATS = None
 _LAKE = None
@@ -155,7 +163,7 @@ def api_plan():
     tile_raw = body.get("tile_m")
     tel_raw = body.get("target_el")
     target_el = None
-    if mode == "survey" and tel_raw not in (None, ""):
+    if mode in ("survey", "areas") and tel_raw not in (None, ""):
         target_el = float(tel_raw)
         if target_el < 5 or target_el > 90:
             return jsonify({"error": "Aim elevation must be between 5° and 90°."}), 400
@@ -186,6 +194,12 @@ def api_plan():
             max_wp=int(body.get("max_wp", 200)),
             waypoints=body.get("waypoints"),
             target_el=target_el,
+            sweep_bearing=float(body["sweep_bearing"]) if body.get("sweep_bearing") not in (None, "") else None,
+            survey_style=body.get("survey_style", "hover"),
+            max_leg_m=float(body.get("max_leg_m", 500)),
+            roi_mode=body.get("roi_mode", "per_point"),
+            antenna_offset_deg=float(body.get("antenna_offset_deg", 0)),
+            coverage_pct=float(body.get("coverage_pct", 100)),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -197,9 +211,12 @@ def api_plan():
     card_name = f"HERON_{stamp}_runcard.txt"
     wpl = qgc_wpl(result)
     check = validate_wpl(wpl, result)
-    (OUTPUT / wp_name).write_text(wpl)
-    (OUTPUT / card_name).write_text(run_card(result))
-    (OUTPUT / f"HERON_{stamp}.json").write_text(json.dumps(result["meta"], indent=2))
+    result["flight_plan_id"] = flight.register_plan(wpl, result["meta"])
+    sim.register_plan(wpl, result["meta"], result["flight_plan_id"])
+    # Explicit UTF-8 bytes: Windows text mode is cp1252 (no arrows) and rewrites \n, breaking upload verification.
+    (OUTPUT / wp_name).write_bytes(wpl.encode("utf-8"))
+    (OUTPUT / card_name).write_bytes(run_card(result).encode("utf-8"))
+    (OUTPUT / f"HERON_{stamp}.json").write_bytes(json.dumps(result["meta"], indent=2).encode("utf-8"))
     result["exports"] = {
         "waypoints": f"/api/export/{wp_name}",
         "runcard": f"/api/export/{card_name}",
@@ -207,6 +224,56 @@ def api_plan():
         "mission": check,
     }
     result["stamp"] = stamp
+    return jsonify(result)
+
+
+@app.get("/api/ground/defaults")
+def api_ground_defaults():
+    return jsonify(LEGION_OVERLOOK)
+
+
+@app.get("/api/elevation")
+def api_elevation():
+    lat = float(request.args["lat"])
+    lon = float(request.args["lon"])
+    try:
+        ground = usgs_elevation(lat, lon)
+    except Exception as e:
+        return jsonify({"error": f"USGS elevation lookup failed: {e}"}), 502
+    try:
+        geoid = geoid_height(lat, lon)
+    except Exception:
+        geoid = None
+    return jsonify({"lat": lat, "lon": lon, "ground_m": ground, "geoid_m": geoid, "source": "USGS 3DEP (NAVD88)"})
+
+
+@app.post("/api/ground")
+def api_ground():
+    body = request.get_json(force=True) or {}
+    tz = ZoneInfo(body.get("tz") or "America/Denver")
+    try:
+        start = datetime.fromisoformat(body["start_local"]).replace(tzinfo=tz)
+        end = datetime.fromisoformat(body["end_local"]).replace(tzinfo=tz)
+        consts = body.get("constellations") or ["G", "E", "C"]
+        result = ground_reflections(
+            filter_sats(sats(), consts),
+            lake(),
+            lat=float(body["lat"]),
+            lon=float(body["lon"]),
+            ground_m=float(body["ground_m"]),
+            antenna_m=float(body.get("antenna_m", 1.5)),
+            water_m=float(body["water_m"]),
+            geoid_m=float(body.get("geoid_m", LEGION_OVERLOOK["geoid_m"])),
+            start=start,
+            end=end,
+            step_s=int(body.get("step_s", 30)),
+            mask=float(body.get("mask", 2.0)),
+            water_lat=body.get("water_lat"),
+            water_lon=body.get("water_lon"),
+        )
+    except (KeyError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+    result["tz"] = str(tz)
     return jsonify(result)
 
 
@@ -333,6 +400,7 @@ def start_almanac_watch() -> None:
 
 def main():
     start_almanac_watch()
+    flight.start_auto_connect()
     print("Specular planner  http://127.0.0.1:5055")
     app.run(host="127.0.0.1", port=5055, debug=False)
 
