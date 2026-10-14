@@ -123,6 +123,12 @@ RESOURCES_PATH=
 # <experiment_name>/{collect_metadata.yml, <collect_id>.<ext>}
 COLLECTS_PATH=
 
+# One `.env` for several machines: any of the three paths above may also be given
+# per platform (suffix _WINDOWS, _LINUX or _MACOS). The key for the platform running
+# now wins over the plain one; a variable set in the shell wins over both. For example:
+# COLLECTS_PATH_WINDOWS=D:/01_Data/collects
+# COLLECTS_PATH_LINUX=/media/<you>/01_Data/collects
+
 # Earthdata credentials for downloading RINEX/orbit (SP3) data from CDDIS/Earthdata.
 # helpers (gnss_tools.rinex_io.cddis_download_utils / earthdata_utils).
 EARTHDATA_USERNAME=
