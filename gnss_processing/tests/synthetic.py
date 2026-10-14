@@ -276,9 +276,16 @@ def generate_b2a_samples(
     nav_bits: bool | np.ndarray = True,
     overlay: bool = True,
     rng: np.random.Generator | None = None,
+    symbol_phase_periods: int = 0,
 ) -> np.ndarray:
     """
     Baseband BeiDou B2a: data on I, pilot on Q, both BPSK(10) at 10.23 Mcps.
+
+    `symbol_phase_periods` slides the secondary codes and the data symbols that many
+    primary periods against the code phase lattice.  With 0 a symbol starts at every
+    multiple of 5 ms of code phase, which is the one alignment a receiver must not
+    be allowed to assume: acquisition fixes B2a's code phase only modulo 1 ms, so on a
+    real signal the symbol boundary is anywhere on the lattice.
 
     Like GPS L5, the two components share every chip and sit in carrier
     quadrature (ICD 4.2.2).  Equal power, so equal amplitude.  Each carries a
@@ -301,7 +308,7 @@ def generate_b2a_samples(
     chip_index = chips.astype(np.int64)
 
     # Secondary-code chips advance once per primary code period.
-    period_index = chip_index // bds_b2a.PRIMARY_CODE_LENGTH
+    period_index = chip_index // bds_b2a.PRIMARY_CODE_LENGTH + symbol_phase_periods
     overlay_d = sec_d[period_index % len(sec_d)] if overlay else 1
     overlay_p = sec_p[period_index % len(sec_p)] if overlay else 1
 

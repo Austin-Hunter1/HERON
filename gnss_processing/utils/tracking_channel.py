@@ -1138,6 +1138,19 @@ class TrackingChannel:
             if c.symbol_period_ms is not None
         ]
         self._epoch_anchor_period_ms: int | None = min(symbol_periods) if symbol_periods else None
+
+        # How many overlay chips make one data symbol, when the data component's
+        # overlay starts a symbol on its first chip.  That is true of L5 (NH10 under a
+        # 10 ms CNAV symbol) and of B2a (00010 under a 5 ms symbol), and it is what
+        # lets the overlay counter, once synced, say where a symbol begins.  None for
+        # every signal where it does not hold, which leaves them untouched.
+        self._symbol_overlay_chips: int | None = None
+        if self._epoch_anchor_period_ms is not None:
+            for component in signal_params.code_set.components:
+                if component.symbol_period_ms == self._epoch_anchor_period_ms and component.overlay is not None:
+                    chips = len(component.overlay)
+                    if chips * signal_params.primary_period_ms == self._epoch_anchor_period_ms:
+                        self._symbol_overlay_chips = chips
         # Cleared whenever the epoch length changes, so the new grid re-anchors.
         self._epoch_grid_anchored = False
 
@@ -1306,6 +1319,39 @@ class TrackingChannel:
         # 19, 29 ... and straddle every CNAV-2 symbol from then on.
         if self.coherent_duration_ms > CORRELATION_INTERVAL_MS:
             self._epoch_grid_anchored = False
+
+        self._tie_symbol_grid_to_overlay_counter()
+
+    def _tie_symbol_grid_to_overlay_counter(self) -> None:
+        """
+        Put the epoch grid on the true symbol boundary, using the overlay counter.
+
+        The grid anchors on multiples of the symbol period in *code phase*.  That is a
+        symbol boundary only if the code phase lattice is tied to the data, and what
+        ties it is how acquisition recovered the overlay phase: L5 acquires on the
+        pilot with NH20 folded in, so its code phase is known modulo 20 ms and the
+        lattice is right by construction.  B2a acquires modulo one 1 ms code period
+        (its 100 ms overlay is not folded in), and finds the overlay phase afterwards,
+        by search.  Its code phase lattice then sits an arbitrary 0 to 4 ms away from
+        the symbol boundary, and an anchored epoch straddles two symbols.  That loses
+        data amplitude, and worse, it puts the time anchor of a decoded frame whole
+        milliseconds from the truth (300 km each in a pseudorange).
+
+        The counter says where a symbol starts: the data overlay's first chip, so a
+        counter that is a multiple of the overlay length.  The interval being folded now
+        has counter `c` and starts at code phase `s`, so intervals with counter 0 mod
+        `L` start at `s - c` modulo `L` ms.  Recording that as the symbol phase offset
+        is what the anchor tests already read (as for L1 C/A bit sync).  For L5 the
+        offset comes out zero, because its counter is its code phase modulo 20, so
+        nothing changes there.
+        """
+        chips = self._symbol_overlay_chips
+        if chips is None or self.overlay_sync is None or not self.overlay_sync.synced:
+            return
+        period_ms = self._epoch_anchor_period_ms
+        counter = self.overlay_sync.counter
+        start_ms = int(round(self.corr_interval.start_code_phase_ms))
+        self._symbol_phase_offset_ms = (start_ms - counter) % period_ms
 
     @property
     def _symbol_boundary_known(self) -> bool:

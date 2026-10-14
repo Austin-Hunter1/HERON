@@ -24,7 +24,7 @@ import pytest
 
 from utils import bds_b2a, bpsk_acquisition, sample_streaming, secondary_code, tracking_channel
 from utils.bpsk_correlation import correlate__multicomponent
-from utils.nav import symbols
+from utils.nav import bcnav2, symbols
 from utils.signal_interfaces import (
     ACQUISITION_POLICIES,
     TRACKING_POLICIES,
@@ -289,7 +289,9 @@ def _loop_params(coherent_duration_ms=5):
     )
 
 
-def _acquire_and_track(noise_sigma=3.0, buffers=16, buffer_ms=50, seed=4, nav_bits=True):
+def _acquire_and_track(
+    noise_sigma=3.0, buffers=16, buffer_ms=50, seed=4, nav_bits=True, symbol_phase_periods=0
+):
     """Acquire, seed a channel from the result, and track `buffers` buffers."""
     definitions = build_signals(BdsB2a, prns=[PRN])
     config = _acquisition_config(bpsk_acquisition.FineSearchParameters())
@@ -297,6 +299,7 @@ def _acquire_and_track(noise_sigma=3.0, buffers=16, buffer_ms=50, seed=4, nav_bi
     kwargs = dict(
         prn=PRN, samp_rate=SAMP_RATE, doppler_hz=SEED_DOPPLER_HZ,
         code_phase_ms=SEED_CODE_PHASE_MS, noise_sigma=noise_sigma, nav_bits=nav_bits,
+        symbol_phase_periods=symbol_phase_periods,
     )
     acq = bpsk_acquisition.run_acquisition(
         sample_block=synthetic.generate_b2a_samples(
@@ -488,3 +491,62 @@ def test_symbol_and_band_tables_describe_b2a():
         signal.code_set.components[carrier].branch != data_component.branch
     )
     assert observables.BAND_FREQ_HZ["BDS_B2A"] == BdsB2a.carrier_freq_hz
+
+
+# --------------------------------------------------------------------------
+# Where a symbol starts on the code phase lattice
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("shift", [0, 1, 2, 3, 4])
+def test_epochs_start_on_the_true_symbol_boundary_whatever_the_lattice_phase(shift):
+    """
+    Acquisition fixes B2a's code phase only modulo 1 ms, so the symbol boundary is
+    anywhere on the 5 ms code phase lattice.  The tracker found it by the overlay
+    counter: with the symbols slid by `shift` periods the 5 ms epochs must start at
+    code phase = -shift (mod 5) and the data component must come out at the pilot's
+    full magnitude.  Anchoring on code phase multiples of 5 ms instead puts every
+    epoch `shift` ms into a symbol, and the data loses amplitude on every transition.
+    """
+    adapter = _acquire_and_track(noise_sigma=0.0, buffers=16, symbol_phase_periods=shift)
+    outputs = adapter.outputs
+    count = outputs.output_index
+    duration = np.asarray(outputs.epoch_duration_ms[:count])
+    long_epochs = np.nonzero(duration == 5.0)[0]
+    assert len(long_epochs) > 20, "the channel never extended to 5 ms epochs"
+    phases = np.round(np.asarray(outputs.code_phase_ms[:count])[long_epochs]).astype(int)
+    assert np.all(phases % 5 == (-shift) % 5), (shift, np.unique(phases % 5))
+    tail = slice(count - 15, count)
+    ratio = np.abs(outputs.prompt_corr[tail, 0]).mean() / np.abs(outputs.prompt_corr[tail, 1]).mean()
+    assert 0.9 < ratio < 1.1, f"shift {shift}: data/pilot magnitude {ratio:.2f}"
+
+
+@pytest.mark.parametrize("shift", [0, 3])
+def test_time_anchor_of_a_decoded_frame_is_exact_at_any_symbol_phase(shift):
+    """
+    The decoded SOW names the frame's first symbol, so the code phase there must be
+    the code phase at which that symbol truly starts.  A grid that is `shift` ms off
+    would put the anchor, and every pseudorange built on it, `shift` ms (300 km each)
+    out.
+    """
+    from utils import observables
+
+    frames = [_nav_frame(10, 5000), _nav_frame(11, 5001)]
+    first_frame_symbol = 120
+    nav_symbols = np.roll(bcnav2.soft_symbols(np.concatenate(frames)), first_frame_symbol)
+    adapter = _acquire_and_track(
+        noise_sigma=2.0, buffers=76, nav_bits=nav_symbols, symbol_phase_periods=shift
+    )
+    stream = symbols.extract(adapter.outputs, "BDS_B2A")
+    result = bcnav2.decode(stream.soft, expected_prn=PRN)
+    assert result.synced
+    anchor = observables.anchor_from_bcnav2(stream, result.frames[0])
+    # Symbol 120 starts at primary period 600 - shift: the period index runs `shift`
+    # ahead of the code phase label.
+    assert anchor.code_phase_ms == pytest.approx(first_frame_symbol * 5.0 - shift, abs=0.01)
+    assert anchor.tow_s == 5000 * 3.0
+
+
+def _nav_frame(message_type: int, sow_count: int) -> np.ndarray:
+    return bcnav2.encode_frame(
+        bcnav2.build_message(prn=PRN, message_type=message_type, sow_count=sow_count)
+    )
