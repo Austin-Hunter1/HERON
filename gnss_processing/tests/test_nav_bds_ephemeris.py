@@ -194,14 +194,18 @@ def test_group_delay_signs_follow_icd_equations_7_4_and_7_5():
     eph = make_ephemeris(tgd_b2ap=5.0e-9, isc_b2ad=-2.0e-9)
     assert eph.group_delay_s("B2ap") == pytest.approx(-5.0e-9)
     assert eph.group_delay_s("B2ad") == pytest.approx(-5.0e-9 + 2.0e-9)
+    # B1C components (B1C ICD 7-4 and 7-5) use their own delay and the B1C data-pilot term.
+    eph = make_ephemeris(tgd_b2ap=5.0e-9, isc_b2ad=-2.0e-9, tgd_b1cp=3.0e-9, isc_b1cd=1.0e-9)
+    assert eph.group_delay_s("B1Cp") == pytest.approx(-3.0e-9)
+    assert eph.group_delay_s("B1Cd") == pytest.approx(-3.0e-9 - 1.0e-9)
     with pytest.raises(ValueError):
-        eph.group_delay_s("B1Cp")
+        eph.group_delay_s("E5a")
 
 
 def test_observables_group_delay_branch_for_beidou():
     eph = make_ephemeris(tgd_b2ap=5.0e-9)
     assert observables.signal_group_delay_s(eph, "BDS_B2A") == pytest.approx(-5.0e-9)
-    with pytest.raises(ValueError, match="B2a only"):
+    with pytest.raises(ValueError, match="B2a and B1C only"):
         observables.signal_group_delay_s(eph, "GPS_L5")
 
 

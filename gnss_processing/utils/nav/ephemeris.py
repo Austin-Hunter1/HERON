@@ -422,7 +422,9 @@ BDS_A_REF_M = {
 @dataclass(frozen=True)
 class BdsEphemeris:
     """
-    BeiDou quasi-Keplerian ephemeris, from B-CNAV2 (B2a) message types 10 and 11.
+    BeiDou quasi-Keplerian ephemeris, from B-CNAV2 (B2a) message types 10 and 11 or from
+    B-CNAV1 (B1C) subframe 2.  Both carry the same orbit and clock blocks and the same
+    user algorithm (ICD Table 7-9 of both ICDs); they differ in the group delay terms.
 
     It has the same shape as `CnavEphemeris` -- a semi-major axis stated as a
     difference from a reference with a rate, and a mean motion correction with a
@@ -433,7 +435,7 @@ class BdsEphemeris:
       * the node rate `Omega_dot` is sent directly, not as a difference from a
         reference rate.
 
-    GEO satellites are rejected: they do not broadcast B2a, and their orbit
+    GEO satellites are rejected: they do not broadcast B2a or B1C, and their orbit
     algorithm differs (the ICD gives only the MEO/IGSO one for this signal).
 
     Times are seconds of the BDT week, and `week` is the BDT week.  The angles
@@ -468,6 +470,7 @@ class BdsEphemeris:
     tgd_b2ap: float = 0.0  # s
     isc_b2ad: float = 0.0  # s
     tgd_b1cp: float = 0.0  # s
+    isc_b1cd: float = 0.0  # s, B-CNAV1 subframe 2 only
     iode: int | None = None
     iodc: int | None = None
     health: int = 0
@@ -552,10 +555,11 @@ class BdsEphemeris:
 
     def group_delay_s(self, component: str = "B2ap") -> float:
         """
-        The term to add to `dt_sv` for one B2a component (ICD 7-4 and 7-5).
+        The term to add to `dt_sv` for one B2a or B1C component (ICD 7-4 and 7-5).
 
         Pilot:  ``dt_sv,B2ap = dt_sv - T_GDB2ap``
         Data:   ``dt_sv,B2ad = dt_sv - T_GDB2ap - ISC_B2ad``
+        B1C:    ``dt_sv,B1Cp = dt_sv - T_GDB1Cp``, ``dt_sv,B1Cd = dt_sv - T_GDB1Cp - ISC_B1Cd``
 
         The result carries the minus signs already, so a caller adds it.
         """
@@ -563,7 +567,15 @@ class BdsEphemeris:
             return -self.tgd_b2ap
         if component == "B2ad":
             return -self.tgd_b2ap - self.isc_b2ad
-        raise ValueError(f"component must be 'B2ap' or 'B2ad', got {component!r}")
+        # B1C (ICD 7-4 and 7-5 of the B1C ICD).  Only B-CNAV1 broadcasts `isc_b1cd`, so
+        # the data component is meaningful for an ephemeris decoded from B1C.
+        if component == "B1Cp":
+            return -self.tgd_b1cp
+        if component == "B1Cd":
+            return -self.tgd_b1cp - self.isc_b1cd
+        raise ValueError(
+            f"component must be 'B2ap', 'B2ad', 'B1Cp' or 'B1Cd', got {component!r}"
+        )
 
 
 Ephemeris = LnavEphemeris | CnavEphemeris | BdsEphemeris

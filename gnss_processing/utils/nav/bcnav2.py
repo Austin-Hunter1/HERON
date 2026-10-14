@@ -395,6 +395,16 @@ assert _layout_bits(_CLOCK) == 69 and _layout_bits(_BDGIM) == 74
 
 DATA_FIRST_BIT = 31  # the first message-data bit, in 1-based message numbering
 
+# B-CNAV1 subframe 2 carries the same ephemeris and clock blocks (ICD Tables 7-5, 7-7
+# and 7-8 of both ICDs), so `utils.nav.bcnav1` reads them with these layouts.  The
+# names are public so that the two modules cannot drift apart.
+EPHEMERIS_I_LAYOUT = _EPHEMERIS_I
+EPHEMERIS_II_LAYOUT = _EPHEMERIS_II
+CLOCK_LAYOUT = _CLOCK
+BDGIM_LAYOUT = _BDGIM
+unpack_layout = _unpack_layout
+layout_bits = _layout_bits
+
 
 @dataclass(frozen=True)
 class Type10:

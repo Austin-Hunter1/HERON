@@ -138,6 +138,30 @@ def anchor_from_bcnav2(stream, frame, week: int | None = None) -> TimeAnchor:
     )
 
 
+def anchor_from_bcnav1(stream, frame) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded B-CNAV1 frame and the stream it came from.
+
+    The time of week of a frame, ``HOW * 3600 + SOH * 18``, names the first symbol of
+    subframe 1 (ICD 7.3), and `frame.symbol_index` is where that symbol sits in
+    `stream`, so the code phase there is a direct lookup.  The time system is BDT and
+    the week number is in subframe 2, so it is set from the frame.
+    """
+    if frame.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {frame.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=f"C{frame.prn:02d}",
+        tow_s=frame.tow_at_frame_start_s,
+        code_phase_ms=float(stream.code_phase_ms[frame.symbol_index]),
+        week=frame.wn,
+        source=f"B-CNAV1 HOW {frame.how}, SOH count {frame.soh_count}",
+        time_system="BDT",
+    )
+
+
 def anchor_from_lnav(stream, subframe, sat_id: str) -> TimeAnchor:
     """Build a `TimeAnchor` from a decoded LNAV subframe."""
     if subframe.symbol_index >= len(stream.code_phase_ms):
@@ -504,12 +528,13 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
     if isinstance(ephemeris, BdsEphemeris):
         # BeiDou states the pilot and data corrections itself (ICD 7-4 and 7-5).  The
         # pilot's is used: it is the component tracking runs its carrier loop on.
-        if signal_type_id != "BDS_B2A":
+        pilot_component = {"BDS_B2A": "B2ap", "BDS_B1C": "B1Cp"}.get(signal_type_id)
+        if pilot_component is None:
             raise ValueError(
-                f"a BeiDou ephemeris from B-CNAV2 has group delays for B2a only, "
+                f"a BeiDou ephemeris has group delays for B2a and B1C only, "
                 f"not {signal_type_id!r}"
             )
-        return ephemeris.group_delay_s("B2ap")
+        return ephemeris.group_delay_s(pilot_component)
     tgd = ephemeris.tgd
     isc = 0.0
     if isinstance(ephemeris, CnavEphemeris):

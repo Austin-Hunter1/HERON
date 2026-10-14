@@ -45,7 +45,7 @@ def _beidou_ephemeris(sat_id: str, *, M0: float, Omega0: float, a0: float, tgd: 
         Cis=0.0, Cic=0.0, Crs=0.0, Crc=0.0, Cus=0.0, Cuc=0.0,
         # A clock drift, so a clock evaluated 14 s off (the wrong time scale) is visible:
         # 2e-9 s/s over 14 s is 8 m.
-        toc=BDT_TOE, a0=a0, a1=2.0e-9, a2=0.0, tgd_b2ap=tgd,
+        toc=BDT_TOE, a0=a0, a1=2.0e-9, a2=0.0, tgd_b2ap=tgd, tgd_b1cp=-2.5 * tgd + 1.0e-9,
     )
 
 
@@ -98,9 +98,14 @@ def build_two_system_truth(
     isb_m: float = INTER_SYSTEM_BIAS_M,
     bds_range_error_m: dict[str, float] | None = None,
     visible: dict[int, set[str]] | None = None,
+    beidou_signal: str = "BDS_B2A",
 ):
     """
     GPS + BeiDou observables in one GPST set.
+
+    `beidou_signal` is the BeiDou signal the satellites stamp: "BDS_B2A" (pilot group
+    delay `tgd_b2ap`) or "BDS_B1C" (pilot group delay `tgd_b1cp`, which the fixture gives
+    a value unlike `tgd_b2ap`, so a solver that used the wrong one would show it).
 
     The receiver clock is `RECEIVER_BIAS_M` off.  BeiDou ranges carry `isb_m` in addition.
     Each BeiDou satellite stamps its signal with its clock error and minus its pilot
@@ -122,7 +127,9 @@ def build_two_system_truth(
                 t_tx = _transit_solution(eph, true_receive[i], native_offset_s=-time_systems.GPST_MINUS_BDT_S)
                 t_bdt = t_tx - time_systems.GPST_MINUS_BDT_S
                 # What the satellite stamps (BDT scale) moved to the GPST scale of the set.
-                stamp_bdt = t_bdt + eph.clock_correction_s(t_bdt) - eph.tgd_b2ap
+                stamp_bdt = t_bdt + eph.clock_correction_s(t_bdt) + eph.group_delay_s(
+                    "B2ap" if beidou_signal == "BDS_B2A" else "B1Cp"
+                )
                 transmit[i, j] = stamp_bdt + time_systems.GPST_MINUS_BDT_S
             else:
                 t_tx = _transit_solution(eph, true_receive[i], native_offset_s=0.0)
@@ -142,7 +149,7 @@ def build_two_system_truth(
                     pseudorange[i, j] = np.nan
                     transmit[i, j] = np.nan
 
-    types = {sid: ("BDS_B2A" if sid.startswith("C") else "GPS_L5") for sid in sat_ids}
+    types = {sid: (beidou_signal if sid.startswith("C") else "GPS_L5") for sid in sat_ids}
     observables = obs.Observables(
         epoch_uptime_ms=np.arange(n) * 1000.0, receive_time_s=nominal_receive, sat_ids=sat_ids,
         transmit_time_s=transmit, pseudorange_m=pseudorange, week=2257,
@@ -224,6 +231,26 @@ def test_a_beidou_only_set_in_bdt_gives_the_same_fix():
     assert np.abs(series.position_ecef_m - REFERENCE_ECEF).max() < 0.15
     # One system: the clock absorbs the 87.5 m, nothing else has to.
     assert series.clock_bias_m == pytest.approx(RECEIVER_BIAS_M + INTER_SYSTEM_BIAS_M, abs=0.05)
+
+
+def test_a_b1c_fix_uses_the_b1c_group_delay():
+    """
+    B1C satellites stamp their signal with `tgd_b1cp`, not `tgd_b2ap` (B1C ICD 7-4).  The
+    solver must pick the delay by each satellite's signal type; the other one is wrong
+    by a few nanoseconds, which is decimetres of range.
+    """
+    ephemerides, observables = build_two_system_truth(beidou_signal="BDS_B1C")
+    series = _solve(observables, ephemerides)
+    assert series.valid.all()
+    assert np.abs(series.position_ecef_m - REFERENCE_ECEF).max() < 0.05
+    assert series.inter_system_bias_m["C"] == pytest.approx(np.full(4, INTER_SYSTEM_BIAS_M), abs=0.05)
+    assert np.nanmax(np.abs(series.residuals_m)) < 0.05
+    # The same ranges read as B2a use the wrong delay and leave a visible residual.
+    as_b2a = dataclasses.replace(
+        observables, signal_type_ids={s: ("BDS_B2A" if s.startswith("C") else "GPS_L5") for s in observables.sat_ids}
+    )
+    wrong = _solve(as_b2a, ephemerides)
+    assert np.nanmax(np.abs(wrong.residuals_m)) > 5 * np.nanmax(np.abs(series.residuals_m))
 
 
 def test_a_wrong_14_seconds_would_show_in_the_residuals():
