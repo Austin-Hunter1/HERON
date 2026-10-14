@@ -60,11 +60,11 @@ NOMINAL_TRANSIT_TIME_S = 0.075
 
 @dataclass(frozen=True)
 class TimeAnchor:
-    """Ties one satellite's cumulative code phase to absolute GPS time."""
+    """Ties one satellite's cumulative code phase to absolute time of week."""
 
     sat_id: str
     tow_s: float
-    """GPS time of week at the anchor instant."""
+    """Time of week at the anchor instant, in the system named by `time_system`."""
 
     code_phase_ms: float
     """Cumulative code phase at that same instant."""
@@ -72,6 +72,11 @@ class TimeAnchor:
     week: int | None = None
     source: str = ""
     """Human-readable provenance, e.g. "CNAV type 11, TOW count 100001"."""
+
+    time_system: str = "GPST"
+    """The time scale of `tow_s` and `week`: "GPST", or "BDT" for BeiDou.  BDT has
+    no leap seconds and runs 14 s behind GPST, so a BDT anchor must be converted
+    before it is mixed with GPS data; nothing in this class does that."""
 
     def transmit_time_s(self, code_phase_ms: np.ndarray | float) -> np.ndarray | float:
         """
@@ -102,6 +107,30 @@ def anchor_from_cnav(stream, message, sat_id: str | None = None) -> TimeAnchor:
         tow_s=message.tow_at_message_start_s,
         code_phase_ms=float(stream.code_phase_ms[message.symbol_index]),
         source=f"CNAV type {message.message_type}, TOW count {message.tow_count}",
+    )
+
+
+def anchor_from_bcnav2(stream, frame, week: int | None = None) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded B-CNAV2 frame and the stream it came from.
+
+    The SOW of a B-CNAV2 frame names the first preamble chip of that same frame, and
+    `frame.symbol_index` is where that preamble starts in `stream`, so the code phase
+    there is a direct lookup.  The time system is BDT.  The BDT week number is only
+    in message type 10 (`Type10.wn`); pass it as `week` when it is known.
+    """
+    if frame.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {frame.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=f"C{frame.prn:02d}",
+        tow_s=frame.sow_at_frame_start_s,
+        code_phase_ms=float(stream.code_phase_ms[frame.symbol_index]),
+        week=week,
+        source=f"B-CNAV2 type {frame.message_type}, SOW count {frame.sow_count}",
+        time_system="BDT",
     )
 
 
