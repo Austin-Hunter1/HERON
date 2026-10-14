@@ -24,7 +24,7 @@ import gnss_tools.signals.gps_l1ca as gps_l1ca
 import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
-from utils import bds_b2a
+from utils import bds_b1c, bds_b2a
 
 
 @dataclass(frozen=True)
@@ -418,4 +418,83 @@ def generate_l1c_samples(
     )
 
     samples = composite * np.exp(2j * np.pi * doppler_hz * t)
+    return _add_noise(samples.astype(np.complex64), noise_sigma, rng)
+
+
+def get_b1c_codes(prn: int) -> tuple[np.ndarray, np.ndarray]:
+    """+/-1 int8 (B1CD, B1CP) primary codes, 10230 chips each."""
+    return bds_b1c.generate_data_code(prn), bds_b1c.generate_pilot_code(prn)
+
+
+def generate_b1c_samples(
+    *,
+    prn: int,
+    start_sec: float,
+    duration_sec: float,
+    samp_rate: float,
+    doppler_hz: float,
+    code_phase_ms: float,
+    noise_sigma: float = 0.0,
+    nav_bits: bool | np.ndarray = True,
+    overlay: bool = True,
+    include_boc61: bool = False,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """
+    Baseband BeiDou B1C: data on I, pilot on Q, both with a BOC(1,1) subcarrier.
+
+    Amplitudes follow the ICD power split (Table 4-2): data 1/4, pilot BOC(1,1)
+    part 29/44.  The data is in phase (0 degrees) and the pilot part is at 90
+    degrees.  The subcarrier is built here from ``sign(sin(...))`` directly, not
+    from `code_components.subcarrier_signs`, so that the fixture and the
+    correlator are two separate statements of the ICD convention.
+
+    With `include_boc61` the pilot's BOC(6,1) part is added too: 1/11 of the power,
+    in phase with the data (0 degrees), on the same pilot primary code and overlay.
+    The tracker does not model it (narrow-band mode, D-062), so this switch is the
+    way to test the mismatch.  It needs a sample rate above about 14 Msps.
+
+    One B-CNAV1 symbol is one 10 ms primary period, and so is one overlay chip.
+    The data has no secondary code.
+    """
+    code_d, code_p = get_b1c_codes(prn)
+    overlay_p = bds_b1c.generate_pilot_secondary_code(prn)
+
+    n = int(round(samp_rate * duration_sec))
+    t = start_sec + np.arange(n) / samp_rate
+
+    code_rate = bds_b1c.CODE_RATE_CHIPS_PER_SEC * (1.0 + doppler_hz / bds_b1c.CARRIER_FREQ_HZ)
+    chips = code_phase_ms * 1e-3 * bds_b1c.CODE_RATE_CHIPS_PER_SEC + t * code_rate
+    chip_index = np.floor(chips).astype(np.int64)
+    within_chip = chips - chip_index
+    period_index = chip_index // bds_b1c.PRIMARY_CODE_LENGTH
+    chip_of_period = chip_index % bds_b1c.PRIMARY_CODE_LENGTH
+
+    def subcarrier(sub_chips_per_chip):
+        """sign(sin(2*pi*f_s*t)) over the chip, stated as its half-cycle index."""
+        return np.where(
+            (within_chip * sub_chips_per_chip).astype(np.int64) % 2 == 1, -1.0, 1.0
+        )
+
+    data = (
+        _nav_bits(period_index, 1, _symbol_sequence(nav_bits))
+        if nav_bits is not False
+        else 1.0
+    )
+    overlay_sign = overlay_p[period_index % len(overlay_p)] if overlay else 1.0
+
+    in_phase = (
+        np.sqrt(bds_b1c.DATA_POWER_FRACTION) * code_d[chip_of_period] * subcarrier(2) * data
+    )
+    quadrature = (
+        np.sqrt(bds_b1c.PILOT_BOC11_POWER_FRACTION)
+        * code_p[chip_of_period] * subcarrier(2) * overlay_sign
+    )
+    if include_boc61:
+        in_phase = in_phase + (
+            np.sqrt(bds_b1c.PILOT_BOC61_POWER_FRACTION)
+            * code_p[chip_of_period] * subcarrier(12) * overlay_sign
+        )
+
+    samples = (in_phase + 1j * quadrature) * np.exp(2j * np.pi * doppler_hz * t)
     return _add_noise(samples.astype(np.complex64), noise_sigma, rng)

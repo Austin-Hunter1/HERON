@@ -9,7 +9,7 @@ link's nominal frequency for a BOC sidelobe -- not the case for any signal
 built here yet, but `Signal.carrier_freq_hz` is independent of `Link` for when
 it is.
 
-A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a` -- IS the class-based
+A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a`, `BdsB1C` -- IS the class-based
 definition of one signal: instantiating it for a PRN builds that satellite's
 spreading-code components (see `utils.code_components`) into a `CodeSet`.
 Acquisition and tracking are configured separately, in `ACQUISITION_POLICIES`
@@ -44,6 +44,7 @@ import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
 from . import ambiguity_resolution
+from . import bds_b1c
 from . import bds_b2a
 from . import bpsk_acquisition
 from . import sample_streaming
@@ -305,6 +306,61 @@ class BdsB2a(Signal):
         ]
 
 
+class BdsB1C(Signal):
+    """
+    BeiDou B1C (open service), narrow-band model: a data component on I and
+    the BOC(1,1) part of the pilot on Q, both at 1.023 Mcps (ICD Table 4-2).
+
+    Unlike GPS L1C the two components are in carrier quadrature (data 0
+    degrees, pilot 90 degrees), so the pilot carrier loop sees the data on
+    its imaginary axis, as on L5 and B2a.  The data has no secondary code.
+    The pilot carries a 1800-chip overlay, one chip per 10 ms primary period,
+    so it repeats every 18 s; the overlay search is FFT-based, as for L1C.
+
+    The BOC(6,1) part of the pilot (1/11 of the power, in phase with the
+    data) is not modelled (D-062).  The sample rate must be at least about
+    4 Msps for the BOC(1,1) lobes.  MEO and IGSO satellites send B1C (PRN 1
+    to 63).
+    """
+
+    signal_type_id = "BDS_B1C"
+    link = LINKS[LinkId.L1]
+    carrier_freq_hz = bds_b1c.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = bds_b1c.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = bds_b1c.PRIMARY_PERIOD_MS
+    sat_id_prefix = "C"
+    default_prns = tuple(range(bds_b1c.FIRST_PRN, bds_b1c.LAST_PRN + 1))
+
+    @staticmethod
+    def _build_components(prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        code_d = bds_b1c.generate_data_code(prn).copy()
+        code_p = bds_b1c.generate_pilot_code(prn).copy()
+        overlay_p = bds_b1c.generate_pilot_secondary_code(prn).copy()
+        # ICD 4.2.2: sign(sin(2 pi f t)), the first half-chip positive.  This
+        # is `BOC_SIN`.  The subcarrier is evaluated by the correlator; it is
+        # not part of the code array (see `code_components`).
+        subcarrier = Subcarrier(
+            kind=SubcarrierKind.BOC_SIN, rate_hz=bds_b1c.BOC11_SUBCARRIER_RATE_HZ
+        )
+        return [
+            CodeComponent(
+                name="B1CD", sequence=code_d, branch=Branch.I,
+                power_weight=bds_b1c.DATA_POWER_FRACTION,
+                # One B-CNAV1 symbol is one 10 ms primary period.
+                symbol_period_ms=bds_b1c.DATA_SYMBOL_PERIOD_MS,
+                subcarrier=subcarrier,
+            ),
+            # The pilot is dataless: no symbol period.  Its 1800-chip overlay
+            # is the long code the overlay search locks.
+            CodeComponent(
+                name="B1CP", sequence=code_p, branch=Branch.Q, overlay=overlay_p,
+                power_weight=bds_b1c.PILOT_BOC11_POWER_FRACTION,
+                subcarrier=subcarrier,
+            ),
+        ]
+
+
 try:
     class GpsL1C(Signal):
         """
@@ -379,6 +435,7 @@ SIGNALS: dict[str, type[Signal]] = {
     GpsL2C.signal_type_id: GpsL2C,
     GpsL5.signal_type_id: GpsL5,
     BdsB2a.signal_type_id: BdsB2a,
+    BdsB1C.signal_type_id: BdsB1C,
 }
 if GpsL1C is not None:
     SIGNALS[GpsL1C.signal_type_id] = GpsL1C
@@ -464,6 +521,13 @@ if GpsL1C is not None:
 # Nothing is left ambiguous in the `ambiguous_component` sense: data and pilot
 # are both 10230 chips, so locating one locates the other.
 ACQUISITION_POLICIES["BDS_B2A"] = AcquisitionPolicy(component_name="B2aP")
+
+# B1C: acquire on the pilot's BOC(1,1) part.  It has 29/44 of the power against
+# 1/4 for the data, and it is dataless inside one 10 ms period.  The 1800-chip
+# overlay (18 s) is not folded in, as for L1C: acquisition pins the code phase
+# modulo 10 ms and the post-lock FFT search finds the overlay phase.  Data and
+# pilot are both 10230 chips, so nothing is left ambiguous.
+ACQUISITION_POLICIES["BDS_B1C"] = AcquisitionPolicy(component_name="B1CP")
 
 
 @dataclass(frozen=True)
@@ -588,6 +652,25 @@ TRACKING_POLICIES["BDS_B2A"] = TrackingPolicy(
     synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
         carrier_component=1, code_components=(0, 1), costas=False
     ),
+)
+
+
+# B1C: pilot carrier, as B2a, because the pilot is in quadrature with the data
+# (ICD Table 4-2) and a later switch would need a quarter-cycle re-pull.  The
+# delay discriminator uses both components, weighted by `power_weight`
+# (data 1/4, pilot 29/44).  Costas stays on while the 1800-chip overlay flips
+# the pilot sign every 10 ms.  The coherent ceiling is 10 ms (one data symbol).
+# The overlay search is the FFT search of L1C: 1800 offsets is too many for
+# brute force, and 200 prompts is 2 s of tracking.
+TRACKING_POLICIES["BDS_B1C"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+    overlay_search=secondary_code.fft_search,
+    overlay_prompts_to_observe=200,
 )
 
 if GpsL1C is not None:
