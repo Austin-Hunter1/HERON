@@ -1,11 +1,11 @@
 """
-Preparing BeiDou B2a tracking for navigation, next to GPS.
+Preparing BeiDou B2a and B1C tracking for navigation, next to GPS.
 
 Notebook 02 decodes a tracking run in four steps: turn the tracked epochs into symbols,
 find the message in them, anchor the satellite's code phase to a time of week, and
 assemble an ephemeris.  For GPS that is `cnav.decode` and a RINEX download.  For B2a
-the signal carries its own ephemeris, so one function does all four, per channel or for
-a whole run.  It lives here, not in the notebook, because the single-signal flow and the
+(B-CNAV2) and B1C (B-CNAV1) the signal carries its own ephemeris, so one function does
+all four, per channel or for a whole run.  It lives here, not in the notebook, because the single-signal flow and the
 combined GPS + BeiDou flow (D-058) both need it, and because it can be tested.
 """
 
@@ -14,11 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import observables
-from .nav import bcnav2
+from .nav import bcnav1, bcnav2
 from .nav import symbols as nav_symbols
 from .nav.ephemeris import BdsEphemeris
 
 SIGNAL_TYPE_ID = "BDS_B2A"
+B1C_SIGNAL_TYPE_ID = "BDS_B1C"
 
 
 @dataclass
@@ -26,7 +27,7 @@ class DecodedChannel:
     """One tracked satellite after decoding.  `failure` says why it has no anchor."""
 
     stream: object
-    result: bcnav2.Bcnav2DecodeResult | None = None
+    result: bcnav2.Bcnav2DecodeResult | bcnav1.Bcnav1DecodeResult | None = None
     ephemeris: BdsEphemeris | None = None
     anchor: observables.TimeAnchor | None = None
     anchor_uptime_ms: float | None = None
@@ -61,9 +62,47 @@ def decode_bcnav2_channel(outputs, sat_id: str) -> DecodedChannel:
     )
 
 
+def decode_bcnav1_channel(outputs, sat_id: str) -> DecodedChannel:
+    """
+    Symbols, frames, ephemeris and time anchor for one B1C channel.
+
+    One B-CNAV1 frame holds the whole ephemeris and the clock in its subframe 2, so a
+    channel is usable as soon as one frame passes its CRC and its IODE matches its
+    IODC.  A frame is 18 s long, so a channel needs about 40 s of tracking: the
+    overlay search, the pull-in, and then one whole frame at the right place.
+    """
+    stream = nav_symbols.extract(outputs, B1C_SIGNAL_TYPE_ID)
+    if not len(stream):
+        return DecodedChannel(stream, failure=f"{sat_id} (never reached the state that makes epochs symbols)")
+    result = bcnav1.decode(stream.soft, expected_prn=int(sat_id[1:]))
+    if not result.synced:
+        return DecodedChannel(stream, result, failure=f"{sat_id} ({len(stream):,} symbols, no frame survived the CRC)")
+    ephemeris = bcnav1.assemble_ephemeris(result, sat_id=sat_id)
+    if ephemeris is None:
+        return DecodedChannel(
+            stream, result,
+            failure=f"{sat_id} ({len(result.frames)} frames, but IODE never matched the IODC low byte)",
+        )
+    frame = result.frames[0]
+    return DecodedChannel(
+        stream, result, ephemeris,
+        anchor=observables.anchor_from_bcnav1(stream, frame),
+        anchor_uptime_ms=float(stream.uptime_ms[frame.symbol_index]),
+    )
+
+
+def decode_beidou_channel(outputs, sat_id: str, signal_type_id: str) -> DecodedChannel:
+    """`decode_bcnav2_channel` or `decode_bcnav1_channel`, by the signal the channel tracked."""
+    if signal_type_id == SIGNAL_TYPE_ID:
+        return decode_bcnav2_channel(outputs, sat_id)
+    if signal_type_id == B1C_SIGNAL_TYPE_ID:
+        return decode_bcnav1_channel(outputs, sat_id)
+    raise ValueError(f"{signal_type_id!r} is not a BeiDou signal with a decoder here")
+
+
 @dataclass
 class DecodedRun:
-    """A whole B2a tracking run, decoded."""
+    """A whole BeiDou tracking run (B2a or B1C), decoded."""
 
     channels: dict[str, DecodedChannel] = field(default_factory=dict)
 
@@ -87,3 +126,15 @@ class DecodedRun:
 def decode_bcnav2_run(run) -> DecodedRun:
     """`decode_bcnav2_channel` for every channel of a `TrackingRun`."""
     return DecodedRun({sid: decode_bcnav2_channel(run[sid].outputs, sid) for sid in run.signal_ids})
+
+
+def decode_bcnav1_run(run) -> DecodedRun:
+    """`decode_bcnav1_channel` for every channel of a `TrackingRun`."""
+    return DecodedRun({sid: decode_bcnav1_channel(run[sid].outputs, sid) for sid in run.signal_ids})
+
+
+def decode_beidou_run(run, signal_type_id: str) -> DecodedRun:
+    """The decoder that matches `signal_type_id`, for every channel of a `TrackingRun`."""
+    return DecodedRun(
+        {sid: decode_beidou_channel(run[sid].outputs, sid, signal_type_id) for sid in run.signal_ids}
+    )

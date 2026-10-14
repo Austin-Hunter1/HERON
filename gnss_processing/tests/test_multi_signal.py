@@ -1,6 +1,6 @@
 """
 Decoding a B2a tracking channel into an anchor and an ephemeris (`utils.multi_signal`),
-and the common epoch grid that joins two tracking runs.
+the same for a B1C channel, and the common epoch grid that joins two tracking runs.
 
 The symbol stream is built directly from encoded frames, so these tests need no signal
 generator and no tracker: they check the decode, the matching rules (D-055) and the
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from utils import multi_signal, observables
-from utils.nav import bcnav2
+from utils.nav import bcnav1, bcnav2
 from utils.nav import primitives as prim
 from utils.nav import symbols as nav_symbols
 
@@ -136,6 +136,85 @@ def test_a_run_collects_anchors_ephemerides_and_failures(patched_extract):
     assert sorted(decoded.ephemerides) == ["C07", "C09"]
     assert decoded.anchor_uptime_ms["C09"] == pytest.approx(1000.0 + 5.0 * 3)
     assert len(decoded.failures) == 1 and decoded.failures[0].startswith("C11")
+
+
+# --------------------------------------------------------------------------
+# B1C
+# --------------------------------------------------------------------------
+
+
+def _b1c_frame(prn: int, soh_count: int, *, iode=0x6B, iodc=0x26B, how=10) -> np.ndarray:
+    information = np.zeros(576, dtype=np.uint8)
+    for start, length, raw in [(14, 8, how), (22, 10, iodc), (32, 8, iode), (51, 2, 3), (40, 11, 1000)]:
+        information = bcnav1.set_data_field(information, start, length, raw)
+    return bcnav1.encode_frame(
+        prn=prn, soh_count=soh_count, subframe2_bits=bcnav1.build_subframe2(information),
+        subframe3_bits=bcnav1.build_subframe3(),
+    )
+
+
+def _b1c_stream(frames: list[np.ndarray], lead: int = 7) -> nav_symbols.SymbolStream:
+    bits = np.concatenate(frames) if frames else np.zeros(0)
+    soft = np.concatenate([np.ones(lead), bcnav1.soft_symbols(bits)])
+    return nav_symbols.SymbolStream(
+        values=1j * soft,
+        uptime_ms=1000.0 + 10.0 * np.arange(len(soft)),
+        code_phase_ms=2000.0 + 10.0 * np.arange(len(soft)),
+        symbol_period_ms=10,
+        signal_type_id="BDS_B1C",
+        epochs_per_symbol=1,
+        dropped_epochs=0,
+        bit_sync=None,
+        data_in_quadrature=True,
+    )
+
+
+def test_a_good_b1c_channel_gives_an_anchor_an_ephemeris_and_the_uptime(patched_extract):
+    patched_extract["ch7"] = _b1c_stream([_b1c_frame(7, 20), _b1c_frame(7, 21)])
+    decoded = multi_signal.decode_bcnav1_channel("ch7", "C07")
+    assert decoded.failure is None
+    assert decoded.ephemeris.sat_id == "C07"
+    assert decoded.anchor.time_system == "BDT"
+    assert decoded.anchor.tow_s == 10 * 3600 + 20 * 18
+    assert decoded.anchor.week == decoded.ephemeris.week
+    assert decoded.anchor_uptime_ms == pytest.approx(1000.0 + 7 * 10.0)
+    assert decoded.anchor.code_phase_ms == pytest.approx(2070.0)
+    assert decoded.result.sow_is_consistent()
+
+
+def test_a_b1c_channel_with_an_unmatched_iode_is_a_failure(patched_extract):
+    patched_extract["ch7"] = _b1c_stream([_b1c_frame(7, 20, iode=0x6B, iodc=0x26C)])
+    decoded = multi_signal.decode_bcnav1_channel("ch7", "C07")
+    assert decoded.anchor is None and "IODE never matched" in decoded.failure
+
+
+def test_a_b1c_channel_that_tracked_another_satellite_has_no_anchor(patched_extract):
+    patched_extract["ch7"] = _b1c_stream([_b1c_frame(9, 20)])
+    decoded = multi_signal.decode_bcnav1_channel("ch7", "C07")
+    assert decoded.anchor is None and "no frame survived the CRC" in decoded.failure
+
+
+def test_the_decoder_follows_the_signal_type(patched_extract):
+    patched_extract["a"] = _stream(_set_of_three(prn=7))
+    patched_extract["b"] = _b1c_stream([_b1c_frame(7, 20)])
+    assert multi_signal.decode_beidou_channel("a", "C07", "BDS_B2A").anchor.tow_s == 5000 * 3.0
+    assert multi_signal.decode_beidou_channel("b", "C07", "BDS_B1C").anchor.tow_s == 10 * 3600 + 360
+    with pytest.raises(ValueError, match="not a BeiDou signal"):
+        multi_signal.decode_beidou_channel("a", "G07", "GPS_L5")
+
+
+def test_a_b1c_run_collects_its_channels(patched_extract):
+    patched_extract["a"] = _b1c_stream([_b1c_frame(7, 20)])
+    patched_extract["b"] = _b1c_stream([_b1c_frame(11, 20)])  # C09 tracked satellite 11's signal
+    channels = {"C07": SimpleNamespace(outputs="a"), "C09": SimpleNamespace(outputs="b")}
+
+    class FakeRun(dict):
+        signal_ids = list(channels)
+
+    run = multi_signal.decode_beidou_run(FakeRun(channels), "BDS_B1C")
+    assert sorted(run.anchors) == ["C07"]
+    assert len(run.failures) == 1 and run.failures[0].startswith("C09")
+    assert sorted(multi_signal.decode_bcnav1_run(FakeRun(channels)).ephemerides) == ["C07"]
 
 
 def test_common_epoch_grid_is_the_span_every_channel_shares():

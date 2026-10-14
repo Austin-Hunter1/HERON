@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compare the BeiDou B2a ephemerides decoded from a tracking run with precise orbits.
+Compare the BeiDou B2a or B1C ephemerides decoded from a tracking run with precise orbits.
 
 Run this on a machine that can reach CDDIS and has an Earthdata login in `.env`
 (D-054).  The cloud session that wrote it could not, so this script is exercised by
@@ -11,7 +11,8 @@ unit tests on synthetic files but has not been run against real archive files.
 
 What it does, per satellite in the tracking file:
 
-1. decodes the B-CNAV2 frames and assembles the ephemeris (D-055);
+1. decodes the B-CNAV2 (B2a) or B-CNAV1 (B1C) frames and assembles the ephemeris
+   (D-055 for B2a);
 2. compares that orbit with the SP3 orbit, every 5 minutes within +/- SPAN hours of
    its `toe`;
 3. if a RINEX 3 broadcast file is given or downloadable, picks that file's record for
@@ -37,19 +38,25 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from utils import bds_orbit_check, precise_orbits, rinex3_nav, tracking_io  # noqa: E402
 from utils import environment_variables  # noqa: E402
-from utils.nav import bcnav2, symbols  # noqa: E402
+from utils.nav import bcnav1, bcnav2, symbols  # noqa: E402
+
+# The decoder module of each BeiDou signal.  Both have `decode` and `assemble_ephemeris`.
+DECODERS = {"BDS_B2A": bcnav2, "BDS_B1C": bcnav1}
 
 
 def decoded_ephemerides(tracking_file: Path):
     """`{sat_id: BdsEphemeris}` for every satellite in the tracking file that decodes."""
     run = tracking_io.load_tracking_results(tracking_file)
-    if run.signal_type_id != "BDS_B2A":
-        raise SystemExit(f"{tracking_file} holds {run.signal_type_id} tracking, not BDS_B2A")
+    decoder = DECODERS.get(run.signal_type_id)
+    if decoder is None:
+        raise SystemExit(
+            f"{tracking_file} holds {run.signal_type_id} tracking, not one of {sorted(DECODERS)}"
+        )
     out = {}
     for sat_id, result in sorted(run.results.items()):
-        stream = symbols.extract(result.outputs, "BDS_B2A")
-        decoded = bcnav2.decode(stream.soft, expected_prn=int(sat_id[1:]))
-        ephemeris = bcnav2.assemble_ephemeris(decoded)
+        stream = symbols.extract(result.outputs, run.signal_type_id)
+        decoded = decoder.decode(stream.soft, expected_prn=int(sat_id[1:]))
+        ephemeris = decoder.assemble_ephemeris(decoded)
         if ephemeris is None:
             print(f"{sat_id}: no complete ephemeris decoded ({len(decoded.frames)} frames)")
             continue
