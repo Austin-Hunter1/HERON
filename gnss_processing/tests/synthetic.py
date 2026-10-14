@@ -24,6 +24,8 @@ import gnss_tools.signals.gps_l1ca as gps_l1ca
 import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
+from utils import bds_b2a
+
 
 @dataclass(frozen=True)
 class SyntheticTruth:
@@ -247,6 +249,73 @@ def generate_l5_samples(
 
     in_phase = code_i[chip_index % len(code_i)] * overlay_i * data
     quadrature = code_q[chip_index % len(code_q)] * overlay_q
+
+    samples = (in_phase + 1j * quadrature) * np.exp(2j * np.pi * doppler_hz * t)
+    return _add_noise(samples.astype(np.complex64), noise_sigma, rng)
+
+
+def get_b2a_codes(prn: int) -> tuple[np.ndarray, np.ndarray]:
+    """+/-1 int8 (B2aD, B2aP) primary codes, 10230 chips each."""
+    return bds_b2a.generate_data_code(prn), bds_b2a.generate_pilot_code(prn)
+
+
+def get_b2a_overlays(prn: int) -> tuple[np.ndarray, np.ndarray]:
+    """+/-1 int8 secondary codes: the 5-chip data code and the 100-chip pilot code."""
+    return bds_b2a.data_secondary_code(), bds_b2a.generate_pilot_secondary_code(prn)
+
+
+def generate_b2a_samples(
+    *,
+    prn: int,
+    start_sec: float,
+    duration_sec: float,
+    samp_rate: float,
+    doppler_hz: float,
+    code_phase_ms: float,
+    noise_sigma: float = 0.0,
+    nav_bits: bool | np.ndarray = True,
+    overlay: bool = True,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """
+    Baseband BeiDou B2a: data on I, pilot on Q, both BPSK(10) at 10.23 Mcps.
+
+    Like GPS L5, the two components share every chip and sit in carrier
+    quadrature (ICD 4.2.2).  Equal power, so equal amplitude.  Each carries a
+    secondary code that advances once per 1 ms primary period: ``00010`` on the
+    data and a 100-chip Weil code on the pilot.  The data symbol is 5 ms, which
+    is exactly one pass of the data secondary code.
+
+    The sample rate must be at least ~20 Msps (two samples per chip).
+    """
+    code_d, code_p = get_b2a_codes(prn)
+    sec_d, sec_p = get_b2a_overlays(prn)
+
+    n = int(round(samp_rate * duration_sec))
+    t = start_sec + np.arange(n) / samp_rate
+
+    code_rate = bds_b2a.CODE_RATE_CHIPS_PER_SEC * (
+        1.0 + doppler_hz / bds_b2a.CARRIER_FREQ_HZ
+    )
+    chips = code_phase_ms * 1e-3 * bds_b2a.CODE_RATE_CHIPS_PER_SEC + t * code_rate
+    chip_index = chips.astype(np.int64)
+
+    # Secondary-code chips advance once per primary code period.
+    period_index = chip_index // bds_b2a.PRIMARY_CODE_LENGTH
+    overlay_d = sec_d[period_index % len(sec_d)] if overlay else 1
+    overlay_p = sec_p[period_index % len(sec_p)] if overlay else 1
+
+    # One data symbol is 5 primary periods, the length of the data secondary code.
+    data = (
+        _nav_bits(
+            period_index, bds_b2a.DATA_SYMBOL_PERIOD_MS, _symbol_sequence(nav_bits)
+        )
+        if nav_bits is not False
+        else 1
+    )
+
+    in_phase = code_d[chip_index % len(code_d)] * overlay_d * data
+    quadrature = code_p[chip_index % len(code_p)] * overlay_p
 
     samples = (in_phase + 1j * quadrature) * np.exp(2j * np.pi * doppler_hz * t)
     return _add_noise(samples.astype(np.complex64), noise_sigma, rng)

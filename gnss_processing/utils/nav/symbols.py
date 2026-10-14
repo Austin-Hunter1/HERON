@@ -13,6 +13,7 @@ property of the signal rather than of the decoder:
     L2C      0 (CM)            20 ms    the CM code period IS the symbol
     L5       0 (L5I)           10 ms    NH10 overlay sync
     L1C      0 (L1CD)          10 ms    L1CD's code period; L1CO gives the frame
+    B2a      0 (B2aD)           5 ms    the 100 ms pilot overlay is 20 whole symbols
 
 The two things that make this more than a reshape:
 
@@ -53,6 +54,7 @@ DATA_COMPONENT: dict[str, int] = {
     "GPS_L2C": 0,  # CM
     "GPS_L5": 0,  # L5I
     "GPS_L1C": 0,  # L1CD
+    "BDS_B2A": 0,  # B2aD
 }
 
 SYMBOL_PERIOD_MS: dict[str, int] = {
@@ -60,6 +62,7 @@ SYMBOL_PERIOD_MS: dict[str, int] = {
     "GPS_L2C": 20,
     "GPS_L5": 10,
     "GPS_L1C": 10,
+    "BDS_B2A": 5,
 }
 
 # Whether the signal's symbol boundary is established by an overlay code.  L1 C/A
@@ -69,6 +72,9 @@ NEEDS_BIT_SYNC: dict[str, bool] = {
     "GPS_L2C": False,
     "GPS_L5": False,
     "GPS_L1C": False,
+    # The 5 ms symbol is 5 whole primary periods, and the pilot overlay (100 ms)
+    # is 20 whole symbols, so the pilot overlay sync gives the boundary.
+    "BDS_B2A": False,
 }
 
 # Whether the channel had a tiered (overlay) code to synchronise, and therefore
@@ -91,6 +97,7 @@ HAS_OVERLAY: dict[str, bool] = {
     "GPS_L2C": False,    # CM code period is the symbol
     "GPS_L5": True,      # NH10/NH20
     "GPS_L1C": True,     # L1CO, 1800 bits at one per 10 ms code period
+    "BDS_B2A": True,     # 100-chip pilot overlay and the 5-chip data overlay
 }
 
 # Whether the data component sits 90 degrees from the carrier loop's reference.
@@ -112,6 +119,9 @@ DATA_IN_QUADRATURE: dict[str, bool] = {
     "GPS_L2C": False,
     "GPS_L5": True,
     "GPS_L1C": False,
+    # Like L5 (ICD 4.2.2): the carrier loop runs on the pilot (Q), and the data
+    # component (I) is 90 degrees from it.
+    "BDS_B2A": True,
 }
 
 

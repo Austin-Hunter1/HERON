@@ -450,6 +450,21 @@ ACQUISITION_POLICIES: dict[str, AcquisitionPolicy] = {
 if GpsL1C is not None:
     ACQUISITION_POLICIES["GPS_L1C"] = AcquisitionPolicy(component_name="L1CP")
 
+# B2a: acquire on the pilot (OQ-4: pilot only first; summing data and pilot would
+# add about 3 dB and can be added later).  The pilot is dataless, so no symbol
+# flip breaks the dwell.
+#
+# The overlay is NOT folded in.  Its period is 100 ms, so a folded replica would
+# be 100 ms long: a 10 Hz Doppler bin and 100 times the search grid.  Like L1C,
+# acquisition then pins the code phase only modulo one 1 ms primary period and
+# the overlay phase comes from the post-lock search (`utils.secondary_code`).
+# Each 1 ms block is still a whole primary period, so the overlay can only flip
+# the sign between blocks; it cannot break a block.  Sum blocks non-coherently.
+#
+# Nothing is left ambiguous in the `ambiguous_component` sense: data and pilot
+# are both 10230 chips, so locating one locates the other.
+ACQUISITION_POLICIES["BDS_B2A"] = AcquisitionPolicy(component_name="B2aP")
+
 
 @dataclass(frozen=True)
 class TrackingPolicy:
@@ -548,6 +563,33 @@ TRACKING_POLICIES: dict[str, TrackingPolicy] = {
         # decoder wants.
     ),
 }
+# B2a follows the L5 recipe, because the ICD gives it the same structure: two
+# equal-power BPSK(10) components 90 degrees apart, a 1 ms primary period, a
+# secondary code on each, and data on I only.  What differs is only the numbers.
+TRACKING_POLICIES["BDS_B2A"] = TrackingPolicy(
+    # Carrier on B2aP (component 1), the pilot, from the start.  The pilot is in
+    # quadrature with the data, so switching components later would force a
+    # re-pull.  Costas stays on until the 100-chip pilot overlay is stripped:
+    # until then it flips the pilot's sign every 1 ms.
+    #
+    # The delay discriminator combines both components non-coherently.  They have
+    # equal power (ICD Table 4-2), so this is worth about 3 dB.
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    # Overlay stripped: the pilot is really dataless, so the carrier loop uses the
+    # full four-quadrant angle.
+    #
+    # The coherent ceiling is read off the code set, not written here (see
+    # `coherent_duration_limits_ms`): B2aD's 5 ms symbol sets it, so 5 ms at most
+    # on this signal against 10 ms on L5.  The default overlay search is used: 100
+    # offsets is cheap for brute force, and the default window of whole overlay
+    # periods is 0.4 s of tracking.
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+)
+
 if GpsL1C is not None:
     TRACKING_POLICIES["GPS_L1C"] = TrackingPolicy(
         # Carrier on L1CP, the pilot, from the start -- three times L1CD's power.

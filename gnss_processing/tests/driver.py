@@ -18,6 +18,7 @@ from utils import sample_streaming
 from utils import tracking_channel
 from utils.signal_interfaces import (
     TRACKING_POLICIES,
+    BdsB2a,
     GpsL1C,
     GpsL1CA,
     GpsL2C,
@@ -80,13 +81,17 @@ FAMILY_LOOP_OVERRIDES = {
 # L1CA and L2C at one interval means those goldens never exercise the extension.
 # That is deliberate -- it was already true before -- and the extension is covered
 # directly in tests/test_coherent_integration.py.
-REQUESTED_COHERENT_DURATION_MS = {"L1CA": 1, "L2C": 1, "L5": 10, "L1C": 10}
+#
+# B2a asks for 5 ms, the cap its 5 ms data symbol sets.  Asking for L5's 10 ms would
+# only add a warning and the same 5 ms result.
+REQUESTED_COHERENT_DURATION_MS = {"L1CA": 1, "L2C": 1, "L5": 10, "L1C": 10, "B2A": 5}
 
 _SIGNAL_TYPES = {
     "L1CA": GpsL1CA,
     "L2C": GpsL2C,
     "L5": GpsL5,
     "L1C": GpsL1C,
+    "B2A": BdsB2a,
 }
 
 _FAMILY_GENERATORS = {
@@ -94,6 +99,7 @@ _FAMILY_GENERATORS = {
     "L2C": synthetic.generate_l2c_samples,
     "L5": synthetic.generate_l5_samples,
     "L1C": synthetic.generate_l1c_samples,
+    "B2A": synthetic.generate_b2a_samples,
 }
 
 OUTPUT_FIELDS = (
@@ -127,7 +133,9 @@ def _build_channel(scenario: TrackingScenario):
     )
     policy = TRACKING_POLICIES[signal_type.signal_type_id]
 
-    signal = build_signals(signal_type, prns=[scenario.prn])[f"G{scenario.prn:02d}"]
+    signal = build_signals(signal_type, prns=[scenario.prn])[
+        f"{signal_type.sat_id_prefix}{scenario.prn:02d}"
+    ]
 
     # Seed the loops the way acquisition would: offset Doppler, offset code phase.
     seed_doppler_hz = scenario.doppler_hz - scenario.doppler_error_hz

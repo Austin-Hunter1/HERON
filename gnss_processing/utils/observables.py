@@ -49,6 +49,7 @@ BAND_FREQ_HZ: dict[str, float] = {
     "GPS_L1C": L1_FREQ_HZ,
     "GPS_L2C": L2_FREQ_HZ,
     "GPS_L5": L5_FREQ_HZ,
+    "BDS_B2A": L5_FREQ_HZ,
 }
 
 # A rough transit time, used only to place the nominal receiver clock so that
