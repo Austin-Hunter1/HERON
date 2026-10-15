@@ -47,6 +47,6 @@ These are not new work. They finish phases that the cloud session could not.
 
 | Item | Why | Notes |
 | --- | --- | --- |
-| Batch script over many collects | The MATLAB `Automate_*.m` idea: run notebooks 01 and 02 over a folder and sort by position error. | Plan phase 9 item 6. Not started; the user must say if they want it. |
+| Batch script over many collects | The MATLAB `Automate_*.m` idea. | The user declined it on 2026-10-15 (D-066). Do not build it unless asked again. |
 | BDSBAS-B1C | The SBAS signal from three GEO satellites (D-045). | Only if ever wanted. The ICD is in `docs/icd/`. |
 | Windows notes for the notebook runner | `run_notebook.py` has Linux defaults (kernel name, interpreter path). | The flags `--python` and `--kernel` already exist. Write the confirmed recipe in the `run-gnss-notebooks` skill. |
