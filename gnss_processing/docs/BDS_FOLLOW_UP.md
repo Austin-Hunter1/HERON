@@ -39,6 +39,7 @@ These are not new work. They finish phases that the cloud session could not.
 | BDGIM ionosphere | No ionosphere correction for BeiDou now (D-053). The nine terms are already parsed (`Type30.bdgim_alpha`, `Page1.bdgim_alpha`). | ICD section 7.8.2 gives the algorithm. |
 | Dual-frequency B1C + B2a iono-free pseudorange | Removes the first-order ionosphere (plan OQ-16). | Not started; the user asked to be asked first. Needs B1C and B2a of one PRN on one grid. |
 | Share the ephemeris between B1C and B2a of one PRN | A B1C channel could use the B2a ephemeris (plan OQ-15). | Not started; the user asked to be asked first. |
+| Corrections use the a-priori position | Troposphere and Sagnac are evaluated at the supplied a-priori position and are not iterated with the solution. On the real B2a recording, a solve with no a-priori gave a mean height 19 m higher than the seeded solve (found while writing the PDF report). | Iterate the corrections with the solved position, or warn when no a-priori is given. |
 | Message type 33 (BGTO) | Can seed the inter-system bias (plan OQ-8). | Not parsed. |
 | GPS L1C message | CNAV-2 needs a binary LDPC decoder. | Also needs a `gnss-tools` checkout that defines `GpsL1C`. |
 | GPS L1 C/A in notebook 02 section 10 | Allows a B1C + L1 C/A combined fix. | The LNAV decode branch is not wired into that section. |
