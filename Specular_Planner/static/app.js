@@ -913,6 +913,7 @@ document.getElementById("btnClear").onclick = () => {
 };
 
 map.on("click", (e) => {
+  if (document.body.dataset.view !== "plan") return;
   if (missionMode === "survey") {
     pickWater(e.latlng);
     return;
@@ -933,7 +934,7 @@ map.on("click", (e) => {
   }
 });
 map.on("dblclick", (e) => {
-  if (missionMode !== "areas" || !drawing) return;
+  if (document.body.dataset.view !== "plan" || missionMode !== "areas" || !drawing) return;
   L.DomEvent.stop(e);
   if (draft.length >= 3) draft.pop();
   finishDraft();
@@ -1032,6 +1033,7 @@ function paintClickWps() {
 }
 
 function resetMission() {
+  window.dispatchEvent(new Event("heron:plan-invalid"));
   planGen += 1;
   stopPlay();
   lastPlan = null;
@@ -1206,6 +1208,7 @@ function pickWater(latlng) {
 }
 
 async function computePlan() {
+  window.dispatchEvent(new Event("heron:plan-invalid"));
   const gen = ++planGen;
   if (missionMode === "survey" && !surveyStart) {
     setStatus("Select a waterbody first.", true);
@@ -1721,6 +1724,7 @@ function paintSummary(plan) {
 
 function showPlan(plan) {
   lastPlan = plan;
+  window.dispatchEvent(new CustomEvent("heron:plan-ready", { detail: plan }));
   stopPlay();
   playT = 0;
   dispHdg = null;
