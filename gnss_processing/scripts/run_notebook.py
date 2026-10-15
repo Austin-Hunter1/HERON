@@ -15,10 +15,28 @@ Usage:
     python scripts/run_notebook.py 02 --set SIGNAL_ID=GpsL1CA --set EXPERIMENT_INDEX=0 \\
         --set CHANNEL_INDEX=1
 
+BeiDou (SIGNAL_ID is a class name, so pass BdsB2a or BdsB1C without quotes).  B2a is on
+the L5 band and B1C is on the L1 band, so the channel index differs.  Run notebook 01
+first; notebook 02 reads the tracking file it writes:
+    python scripts/run_notebook.py 01 --set SIGNAL_ID=BdsB2a --set EXPERIMENT_INDEX=0 \\
+        --set CHANNEL_INDEX=0
+    python scripts/run_notebook.py 02 --set SIGNAL_ID=BdsB2a --set EXPERIMENT_INDEX=0 \\
+        --set CHANNEL_INDEX=0
+    python scripts/run_notebook.py 01 --set SIGNAL_ID=BdsB1C --set EXPERIMENT_INDEX=0 \\
+        --set CHANNEL_INDEX=1
+    python scripts/run_notebook.py 02 --set SIGNAL_ID=BdsB1C --set EXPERIMENT_INDEX=0 \\
+        --set CHANNEL_INDEX=1
+The indices above are examples.  Read the right ones from the catalog table that the
+notebook prints (run it once with any index to see the table).
+
 Each --set KEY=VALUE overwrites the right-hand side of the first top-level
 assignment `KEY = ...` found in any code cell (VALUE is inserted as raw Python
 source, so pass GpsL5 not "GpsL5", and 1 not "1"). A trailing inline comment on
 that line is preserved.
+
+On Windows or with another environment, give the interpreter and the kernel yourself:
+    python scripts/run_notebook.py 01 --python <path to python.exe> --kernel <kernel name> ...
+The defaults (`--python` and `--kernel`) are the Linux ones named below.
 
 Requires the `gnss_tracking_linux` Jupyter kernel (see the `run-gnss-notebooks`
 skill for how it's set up) and must run with this repo's root as the working

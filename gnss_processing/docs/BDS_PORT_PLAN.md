@@ -822,16 +822,16 @@ user before changing any default that already exists for GPS.
 
 - [ ] Read sections 0 to 5 and 11.
 - [x] Phase 0 done; baseline saved; OQ-2, 3, 5, 12 asked and recorded.
-- [ ] Phase 1: B2a codes, `BdsB2a`, tests green.
-- [ ] Phase 2: B2a policies, synthetic tests green.
-- [ ] Phase 3: notebook 01 on real L5-band data.
-- [ ] Phase 4: B-CNAV2 decoder.
-- [ ] Phase 5: BDS ephemeris, time, truth data.
-- [ ] Phase 6: notebook 02, B2a fix, then L5 + B2a fix.
-- [ ] Phase 7: B1C signal, notebook 01 on L1 data.
-- [ ] Phase 8: B-CNAV1 decoder, B1C fix.
-- [ ] Phase 9: docs, scripts, follow-up list.
-- [ ] `docs/DECISIONS.md` holds every answer.
+- [x] Phase 1: B2a codes, `BdsB2a`, tests green.
+- [x] Phase 2: B2a policies, synthetic tests green.
+- [x] Phase 3: notebook 01 on real L5-band data.
+- [x] Phase 4: B-CNAV2 decoder.
+- [x] Phase 5: BDS ephemeris, time, truth data.
+- [x] Phase 6: notebook 02, B2a fix, then L5 + B2a fix. (Combined fix not run on real data; see BDS_FOLLOW_UP.md.)
+- [~] Phase 7: B1C signal done; notebook 01 on real L1 data not yet run (D-063).
+- [~] Phase 8: B-CNAV1 decoder done on synthetic data; B1C fix on real data not yet run (D-064, Q-019).
+- [x] Phase 9: docs, scripts, follow-up list. (Batch script and Windows recipe: asked, not done; D-066.)
+- [x] `docs/DECISIONS.md` holds every answer (D-065).
 
 ---
 

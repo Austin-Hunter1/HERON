@@ -111,8 +111,14 @@ python3 scripts/run_notebook.py 01 \
   --set START_OFFSET_MS=0.0
 ```
 
-`SIGNAL_ID` is one of `GpsL1CA`, `GpsL2C`, `GpsL5`, `GpsL1C` (bareword, no
-quotes -- it's a class reference, not a string). `EXPERIMENT_INDEX`/
+`SIGNAL_ID` is one of `GpsL1CA`, `GpsL2C`, `GpsL5`, `GpsL1C`, `BdsB2a`,
+`BdsB1C` (bareword, no quotes -- it's a class reference, not a string). The
+band decides which collects can be used: `GpsL1CA`, `GpsL1C` and `BdsB1C` are
+on L1; `GpsL2C` is on L2; `GpsL5` and `BdsB2a` are on L5. BeiDou satellites
+are `C01`..`C63`; a B1C PRN and its B2a PRN name the same satellite. B2a needs
+about 20 MHz of sample bandwidth; B1C (narrow-band model) needs about 4-5 MHz.
+Tracking files made for `BdsB2a` before the symbol-grid fix of D-059 are not
+valid -- track again. `EXPERIMENT_INDEX`/
 `CHANNEL_INDEX` here index notebook 01's own catalog printout, which is
 filtered to channels carrying that signal's band -- re-run with throwaway
 values first to read it, same as notebook 00. This is the slow notebook (it
@@ -137,6 +143,32 @@ notebook 02's own printed table the same way. It also takes
 `RECEIVER_REFERENCE_GEO` (an a-priori lat/lon/height tuple) and
 `TRACK_DURATION_MS`; leave them at the notebook's own defaults unless the user
 gives a real receiver position or wants a shorter window.
+
+### BeiDou in notebook 02
+
+`SIGNAL_ID=BdsB2a` and `SIGNAL_ID=BdsB1C` need no broadcast file and no
+download: the signal carries its own ephemeris (B-CNAV2 for B2a, B-CNAV1 for
+B1C), in BeiDou time. The tracking run must be long enough to decode it: 30 s
+for B2a (frames of 3 s, three message types) and 40 s for B1C (one frame is
+18 s). Notebook 02 prints a table of what decoded; a satellite with no frame
+is listed under "Not decoded". No ionosphere correction is applied to BeiDou
+(D-053). Section 10 of notebook 02 joins a GPS L5 run and a BeiDou run into
+one fix with an inter-system bias; set `COMBINED_ENABLED=True` for it, and it
+needs one notebook-01 tracking file for each signal, made with the same
+`START_OFFSET_MS` and `TRACK_DURATION_MS`.
+
+To compare decoded BeiDou orbits with precise orbits (needs CDDIS access):
+`python3 scripts/compare_bds_orbits.py <tracking.h5> --date YYYY-MM-DD`.
+
+## Windows
+
+`run_notebook.py` defaults are Linux ones: the kernel `gnss_tracking_linux` and
+the interpreter `gps-tracking-example/.venv-linux/bin/python3`. On another
+system pass `--python <interpreter>` and `--kernel <kernelspec name>`.
+`.env` may hold one path for each platform (`COLLECTS_PATH_WINDOWS` and so
+on; see `utils/environment_variables.py`). The exact Windows recipe (which
+environment, which kernel) is **not confirmed by the user yet**; ask before
+writing it down here.
 
 ## If a run fails
 

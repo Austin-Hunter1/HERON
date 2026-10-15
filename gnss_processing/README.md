@@ -44,6 +44,35 @@ made for HERON's UAS GNSS-R work that are not upstream:
   `02-navigation.ipynb` -- updated to use the above, plus per-run figure saving and
   a `CHANNEL_INDEX` disambiguation fix for collects with more than one capture per band.
 
+BeiDou B2a and B1C (D-044 to D-064; plan in `docs/BDS_PORT_PLAN.md`, follow-up list
+in `docs/BDS_FOLLOW_UP.md`):
+
+- `utils/bds_b2a.py`, `utils/bds_b1c.py` (new) -- the B2a and B1C code generators and
+  signal constants. They do not use `gnss-tools`. B1C reads its code pairs from
+  `docs/icd/bds_b1c_code_tables.json`.
+- `utils/signal_interfaces.py` -- `BdsB2a` and `BdsB1C` signal classes, and their
+  acquisition and tracking policies.
+- `utils/tracking_channel.py` -- the symbol grid is tied to the overlay counter once
+  the overlay syncs (D-059). B2a acquires only modulo 1 ms, so without this the
+  epochs sit up to 4 ms from the symbol edge.
+- `utils/nav/bcnav2.py`, `utils/nav/bcnav1.py`, `utils/nav/ldpc.py`,
+  `utils/nav/ldpc_b1c_tables.py` (new) -- the B-CNAV2 (B2a) and B-CNAV1 (B1C)
+  decoders and the three 64-ary LDPC codes.
+- `utils/nav/ephemeris.py` -- `BdsEphemeris` (BeiDou orbit and clock, B2a and B1C
+  group delays). `utils/nav/symbols.py` has the BeiDou table rows.
+- `utils/time_systems.py` (new) -- GPST and BDT.
+- `utils/observables.py`, `utils/navigation.py` -- time scales per system, joining
+  several tracking runs, and a position solution with one inter-system bias for each
+  extra system, optional C/N0 weights, and a fallback bias.
+- `utils/multi_signal.py` (new) -- decodes a BeiDou tracking run into anchors and
+  ephemerides.
+- `utils/rinex3_nav.py`, `utils/bds_orbit_check.py` (new),
+  `scripts/compare_bds_orbits.py` (new) -- compare decoded BeiDou orbits with RINEX 3
+  and SP3 files. Needs CDDIS access.
+- `docs/icd/` -- the B2a and B1C interface documents and the tables made from them.
+- `notebooks/01-...ipynb` and `02-...ipynb` -- accept `BdsB2a` and `BdsB1C`. Notebook 02
+  section 10 joins GPS L5 and BeiDou runs.
+
 `submodules/gnss-tools` here is pinned to the same commit as the corresponding
 submodule inside the `gps-tracking-example` submodule elsewhere in this repo
 (`b5409db92a45fdbddae9a4863ded821873dadab6`, the real tip of upstream `gnss-tools`'
@@ -54,6 +83,32 @@ Everything below this section is upstream's own README, kept for setup reference
 the clone instructions assume `cu-sense-lab/gps-tracking-example` directly rather
 than this folder -- clone the HERON repo with `--recurse-submodules` instead (see
 the root [README.md](../README.md)).
+
+---
+
+## BeiDou B2a and B1C: quick start
+
+B2a is on the L5 band (1176.45 MHz). B1C is on the L1 band (1575.42 MHz). Both run
+through the same three notebooks as the GPS signals.
+
+1. **Set up** as in "Getting Started" below (this folder also has a `uv.lock`, so
+   `uv sync` can build the environment). Run `pytest` to check; the known baseline
+   failures are in `docs/BDS_BASELINE_TESTS.md`. Fill in `.env` (`COLLECTS_PATH`, `OUTPUTS_PATH`,
+   `RESOURCES_PATH`). A recording needs a `metadata.yml` in its experiment folder.
+2. **Notebook 00**: check that the recording is usable. Use a channel of the right
+   band. B2a needs about 20 MHz of bandwidth; B1C needs about 4-5 MHz.
+3. **Notebook 01**: set `SIGNAL_ID = BdsB2a` (or `BdsB1C`) and the experiment and
+   channel indices that the catalog table shows. Run all cells. It writes a tracking
+   file under `OUTPUTS_PATH/tracking/`. Track at least 30 s (B2a) or 40 s (B1C).
+4. **Notebook 02**: set the same `SIGNAL_ID` and the same file. Run all cells.
+   It decodes the message, forms pseudoranges and solves the position. The
+   ephemeris comes from the signal; nothing is downloaded. Put the antenna position
+   in `RECEIVER_REFERENCE_GEO` to see the error.
+5. **Headless**: `python scripts/run_notebook.py 01 --set SIGNAL_ID=BdsB1C ...`
+   (see the docstring of `scripts/run_notebook.py` for the full commands).
+
+Limits that you should know: no ionosphere correction for BeiDou, B1C narrow-band
+only, and B1C has no real-data check yet. See `docs/BDS_FOLLOW_UP.md`.
 
 ---
 
