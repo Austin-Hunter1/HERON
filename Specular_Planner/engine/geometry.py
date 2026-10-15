@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import math
+from pyproj import Transformer
+import urllib
+import json
+import functools
+import requests
 
 # future: need to do ellipsoid and geoid offset dynamic!
 # it is now the future
@@ -12,6 +17,69 @@ C = 299792458.0
 SDR_RATE = 22e6
 L5_HZ = 1176.45e6
 L5_LAMBDA = C / L5_HZ
+
+
+    ## LIDAR DATA from USGS
+def usgs_elevation(lat: float, lon: float) -> float | None:
+    """USGS 3DEP ground elevation (NAVD88 metres, lidar where available)."""
+    url = (
+        "https://epqs.nationalmap.gov/v1/json"
+        f"?x={lon}&y={lat}&wkid=4326&units=Meters&includeDate=false"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "HERON-planner"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        value = float(json.load(r)["value"])
+    return None if value < -1000 else value
+
+    ## GEOID18 Undulation from NOAA
+def geoid18_height(lat: float, lon: float, model: str = "14", timeout: float = 10.0) -> float:
+    """
+    GEOID18 geoid height N (meters) at a point, from the NGS Geoid API.
+
+    N is relative to the NAD83(2011) ellipsoid, so h_NAD83 = H_NAVD88 + N.
+    lat, lon: decimal degrees (west longitudes negative).
+    Covers CONUS, Puerto Rico and USVI only.
+    """
+    params = {"lat": f"{lat:.8f}", "lon": f"{lon:.8f}", "model": model}
+    resp = requests.get("https://geodesy.noaa.gov/api/geoid/ght", params=params, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+
+    # Fail loudly if the service didn't give us what we asked for
+    if "geoidHeight" not in data or data["geoidHeight"] in (None, ""):
+        raise ValueError(f"No geoid height returned for ({lat}, {lon}): {data}")
+
+    if "GEOID18" not in str(data.get("geoidModel", "")).upper():
+        raise ValueError(f"Expected GEOID18 but service used {data.get('geoidModel')!r}")
+
+    if data.get("units", "m") != "m":
+        raise ValueError(f"Unexpected units {data['units']!r}")
+
+    return float(data["geoidHeight"])
+
+
+def WGS84_to_NAD83(lat: float, lon: float, h: float, tt: float) -> tuple[float, float, float, float]:
+    """
+    Convert WGS84(G2296) 3D to NAD83(2011) 3D using pyproj.
+
+    tt is the epoch in decimal years, e.g. 2026.8 for late 2026.
+    """
+    t = Transformer.from_crs("EPSG:7912", "EPSG:6319", always_xy=True)  # WGS84(G2296) 3D -> NAD83(2011) 3D
+    lon_NAD, lat_NAD, h_NAD, tt_NAD = t.transform(lon, lat, h, tt)
+
+    return lat_NAD, lon_NAD, h_NAD, tt_NAD
+
+
+def NAD83_to_WGS84(lat: float, lon: float, h: float, tt: float) -> tuple[float, float, float, float]:
+    """
+    Convert NAD83(2011) 3D to WGS84(G2296) 3D using pyproj.
+
+    tt is the epoch in decimal years, e.g. 2026.8 for late 2026.
+    """
+    t = Transformer.from_crs("EPSG:6319", "EPSG:7912", always_xy=True)  # NAD83(2011) 3D -> WGS84(G2296) 3D
+    lon_WGS84, lat_WGS84, h_WGS84, tt_WGS84 = t.transform(lon, lat, h, tt)
+    
+    return lat_WGS84, lon_WGS84, h_WGS84, tt_WGS84
 
 
 def lla_to_ecef(lat_deg: float, lon_deg: float, h: float) -> tuple[float, float, float]:

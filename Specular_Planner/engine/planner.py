@@ -27,11 +27,14 @@ from engine.geometry import (
     point_in_ring,
     ring_centroid,
     specular_point,
+    usgs_elevation,
+    geoid18_height,
+    WGS84_to_NAD83,
+    NAD83_to_WGS84,
 )
 
 DEFAULT_PAD = {"lat": 40.086045, "lon": -105.233634, "name": "SURGE pad (north shore)"}
 DEFAULT_HOVER = {"lat": 40.08240, "lon": -105.22680, "name": "Over-water hover"}
-WATER_H = 1578.0 # NEED TO UPDATE THIS TO BE DYNAMIC BASED ON THE WATER HEIGHT
 DEFAULT_H_AGL = 120.0
 DEFAULT_SPEED = 8.0
 DEFAULT_LOITER = 30
@@ -48,6 +51,19 @@ DEFAULT_TARGET = {
         [-105.2282, 40.0816],
     ],
 }
+
+def decimal_year(dt: datetime | None = None) -> float:
+    """Decimal year (e.g. 2026.79) for a datetime. Defaults to now, in UTC."""
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)   # treat naive datetimes as UTC
+    else:
+        dt = dt.astimezone(timezone.utc)
+
+    start = datetime(dt.year, 1, 1, tzinfo=timezone.utc)
+    end = datetime(dt.year + 1, 1, 1, tzinfo=timezone.utc)
+    return dt.year + (dt - start) / (end - start)
 
 
 def load_lake(path: Path) -> dict:
@@ -708,10 +724,11 @@ def plan(
     target_hits = {tgt["name"]: 0 for tgt in target_list}
     last_hdg = 0.0
     used_sids = {h.get("prn") for h in hovers if h.get("prn")}
-
     for t in _sample_times(segs, end, step_s):
         dt = start + timedelta(seconds=t)
         dlat, dlon, phase, _ = _pos_at(t, segs, pad, hovers)
+        dlat_NAD, dlon_NAD, _, _ = WGS84_to_NAD83(dlat, dlon, usgs_elevation(dlat, dlon) + geoid18_height(dlat, dlon), decimal_year())
+        dlat, dlon, WATER_H, _ = NAD83_to_WGS84(dlat_NAD, dlon_NAD, usgs_elevation(dlat_NAD, dlon_NAD) + geoid18_height(dlat_NAD, dlon_NAD), decimal_year())
         alt, gs, vs = _alt_gs(t, segs, h_agl, speed_mps)
         if survey_line is not None and alt >= 5.0:
             pin_lat, pin_lon, pin_sid = _river_splash_at(t, segs, hovers, survey_line, phase)
