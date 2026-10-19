@@ -20,10 +20,10 @@ RC0603JR-070RL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402JR-070RL. Digi-Key P
 RC0603FR-0717R4L,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0717R4L. Digi-Key PN, stock and price not checked yet"
 RMCF0603FT22R0,Stackpole Electronics Inc,RMCF0603FT22R0CT-ND,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0722RL. YAGEO RC0603FR-0722RL out of stock on 2026-10-07: Stackpole used. In stock in the 2026-10-07 Digi-Key cart (0.021 USD at qty 10)"
 RC0603FR-0749R9L,YAGEO,,,,,,5,,"R23 is DNP (fit only if the GNSS PPS source needs 50 ohm). 5 spares in the Digi-Key upload. Rev C (D-028): 0603, was RC0402FR-0749R9L. Digi-Key PN, stock and price not checked yet"
-RC0603FR-07100RL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-07100RL. Digi-Key PN, stock and price not checked yet"
+AC0603FR-07100RL,YAGEO,YAG3561CT-ND,,0.028,,,,,"Rev C (D-028): 0603, was RC0402FR-07100RL. AC series (AEC-Q200) in place of RC series (D-036). Price from the cart of 2026-10-15; stock not checked"
 ERJ-3EKF2940V,Panasonic,,,,,,,,"Rev C (D-028): 0603, was ERJ-2RKF2940X. Digi-Key PN, stock and price not checked yet"
 RC0603FR-071KL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-071KL. Digi-Key PN, stock and price not checked yet"
-RC0603FR-0710KL,YAGEO,,,,,,,,"Rev C (D-028): 0603, was RC0402FR-0710KL. Digi-Key PN, stock and price not checked yet"
+AC0603FR-0710KL,YAGEO,311-10KLDCT-ND,,0.03,,,,,"Rev C (D-028): 0603, was RC0402FR-0710KL. AC series (AEC-Q200) in place of RC series (D-036). Price from the cart of 2026-10-15; stock not checked"
 LP5907MFX-3.3/NOPB,Texas Instruments,296-38557-1-ND,,,,,,,U1 (+3V3_OSC). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
 TLV75533PDBVR,Texas Instruments,296-50411-1-ND,,,,,,,U2 (+3V3_CLK). Replaces TPS7A2033PDBVR (no stock until 2026-11-23). Stock not checked yet
 SiT5155AI-FK-33E0-10.000000,SiTime,,0,55.66,,,,yes,In hand (2026-10-07). Digi-Key estimate 2027-05-17 if more are needed

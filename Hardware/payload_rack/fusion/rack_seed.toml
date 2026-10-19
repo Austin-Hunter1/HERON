@@ -1,0 +1,413 @@
+# Seed values for the flight_rack Fusion design (decision D-035).
+#
+# Why this file exists: Fusion is the master model. This file only seeds a
+# NEW design. After that, you edit the User Parameters in Fusion.
+#
+# Source of every value: Hardware/payload_rack/heron_rack.py (frozen).
+# Names follow heron_rack.py. Three names get a trailing underscore because
+# Fusion refuses the bare name (they are unit symbols): T -> T_, H -> H_, W -> W_.
+# Lists are flattened with 1-based suffixes (WALL_TAB_Y1, ...).
+# Order matters: a parameter can use only names that come before it.
+# Tags VERIFY and PROPOSED are copied from heron_rack.py.
+#
+# Format: NAME = { value = 3.0, unit = "mm", comment = "..." }
+#     or  NAME = { expr = "...", unit = "mm", comment = "..." }
+# unit is "mm", "deg" or "none" (unitless count or factor).
+
+[kicad]
+# Clock board rev C file. Path is relative to this folder. The builder reads
+# J1..J10 from it and makes the CLK_J<n>_KX / _KY parameters (sync_kicad.py
+# updates them later).
+pcb = "../../clock_board_revC/project/heron_clock.kicad_pcb"
+# KiCad page origin offset: heron_rack.py `_clk_read` subtracts 100.0 from x and y.
+origin = 100.0
+
+[materials]
+# Applied by apply_materials.py by category. Library: Fusion Material Library.
+# Category "ref" gets no material (translucent appearance).
+laser = "Plywood, Finish"
+rigid = "ABS Plastic"
+flex = "Rubber"
+library = "Fusion Material Library"
+
+[ref_look]
+# Look of the "ref" parts (reference envelopes, not made). They get no
+# material. The colour copies the CadQuery ref colour (0.2, 0.55, 0.3, alpha 0.6).
+# `base` is a library appearance that is copied once into the design.
+library = "Fusion Appearance Library"
+base = "Plastic - Translucent Matte (Green)"
+name = "HERON ref green"
+red = 0.2
+green = 0.55
+blue = 0.3
+alpha = 0.6
+
+# Slot order is the order along X. pitch names a parameter below.
+[[slots]]
+name = "NUC"
+kind = "nuc"
+pitch = "PITCH_NUC"
+
+[[slots]]
+name = "B210_1"
+kind = "b210"
+pitch = "PITCH_B210_1"
+
+[[slots]]
+name = "B210_2"
+kind = "b210"
+pitch = "PITCH_B210_2"
+
+[[slots]]
+name = "B200_1"
+kind = "b200"
+pitch = "PITCH_B200_1"
+
+[[slots]]
+name = "B200_2"
+kind = "b200"
+pitch = "PITCH_B200_2"
+
+[params]
+# ---- sheet and general (heron_rack.py: parameters block)
+T_     = { value = 3.0,  unit = "mm", comment = "Laser-cut sheet thickness (heron_rack T)" }
+KERF   = { value = 0.15, unit = "mm", comment = "Slot clearance per side for tab/slot joints" }
+H_     = { value = 120.0, unit = "mm", comment = "Interior height, bottom plate top to top plate underside (heron_rack H)" }
+M3_CLR_D = { value = 3.4, unit = "mm", comment = "M3 clearance hole diameter. heron_rack circ(...,3.4) in plates, walls, trays, latch" }
+RACK_Z0 = { expr = "T_", unit = "mm", comment = "Fusion world Z of the CadQuery world origin. The bottom plate (local z 0..T) is grounded at the Fusion origin, so the CadQuery z=0 plane (plate top) is T_ above it. Not in heron_rack.py" }
+
+# ---- Ettus B200/B210 board
+SDR_W    = { value = 99.949,  unit = "mm", comment = "SDR board width (Ettus STEP, board-only CCA)" }
+SDR_L    = { value = 154.686, unit = "mm", comment = "SDR board length" }
+PCB_T    = { value = 1.575,   unit = "mm", comment = "SDR board thickness" }
+SDR_TOP  = { value = 14.125,  unit = "mm", comment = "Tallest part above board bottom (USB-B)" }
+SDR_HOLE_D = { value = 3.18,  unit = "mm", comment = "SDR mounting hole diameter (heron_rack comment d3.18)" }
+SDR_HOLE1_BX = { value = 3.17,   unit = "mm", comment = "SDR_HOLES[0] bx" }
+SDR_HOLE1_BY = { value = -20.19, unit = "mm", comment = "SDR_HOLES[0] by" }
+SDR_HOLE2_BX = { value = 96.77,  unit = "mm", comment = "SDR_HOLES[1] bx" }
+SDR_HOLE2_BY = { value = -20.19, unit = "mm", comment = "SDR_HOLES[1] by" }
+SDR_HOLE3_BX = { value = 3.17,   unit = "mm", comment = "SDR_HOLES[2] bx" }
+SDR_HOLE3_BY = { value = -140.21, unit = "mm", comment = "SDR_HOLES[2] by" }
+SDR_HOLE4_BX = { value = 96.77,  unit = "mm", comment = "SDR_HOLES[3] bx" }
+SDR_HOLE4_BY = { value = -140.21, unit = "mm", comment = "SDR_HOLES[3] by" }
+SDR_REAR_SMA_REF_A = { value = 14.22, unit = "mm", comment = "bx of rear SMA ref_a. Which is 10 MHz / PPS: VERIFY on silkscreen" }
+SDR_REAR_SMA_REF_B = { value = 34.16, unit = "mm", comment = "bx of rear SMA ref_b. VERIFY on silkscreen" }
+SDR_REAR_SMA_AUX   = { value = 70.89, unit = "mm", comment = "bx of rear SMA aux. VERIFY on silkscreen" }
+SDR_USB_BX = { value = 51.69, unit = "mm", comment = "USB connector bx" }
+SDR_PWR_BX = { value = 89.43, unit = "mm", comment = "Power connector bx" }
+SMA_BZ     = { value = 1.96,  unit = "mm", comment = "SMA axis height above board bottom" }
+SMA_OVERHANG = { value = 11.48, unit = "mm", comment = "SMA tip beyond board edge" }
+
+# ---- Intel NUC7i3DNB board
+NUC_S   = { value = 101.6, unit = "mm", comment = "NUC board side (101.6 x 101.6)" }
+NUC_TOP = { value = 25.0,  unit = "mm", comment = "VERIFY: tallest part (cooler) above board bottom" }
+NUC_HOLE1_X = { value = 5.0,  unit = "mm", comment = "VERIFY: NUC_HOLES[0] x from board corner" }
+NUC_HOLE1_Z = { value = 5.0,  unit = "mm", comment = "VERIFY: NUC_HOLES[0] z from board corner" }
+NUC_HOLE2_X = { value = 96.6, unit = "mm", comment = "VERIFY: NUC_HOLES[1] x" }
+NUC_HOLE2_Z = { value = 5.0,  unit = "mm", comment = "VERIFY: NUC_HOLES[1] z" }
+NUC_HOLE3_X = { value = 5.0,  unit = "mm", comment = "VERIFY: NUC_HOLES[2] x" }
+NUC_HOLE3_Z = { value = 96.6, unit = "mm", comment = "VERIFY: NUC_HOLES[2] z" }
+NUC_HOLE4_X = { value = 96.6, unit = "mm", comment = "VERIFY: NUC_HOLES[3] x" }
+NUC_HOLE4_Z = { value = 96.6, unit = "mm", comment = "VERIFY: NUC_HOLES[3] z" }
+NUC_ENV_MARGIN = { value = 10.0, unit = "mm", comment = "nuc_ref: envelope inset from the board edge on each side" }
+
+# ---- 2.5 in SATA SSD (SFF-8201)
+SSD_L = { value = 100.45, unit = "mm", comment = "SSD length" }
+SSD_W = { value = 69.85,  unit = "mm", comment = "SSD width" }
+SSD_T = { value = 7.0,    unit = "mm", comment = "SSD thickness (use 9.5 for thick drives)" }
+SSD_HOLE_IN = { value = 4.07, unit = "mm", comment = "Bottom holes inset from long sides" }
+SSD_HOLE1_Y0 = { value = 9.85,  unit = "mm", comment = "SSD_HOLE_Y[0] start. Slot spans cover both SFF datum readings - VERIFY on drive" }
+SSD_HOLE1_Y1 = { value = 14.0,  unit = "mm", comment = "SSD_HOLE_Y[0] end - VERIFY on drive" }
+SSD_HOLE2_Y0 = { value = 86.45, unit = "mm", comment = "SSD_HOLE_Y[1] start - VERIFY on drive" }
+SSD_HOLE2_Y1 = { value = 90.6,  unit = "mm", comment = "SSD_HOLE_Y[1] end - VERIFY on drive" }
+SSD_CONN_C = { value = 24.0, unit = "mm", comment = "VERIFY: SATA connector centre from drive long edge" }
+SSD_CONN_W = { value = 45.0, unit = "mm", comment = "Pocket width for the 22-pin receptacle adapter (VERIFY with your part)" }
+SSD_CONN_H = { value = 12.0, unit = "mm", comment = "Pocket height for the receptacle adapter (VERIFY with your part)" }
+SLED_T   = { value = 2.0, unit = "mm", comment = "Printed sled plate on the drive bottom (hole) face" }
+SSD_CLR  = { value = 0.3, unit = "mm", comment = "Clearance per side in the guide channels" }
+SSD_BASE = { value = 13.0, unit = "mm", comment = "Cage base height: receptacle adapter + cable exit" }
+SSD_Y0_MAX = { value = 136.0, unit = "mm", comment = "Drive front edge, upper limit (behind the NUC)" }
+SSD_REAR_GAP = { value = 1.0, unit = "mm", comment = "PROPOSED: minimum gap, SSD cage rear face to rear plate front face" }
+SSD_XC   = { value = 23.0, unit = "mm", comment = "Drive + sled centre plane (middle of the NUC slot)" }
+SSD_GUIDE_WALL = { value = 2.0, unit = "mm", comment = "ssd_cage: cage wall thickness outside the channel (cx0 - 2.0), also in ssd_cage_holes, ssd_cage_keep and SSD_Y0" }
+SSD_GUIDE_T = { value = 3.0, unit = "mm", comment = "ssd_cage: guide thickness along Y" }
+SSD_GUIDE_CUT_EXTRA = { value = 0.1, unit = "mm", comment = "ssd_cage: guide channel cut is guide thickness + 0.1 (3.1)" }
+SSD_CAGE_TOP_GAP = { value = 0.4, unit = "mm", comment = "ssd_cage: cage top is H - 0.4" }
+SSD_RIB_Z1 = { value = 55.0, unit = "mm", comment = "ssd_cage: tie rib 1 bottom height" }
+SSD_RIB_Z2 = { value = 90.0, unit = "mm", comment = "ssd_cage: tie rib 2 bottom height" }
+SSD_RIB_T  = { value = 4.0, unit = "mm", comment = "ssd_cage: tie rib height" }
+SSD_RIB_Y_INSET = { value = 2.9, unit = "mm", comment = "ssd_cage: tie rib inset from drive Y edges" }
+SSD_FLANGE_HALF = { value = 27.0, unit = "mm", comment = "ssd_cage: flange half length along Y" }
+SSD_FLANGE_T = { value = 4.0, unit = "mm", comment = "ssd_cage: bottom flange thickness" }
+SSD_EAR_Z_OFF = { value = 6.4, unit = "mm", comment = "ssd_cage: top ear bottom is H - 6.4" }
+SSD_INSERT_DEPTH = { value = 5.0, unit = "mm", comment = "ssd_cage: heat-set insert hole depth (diameter INSERT_D)" }
+SSD_INSERT_TOP_Z_OFF = { value = 5.4, unit = "mm", comment = "ssd_cage: top insert hole starts at H - 5.4" }
+SSD_CAGE_HOLE_DY = { value = 22.0, unit = "mm", comment = "ssd_cage_holes: screw offset from drive Y centre" }
+SSD_CAGE_HOLE_OUT = { value = 5.0, unit = "mm", comment = "ssd_cage_holes: screw offset outside the cage wall" }
+SSD_KEEP_PAD = { value = 5.0, unit = "mm", comment = "ssd_cage_keep: pad around the screw positions" }
+SSD_KEEP_M = { value = 3.0, unit = "mm", comment = "ssd_cage_keep: margin m" }
+SSD_POCKET_Z0 = { value = 3.0, unit = "mm", comment = "ssd_cage: receptacle pocket floor height" }
+SSD_POCKET_OVER = { value = 1.0, unit = "mm", comment = "ssd_cage: pocket cut goes this far above SSD_BASE" }
+SSD_LIGHTEN_Y0 = { value = 3.0, unit = "mm", comment = "ssd_cage: lightening pocket starts this far behind the connector pocket" }
+SSD_LIGHTEN_Y1 = { value = 4.0, unit = "mm", comment = "ssd_cage: lightening pocket ends this far before the rear face" }
+SSD_LIGHTEN_Z_TOP = { value = 2.5, unit = "mm", comment = "ssd_cage: lightening pocket top is SSD_BASE - 2.5" }
+SSD_POCKET_Y_OVER = { value = 1.0, unit = "mm", comment = "ssd_cage (heron_rack.py): the receptacle pocket cut starts this far before the cage front face (fy0 - 1)" }
+SSD_LIGHTEN_X_OVER = { value = 1.0, unit = "mm", comment = "ssd_cage (heron_rack.py): the lightening pocket cut goes this far outside the cage in X (ox0 - 1, ox1 + 1). It also nicks the bottom flanges" }
+SSD_LIGHTEN_Z0 = { value = 3.0, unit = "mm", comment = "ssd_cage (heron_rack.py): lightening pocket floor height (a second literal 3.0, apart from SSD_POCKET_Z0)" }
+SSD_FLANGE_OVER = { value = 5.0, unit = "mm", comment = "ssd_cage (heron_rack.py): flange and top ear reach this far beyond the screw axis (x - 5, x + 5)" }
+SLED_TOP_GAP = { value = 0.3, unit = "mm", comment = "ssd_sled (heron_rack.py): the handle block ends this far below the top plate outer face (H + T - 0.3)" }
+SLED_GAP = { value = 0.3, unit = "mm", comment = "ssd_sled: gap between handle block and drive; plate extends 0.3 above the drive" }
+SLED_HANDLE_Y_INSET = { value = 12.0, unit = "mm", comment = "ssd_sled: handle block inset from drive Y edges" }
+SLED_CORD_Y_INSET = { value = 22.0, unit = "mm", comment = "ssd_sled: cord hole inset from drive Y edges" }
+SLED_CORD_Z0 = { value = 2.5, unit = "mm", comment = "ssd_sled: cord hole bottom above drive top" }
+SLED_CORD_Z1 = { value = 6.5, unit = "mm", comment = "ssd_sled: cord hole top above drive top" }
+SLED_SLOT_D = { value = 3.4, unit = "mm", comment = "ssd_sled: screw slot width (stadium diameter). The slot centre length is (b-a) + this value" }
+SLED_LIGHT_Y_INSET = { value = 10.0, unit = "mm", comment = "ssd_sled: lightening window inset in Y" }
+SLED_LIGHT_Z_INSET = { value = 20.0, unit = "mm", comment = "ssd_sled: lightening window inset in Z" }
+SSD_HATCH_CLR = { value = 0.6, unit = "mm", comment = "plate_local(top): hatch clearance around the drive" }
+SSD_LATCH_OFF = { value = 6.0, unit = "mm", comment = "ssd_latch_xy: latch pivot offset from the clear channel edge" }
+
+# ---- board placement
+STANDOFF = { value = 6.0, unit = "mm", comment = "Tray face to board bottom (M3 nylon standoffs)" }
+Y_BOARD  = { value = 3.0, unit = "mm", comment = "Board front edge" }
+Z_BOARD  = { value = 9.0, unit = "mm", comment = "Board lower edge (clears rail strip ribs at z=8)" }
+
+# ---- rail strip (printed ASA-CF) and TPU C-rail
+STRIP_BASE = { value = 2.0, unit = "mm", comment = "Rail strip base thickness" }
+RIB_H  = { value = 6.0, unit = "mm", comment = "Rail strip rib height" }
+RIB_T  = { value = 2.5, unit = "mm", comment = "Rail strip rib thickness" }
+RAIL_W = { value = 6.0, unit = "mm", comment = "TPU rail overall width (tray 3 + 2x1.5 lips)" }
+CHAN_CLR = { value = 0.2, unit = "mm", comment = "PROPOSED (was 0.4): total clearance, strip channel to TPU rail. Sets the radial blade position" }
+RAIL_BASE_GAP = { value = 0.1, unit = "mm", comment = "PROPOSED (was 0.2): Z gap, TPU rail back to strip base" }
+CHAN_W = { expr = "RAIL_W + CHAN_CLR", unit = "mm", comment = "Channel width" }
+RAIL_BACK = { value = 2.0, unit = "mm", comment = "TPU rail back thickness" }
+RAIL_GRIP = { value = 3.0, unit = "mm", comment = "TPU rail lip height" }
+STRIP_W = { expr = "CHAN_W + 2 * RIB_T", unit = "mm", comment = "Strip width (11.2)" }
+TRAY_OFF = { value = 5.7, unit = "mm", comment = "Tray centre from slot start. Clock board jacks are placed for this value. A change moves the SDR axes away from the jacks" }
+TRAY_Z0 = { expr = "STRIP_BASE + RAIL_BASE_GAP + RAIL_BACK", unit = "mm", comment = "Tray bottom edge (4.1)" }
+TRAY_Z1 = { expr = "H_ - TRAY_Z0", unit = "mm", comment = "Tray top edge" }
+LATCH_Z_OFF = { value = 0.5, unit = "mm", comment = "LATCH_Z = STRIP_BASE + RIB_H / 2 + 0.5" }
+LATCH_Z = { expr = "STRIP_BASE + RIB_H / 2 + LATCH_Z_OFF", unit = "mm", comment = "Height of the latch pivot; tray stop and preload screws use it too" }
+
+# ---- SDR tray axial stop, latch and preload boss
+INSERT_D = { value = 4.0, unit = "mm", comment = "Hole for an M3 heat-set insert (also the strip ears)" }
+STOP_ADJ = { value = 1.5, unit = "mm", comment = "PROPOSED: adjust range of the rear stop screw, +/- mm about the nominal screw tip" }
+STOP_MATE_MARGIN = { value = 0.3, unit = "mm", comment = "PROPOSED: stop screw tip is this far behind the fully mated tray rear end (+Y)" }
+STOP_INSERT_L = { value = 5.5, unit = "mm", comment = "M3 heat-set insert length" }
+STOP_WALL = { value = 2.5, unit = "mm", comment = "PROPOSED: block material behind the insert" }
+STOP_BLOCK_L = { expr = "STOP_INSERT_L + STOP_WALL", unit = "mm", comment = "Length of the rear stop block along Y" }
+STOP_BLOCK_H = { value = 10.0, unit = "mm", comment = "PROPOSED: block top height. It is behind the SDR board" }
+STOP_SCREW_CLR = { value = 3.4, unit = "mm", comment = "Clearance hole for the M3 set screw (enters from the rear)" }
+LATCH_L = { value = 15.0, unit = "mm", comment = "Latch arm length" }
+LATCH_L_PRE = { value = 16.0, unit = "mm", comment = "Arm length when it carries the preload screw" }
+PRE_BOSS_D = { value = 8.0, unit = "mm", comment = "PROPOSED: preload boss diameter (equals the latch width)" }
+PRE_BOSS_T = { value = 7.5, unit = "mm", comment = "PROPOSED: preload boss thickness along Y (insert pocket 5.5 + 2 front wall)" }
+LATCH_W = { value = 8.0, unit = "mm", comment = "latch_local: arm width (plate(0,-4,n,4))" }
+LATCH_PIVOT_X = { value = 3.0, unit = "mm", comment = "latch_local: pivot hole distance from the arm start (also place() offset)" }
+LATCH_NUB_X = { value = 12.5, unit = "mm", comment = "latch_local: grip nub position along the arm" }
+LATCH_NUB_D = { value = 3.0, unit = "mm", comment = "latch_local: grip nub diameter" }
+LATCH_NUB_H = { value = 2.0, unit = "mm", comment = "latch_local: grip nub height" }
+
+# ---- slots
+MARGIN = { value = 2.0, unit = "mm", comment = "Interior margin at both X ends" }
+PITCH_NUC    = { value = 42.0, unit = "mm", comment = "Slot pitch NUC" }
+PITCH_B210_1 = { value = 30.0, unit = "mm", comment = "Slot pitch B210_1" }
+PITCH_B210_2 = { value = 30.0, unit = "mm", comment = "Slot pitch B210_2" }
+PITCH_B200_1 = { value = 30.0, unit = "mm", comment = "Slot pitch B200_1" }
+PITCH_B200_2 = { value = 30.0, unit = "mm", comment = "Slot pitch B200_2" }
+W_ = { expr = "MARGIN + PITCH_NUC + PITCH_B210_1 + PITCH_B210_2 + PITCH_B200_1 + PITCH_B200_2 + MARGIN", unit = "mm", comment = "Interior width (heron_rack W)" }
+SLOT_X0_NUC    = { expr = "MARGIN", unit = "mm", comment = "slot_x0(0)" }
+SLOT_X0_B210_1 = { expr = "SLOT_X0_NUC + PITCH_NUC", unit = "mm", comment = "slot_x0(1)" }
+SLOT_X0_B210_2 = { expr = "SLOT_X0_B210_1 + PITCH_B210_1", unit = "mm", comment = "slot_x0(2)" }
+SLOT_X0_B200_1 = { expr = "SLOT_X0_B210_2 + PITCH_B210_2", unit = "mm", comment = "slot_x0(3)" }
+SLOT_X0_B200_2 = { expr = "SLOT_X0_B200_1 + PITCH_B200_1", unit = "mm", comment = "slot_x0(4)" }
+TRAY_X_NUC    = { expr = "SLOT_X0_NUC + TRAY_OFF", unit = "mm", comment = "tray_x(0): tray centre plane" }
+TRAY_X_B210_1 = { expr = "SLOT_X0_B210_1 + TRAY_OFF", unit = "mm", comment = "tray_x(1)" }
+TRAY_X_B210_2 = { expr = "SLOT_X0_B210_2 + TRAY_OFF", unit = "mm", comment = "tray_x(2)" }
+TRAY_X_B200_1 = { expr = "SLOT_X0_B200_1 + TRAY_OFF", unit = "mm", comment = "tray_x(3)" }
+TRAY_X_B200_2 = { expr = "SLOT_X0_B200_2 + TRAY_OFF", unit = "mm", comment = "tray_x(4)" }
+TRAY_Y0 = { value = 0.5, unit = "mm", comment = "Tray front edge" }
+TRAY_Y1 = { expr = "Y_BOARD + SDR_L", unit = "mm", comment = "Tray rear end when fully mated (157.69)" }
+STOP_TIP_Y = { expr = "TRAY_Y1 + STOP_MATE_MARGIN", unit = "mm", comment = "Nominal stop screw tip; the margin is applied here" }
+STRIP_Y1 = { expr = "STOP_TIP_Y + STOP_ADJ + STOP_BLOCK_L", unit = "mm", comment = "Closed rear end of the SDR strip (stop block)" }
+NUC_TRAY_REAR = { value = 3.0, unit = "mm", comment = "NUC_TRAY_Y1 = Y_BOARD + NUC_S + 3.0: tray extends past the NUC board" }
+NUC_TRAY_Y1 = { expr = "Y_BOARD + NUC_S + NUC_TRAY_REAR", unit = "mm", comment = "NUC front-aligned, short blade" }
+NUC_STRIP_GAP = { value = 0.5, unit = "mm", comment = "NUC_STRIP_Y1 = NUC_TRAY_Y1 + 0.5 + 3.0: gap behind the NUC tray" }
+NUC_STOP_L = { value = 3.0, unit = "mm", comment = "NUC strip rear stop block length (strip_local: length - 3.0)" }
+NUC_STRIP_Y1 = { expr = "NUC_TRAY_Y1 + NUC_STRIP_GAP + NUC_STOP_L", unit = "mm", comment = "Closed rear end of the NUC strip" }
+RAIL_LIP = { expr = "(RAIL_W - T_) / 2", unit = "mm", comment = "tpu_rail_local: lip width beside the tray edge" }
+RAIL_L_SDR = { expr = "TRAY_Y1 - TRAY_Y0", unit = "mm", comment = "build(): SDR TPU rail length (rlen)" }
+RAIL_L_NUC = { expr = "NUC_TRAY_Y1 - TRAY_Y0", unit = "mm", comment = "build(): NUC TPU rail length (rlen)" }
+
+# ---- SMP direct mate stack-up along Y
+SDR_SMA_TIP_Y = { expr = "Y_BOARD + SDR_L + SMA_OVERHANG", unit = "mm", comment = "Plane of the SDR SMA jack tips" }
+ADAPTER_REACH = { value = 9.0, unit = "mm", comment = "VERIFY: placeholder. SDR SMA tip plane to the board jack mating face, adapter fully mated. Measure on a real B210" }
+ADAPTER_AF = { value = 5.54, unit = "mm", comment = "Cinch 134-1019-451 hex across flats" }
+ADAPTER_HEX_ANGLE = { value = 30.0, unit = "deg", comment = "Half the hex corner angle: across corners = across flats / cos(30 deg)" }
+ADAPTER_D = { expr = "ADAPTER_AF / cos(ADAPTER_HEX_ANGLE)", unit = "mm", comment = "Adapter body diameter on the across-corners size (6.40)" }
+SMP_JACK_H = { value = 4.09, unit = "mm", comment = "Board front face to the jack mating face (Amphenol SMP-MSSB-PCT10T)" }
+CLK_Y0 = { expr = "SDR_SMA_TIP_Y + ADAPTER_REACH + SMP_JACK_H", unit = "mm", comment = "Clock board front face" }
+CLK_STANDOFF = { value = 20.0, unit = "mm", comment = "PROPOSED: M3 F-F standoff length, board rear face to rear plate (a standard length)" }
+CLK_PCB_T = { value = 1.6, unit = "mm", comment = "Clock board PCB thickness" }
+REAR_Y0 = { expr = "CLK_Y0 + CLK_PCB_T + CLK_STANDOFF", unit = "mm", comment = "Rear plate front face" }
+REAR_DEPTH_MARGIN = { value = 3.0, unit = "mm", comment = "D = REAR_Y0 + T + 3.0: depth behind the rear plate" }
+D = { expr = "REAR_Y0 + T_ + REAR_DEPTH_MARGIN", unit = "mm", comment = "Overall depth (walls/plates)" }
+SSD_Y0 = { expr = "min(SSD_Y0_MAX; REAR_Y0 - SSD_REAR_GAP - (SSD_W + 2 * (SSD_CLR + SSD_GUIDE_WALL)))", unit = "mm", comment = "Drive front edge. The bay moves forward when 136 mm no longer fits" }
+SSD_CONN_GAP = { value = 0.5, unit = "mm", comment = "ssd_geom: drive connector edge is SSD_BASE + 0.5 (mated)" }
+SSD_SX0 = { expr = "SSD_XC - (SSD_T + SLED_T) / 2", unit = "mm", comment = "ssd_geom sx0: sled outer face" }
+SSD_SX1 = { expr = "SSD_SX0 + SLED_T + SSD_T", unit = "mm", comment = "ssd_geom sx1: drive top-cover face" }
+SSD_GY1 = { expr = "SSD_Y0 + SSD_W", unit = "mm", comment = "ssd_geom y1: drive rear edge" }
+SSD_YM = { expr = "(SSD_Y0 + SSD_GY1) / 2", unit = "mm", comment = "Drive centre along Y" }
+SSD_ZD0 = { expr = "SSD_BASE + SSD_CONN_GAP", unit = "mm", comment = "ssd_geom zd0: drive connector edge height" }
+SSD_ZD1 = { expr = "SSD_ZD0 + SSD_L", unit = "mm", comment = "ssd_geom zd1: drive top edge height" }
+SSD_CX0 = { expr = "SSD_SX0 - SSD_CLR", unit = "mm", comment = "ssd_cage cx0: guide channel, X start" }
+SSD_CX1 = { expr = "SSD_SX1 + SSD_CLR", unit = "mm", comment = "ssd_cage cx1: guide channel, X end" }
+SSD_OX0 = { expr = "SSD_CX0 - SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage ox0: cage outer face, X start" }
+SSD_OX1 = { expr = "SSD_CX1 + SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage ox1: cage outer face, X end" }
+SSD_FY0 = { expr = "SSD_Y0 - SSD_CLR - SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage fy0: cage front face (toward the NUC)" }
+SSD_FY1 = { expr = "SSD_GY1 + SSD_CLR + SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage fy1: cage rear face" }
+SSD_EAR_Y0 = { expr = "SSD_FY0", unit = "mm", comment = "ssd_cage top ear front end. CHANGE from heron_rack.py (D-035, 2026-10-14): the ears span the full cage so they join both guides; heron_rack.py uses ym - 27" }
+SSD_EAR_Y1 = { expr = "SSD_FY1", unit = "mm", comment = "ssd_cage top ear rear end. CHANGE from heron_rack.py (D-035, 2026-10-14); heron_rack.py uses ym + 27" }
+SSD_PC = { expr = "(SSD_CX0 + SSD_CX1) / 2", unit = "mm", comment = "ssd_cage pc: channel centre plane (X); the receptacle pocket is centred on it" }
+SSD_CCY = { expr = "SSD_Y0 + SSD_CONN_C", unit = "mm", comment = "ssd_cage ccy: drive connector centre along Y" }
+SSD_XL = { expr = "SSD_SX0 - SSD_CLR - SSD_GUIDE_WALL - SSD_CAGE_HOLE_OUT", unit = "mm", comment = "ssd_cage_holes: left screw column X" }
+SSD_XR = { expr = "SSD_SX1 + SSD_CLR + SSD_GUIDE_WALL + SSD_CAGE_HOLE_OUT", unit = "mm", comment = "ssd_cage_holes: right screw column X" }
+SSD_KEEP_X0 = { expr = "SSD_XL - SSD_KEEP_PAD - SSD_KEEP_M", unit = "mm", comment = "ssd_cage_keep: solid plate area, X start" }
+SSD_KEEP_X1 = { expr = "SSD_XR + SSD_KEEP_PAD + SSD_KEEP_M", unit = "mm", comment = "ssd_cage_keep: X end" }
+SSD_KEEP_Y0 = { expr = "SSD_Y0 - SSD_CLR - SSD_GUIDE_WALL - SSD_KEEP_M", unit = "mm", comment = "ssd_cage_keep: Y start" }
+SSD_KEEP_Y1 = { expr = "SSD_GY1 + SSD_CLR + SSD_GUIDE_WALL + SSD_KEEP_M", unit = "mm", comment = "ssd_cage_keep: Y end" }
+SSD_LATCH_X = { expr = "SSD_SX1 + SSD_CLR + SSD_LATCH_OFF", unit = "mm", comment = "ssd_latch_xy: hatch latch pivot X" }
+SSD_LATCH_Y = { expr = "SSD_YM", unit = "mm", comment = "ssd_latch_xy: hatch latch pivot Y" }
+
+# ---- rear plate: windows and holes
+SOLDER_WIN_DX = { value = 7.0, unit = "mm", comment = "PROPOSED: window half width about the jack axis (X)" }
+SOLDER_WIN_DZ = { value = 6.0, unit = "mm", comment = "PROPOSED: window margin above the upper jack and below the lower jack (Z)" }
+SOLDER_WIN_R  = { value = 2.0, unit = "mm", comment = "solder_windows: window corner radius" }
+CLK_HOLE_KEEP = { value = 4.0, unit = "mm", comment = "PROPOSED: minimum material around each board mounting hole" }
+CLK_HOLE_D = { value = 3.4, unit = "mm", comment = "Clock board mounting hole in the rear plate" }
+STOP_ACCESS_D = { value = 4.0, unit = "mm", comment = "PROPOSED: access hole diameter in the rear plate for the rear stop screws" }
+STOP_KEY_D = { value = 3.0, unit = "mm", comment = "Tool shaft diameter that check_fit.py proves has a clear path" }
+REARWIN_L_MARGIN_X = { value = 16.0, unit = "mm", comment = "rear_plate_local: left window block starts this far from the plate edge" }
+REARWIN_MARGIN_Z = { value = 18.0, unit = "mm", comment = "rear_plate_local: window margin at the top and bottom edge" }
+REARWIN_CLK_GAP = { value = 6.0, unit = "mm", comment = "rear_plate_local: gap between the clock board outline and the window blocks" }
+REARWIN_L_NX = { value = 1, unit = "none", comment = "Left window block count in X. Counts are seed-time static for patterns (README)" }
+REARWIN_L_NY = { value = 2, unit = "none", comment = "Left window block count in Z" }
+REARWIN_L_RIB = { value = 8.0, unit = "mm", comment = "Left window block rib width" }
+REARWIN_R_MARGIN_X = { value = 16.0, unit = "mm", comment = "rear_plate_local: right window block ends this far from the plate edge" }
+REARWIN_R_NX = { value = 3, unit = "none", comment = "Right window block count in X" }
+REARWIN_R_NY = { value = 1, unit = "none", comment = "Right window block count in Z" }
+REARWIN_R_RIB = { value = 8.0, unit = "mm", comment = "Right window block rib width" }
+
+# ---- clock board rev C (outline and reference envelope)
+CLK_W = { value = 118.0, unit = "mm", comment = "Clock board rev C width (same outline as rev B)" }
+CLK_H = { value = 44.0, unit = "mm", comment = "Clock board rev C height" }
+CLK_TOP_Z = { value = 54.0, unit = "mm", comment = "Board top edge height (KiCad y=0)" }
+CLK_X_OFF = { value = 2.0, unit = "mm", comment = "clk_outline: board x0 is the first SDR slot start + 2.0" }
+CLK_X0 = { expr = "SLOT_X0_B210_1 + CLK_X_OFF", unit = "mm", comment = "Board left edge (KiCad x=0). First SDR slot is B210_1" }
+CLK_Z0 = { expr = "CLK_TOP_Z - CLK_H", unit = "mm", comment = "Board bottom edge" }
+CLK_HOLE_INSET = { value = 4.0, unit = "mm", comment = "clk_holes: mounting hole inset from the board corners" }
+CLKREF_HOLE_D = { value = 3.2, unit = "mm", comment = "clock_board_ref: hole diameter in the PCB reference" }
+CLKREF_JST_W = { value = 7.0, unit = "mm", comment = "clock_board_ref J1: JST-GH body width" }
+CLKREF_JST_H = { value = 6.4, unit = "mm", comment = "clock_board_ref J1: JST-GH body height" }
+CLKREF_JST_D = { value = 4.3, unit = "mm", comment = "clock_board_ref J1: JST-GH body depth" }
+CLKREF_SMP_BODY = { value = 6.0, unit = "mm", comment = "clock_board_ref SMP: square body side (also flange diameter)" }
+CLKREF_SMP_BODY_D = { value = 1.22, unit = "mm", comment = "clock_board_ref SMP: square body depth" }
+CLKREF_SMP_FLANGE_END = { value = 2.31, unit = "mm", comment = "clock_board_ref SMP: flange ends at this depth" }
+CLKREF_SMP_SHROUD_D = { value = 4.19, unit = "mm", comment = "clock_board_ref SMP: shroud diameter" }
+CLKREF_SMA_BODY = { value = 6.35, unit = "mm", comment = "clock_board_ref SMA (132134): square body side and barrel diameter" }
+CLKREF_SMA_BODY_D = { value = 4.4, unit = "mm", comment = "clock_board_ref SMA: body depth" }
+CLKREF_SMA_BARREL_L = { value = 8.3, unit = "mm", comment = "clock_board_ref SMA: barrel length" }
+
+# ---- NUC reference envelope (nuc_ref in heron_rack.py)
+NUCREF_INSET = { value = 10.0, unit = "mm", comment = "nuc_ref: the cooler envelope is this far inside the board edges (Y and Z)" }
+
+# ---- joints between plates, walls and rear plate
+WALL_TAB_Y1 = { value = 25.0,  unit = "mm", comment = "Side wall tab centre 1 along the wall edge" }
+WALL_TAB_Y2 = { value = 105.0, unit = "mm", comment = "Side wall tab centre 2" }
+WALL_TAB_Y3 = { value = 185.0, unit = "mm", comment = "Side wall tab centre 3" }
+WALL_SCREW_Y1 = { value = 65.0,  unit = "mm", comment = "Side wall screw position 1" }
+WALL_SCREW_Y2 = { value = 145.0, unit = "mm", comment = "Side wall screw position 2" }
+TAB_L = { value = 20.0, unit = "mm", comment = "Tab length" }
+REAR_TAB_FRAC1 = { value = 0.22, unit = "none", comment = "Rear plate tab 1 position as a fraction of W" }
+REAR_TAB_FRAC2 = { value = 0.78, unit = "none", comment = "Rear plate tab 2 position as a fraction of W" }
+REAR_TAB_X1 = { expr = "W_ * REAR_TAB_FRAC1", unit = "mm", comment = "REAR_TABS_X[0]" }
+REAR_TAB_X2 = { expr = "W_ * REAR_TAB_FRAC2", unit = "mm", comment = "REAR_TABS_X[1]" }
+REAR_SCREW_X1 = { expr = "SLOT_X0_B200_1 + TRAY_OFF - PITCH_B210_2 / 2", unit = "mm", comment = "Rear plate screw midway between the 2nd and 3rd SDR trays (heron_rack REAR_SCREWS_X[0]). At W/2 its nut pocket cut into the stop access hole of slot 2" }
+REAR_SIDE_TAB_Z1 = { value = 30.0, unit = "mm", comment = "Rear plate side tab centre 1" }
+REAR_SIDE_TAB_Z2 = { value = 90.0, unit = "mm", comment = "Rear plate side tab centre 2" }
+REAR_SIDE_SCREW_Z1 = { value = 60.0, unit = "mm", comment = "Rear plate side screw height" }
+REAR_SIDE_TAB_L = { value = 15.0, unit = "mm", comment = "Rear plate side tab length (side wall slots use 15, rear plate tabs 7.5 each side)" }
+TSLOT_SCREW_HW = { value = 1.6, unit = "mm", comment = "tslot: M3 screw channel half width" }
+TSLOT_NUT_HW = { value = 2.85, unit = "mm", comment = "tslot: square nut pocket half width" }
+TSLOT_NUT_Y0 = { value = 6.0, unit = "mm", comment = "tslot: nut pocket start from the edge" }
+TSLOT_NUT_Y1 = { value = 8.7, unit = "mm", comment = "tslot: nut pocket end from the edge" }
+TSLOT_DEPTH = { value = 14.0, unit = "mm", comment = "tslot: screw channel depth from the edge" }
+
+# ---- rail strips: ears
+EAR1_Y0 = { value = 0.0,   unit = "mm", comment = "EAR_Y[0] start" }
+EAR1_Y1 = { value = 14.0,  unit = "mm", comment = "EAR_Y[0] end" }
+EAR2_Y0 = { value = 75.0,  unit = "mm", comment = "EAR_Y[1] start" }
+EAR2_Y1 = { value = 85.0,  unit = "mm", comment = "EAR_Y[1] end" }
+EAR3_Y0 = { value = 145.0, unit = "mm", comment = "EAR_Y[2] start" }
+EAR3_Y1 = { value = 155.0, unit = "mm", comment = "EAR_Y[2] end" }
+NUC_EAR1_Y0 = { value = 0.0,  unit = "mm", comment = "NUC_EAR_Y[0] start" }
+NUC_EAR1_Y1 = { value = 14.0, unit = "mm", comment = "NUC_EAR_Y[0] end" }
+NUC_EAR2_Y0 = { value = 50.0, unit = "mm", comment = "NUC_EAR_Y[1] start" }
+NUC_EAR2_Y1 = { value = 60.0, unit = "mm", comment = "NUC_EAR_Y[1] end" }
+NUC_EAR3_Y0 = { value = 95.0, unit = "mm", comment = "NUC_EAR_Y[2] start" }
+NUC_EAR3_Y1 = { value = 105.0, unit = "mm", comment = "NUC_EAR_Y[2] end" }
+EAR_W = { value = 6.0, unit = "mm", comment = "strip_local: ear width beside the strip (also the latch boss offset and the screw offset is half of it)" }
+EAR_HOLE0_Y = { value = 10.0, unit = "mm", comment = "strip_local: first ear insert hole Y" }
+EAR_INSERT_L = { value = 5.5, unit = "mm", comment = "strip_local: ear insert hole depth (M3 heat-set from plate side)" }
+LATCH_INSERT_L = { value = 6.0, unit = "mm", comment = "strip_local: latch pivot insert hole depth" }
+
+# ---- plates: airflow windows and rear area
+PLATE_WIN_EDGE = { value = 2.0, unit = "mm", comment = "plate_local: airflow window margin to the strip" }
+PLATE_WIN_MIN_W = { value = 7.0, unit = "mm", comment = "plate_local: skip a window narrower than this" }
+PLATE_WIN_R = { value = 3.0, unit = "mm", comment = "plate_local: airflow window corner radius" }
+PLATE_WIN_A_Y0 = { value = 18.0, unit = "mm", comment = "plate_local: standard window 1 start (Y)" }
+PLATE_WIN_A_Y1 = { value = 72.0, unit = "mm", comment = "plate_local: standard window 1 end" }
+PLATE_WIN_B_Y0 = { value = 88.0, unit = "mm", comment = "plate_local: standard window 2 start" }
+PLATE_WIN_B_Y1 = { value = 142.0, unit = "mm", comment = "plate_local: standard window 2 end" }
+PLATE_WIN_NUCR_A_Y0 = { value = 18.0, unit = "mm", comment = "plate_local: window 1 right of the NUC start" }
+PLATE_WIN_NUCR_A_Y1 = { value = 46.0, unit = "mm", comment = "plate_local: window 1 right of the NUC end" }
+PLATE_WIN_NUCR_B_Y0 = { value = 64.0, unit = "mm", comment = "plate_local: window 2 right of the NUC start" }
+PLATE_WIN_NUCR_B_Y1 = { value = 92.0, unit = "mm", comment = "plate_local: window 2 right of the NUC end" }
+GRID_WIN_R = { value = 4.0, unit = "mm", comment = "grid_windows: default corner radius r. A window is kept only if cw > 2r+1 and ch > 2r+1 (checked at build time)" }
+NUCBEHIND_X0 = { value = 4.0, unit = "mm", comment = "plate_local: windows behind the NUC blade, X start" }
+NUCBEHIND_Y_OFF = { value = 4.0, unit = "mm", comment = "plate_local: windows behind the NUC blade, offset behind NUC_STRIP_Y1" }
+NUCBEHIND_X1_GAP = { value = 2.0, unit = "mm", comment = "plate_local: windows behind the NUC blade end this far before the strip" }
+NUCBEHIND_NX = { value = 2, unit = "none", comment = "Count in X" }
+NUCBEHIND_NY = { value = 1, unit = "none", comment = "Count in Y" }
+NUCBEHIND_RIB = { value = 6.0, unit = "mm", comment = "Rib width" }
+REARAREA_MARGIN_X = { value = 6.0, unit = "mm", comment = "plate_local: full-width windows behind the strips, margin at both X ends" }
+REARAREA_Y_OFF = { value = 4.0, unit = "mm", comment = "plate_local: full-width windows, gap to STRIP_Y1 and to the rear plate" }
+REARAREA_NX = { value = 4, unit = "none", comment = "Count in X" }
+REARAREA_NY = { value = 1, unit = "none", comment = "Count in Y" }
+REARAREA_RIB = { value = 6.0, unit = "mm", comment = "Rib width" }
+
+# ---- side wall windows
+SW_WIN_X0 = { value = 10.0, unit = "mm", comment = "side_wall_local: window block start (local x = world Y)" }
+SW_WIN_Z0 = { value = 18.0, unit = "mm", comment = "side_wall_local: window block bottom (local y = world Z)" }
+SW_WIN_REAR_GAP = { value = 8.0, unit = "mm", comment = "side_wall_local: window block ends this far before REAR_Y0" }
+SW_WIN_Z_TOP_GAP = { value = 18.0, unit = "mm", comment = "side_wall_local: window block ends this far below H" }
+SW_WIN_NX = { value = 4, unit = "none", comment = "Count along the wall depth" }
+SW_WIN_NY = { value = 2, unit = "none", comment = "Count along the wall height" }
+SW_WIN_RIB = { value = 7.0, unit = "mm", comment = "Rib width" }
+
+# ---- trays
+PULL_TAB_CX = { value = -7.0, unit = "mm", comment = "tray_local: pull tab centre x (local x = world Y)" }
+PULL_TAB_CY = { value = 60.0, unit = "mm", comment = "tray_local: pull tab centre y (local y = world Z)" }
+PULL_TAB_W = { value = 22.0, unit = "mm", comment = "tray_local: pull tab width" }
+PULL_TAB_H = { value = 26.0, unit = "mm", comment = "tray_local: pull tab height" }
+PULL_TAB_R = { value = 5.0, unit = "mm", comment = "tray_local: pull tab corner radius" }
+FINGER_HOLE_CX = { value = -9.0, unit = "mm", comment = "tray_local: finger hole centre x" }
+FINGER_HOLE_CY = { value = 60.0, unit = "mm", comment = "tray_local: finger hole centre y" }
+FINGER_HOLE_D = { value = 10.0, unit = "mm", comment = "tray_local: finger hole diameter" }
+TRAY_WIN_X0 = { value = 14.0, unit = "mm", comment = "tray_local (NUC): window block start" }
+TRAY_WIN_Z0 = { value = 20.0, unit = "mm", comment = "tray_local (NUC): window block bottom" }
+TRAY_WIN_REAR_GAP = { value = 12.0, unit = "mm", comment = "tray_local (NUC): window block ends this far before the tray rear end" }
+TRAY_WIN_Z_TOP_GAP = { value = 26.0, unit = "mm", comment = "tray_local (NUC): window block ends this far below H" }
+TRAY_WIN_NX = { value = 2, unit = "none", comment = "Count in X" }
+TRAY_WIN_NY = { value = 2, unit = "none", comment = "Count in Y" }
+TRAY_WIN_RIB = { value = 7.0, unit = "mm", comment = "Rib width" }

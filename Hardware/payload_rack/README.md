@@ -1,5 +1,7 @@
 # HERON payload rack, Rev A (concept)
 
+> **Frozen (2026-10-14, D-035).** The design master is now the parametric Fusion design `flight_rack_asm` (Fusion project `HERON`), seeded by `fusion/build_flight_rack.py`. See `fusion/README.md`. This script and its outputs are kept as a record. Do not change the design here. Known change in Fusion: the SSD cage top ears span the full cage.
+
 A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 2.5" SATA SSD, and the clock board. It is made from laser-cut sheet plus printed ASA and TPU, with no metal structure and no fan.
 
 **Envelope:** 172 W × 210 D × 126 H mm (front = RF side). Rack mass without boards is about 0.46 kg in 3 mm plywood plus printed parts. That excludes screws, inserts and standoffs (about 40 g) and the copper tape (about 25 g).

@@ -1,20 +1,20 @@
 ** Drc report for heron_clock.kicad_pcb **
-** Created on 2026-10-07T14:24:21 **
+** Created on 2026-10-19T15:25:32 **
 ** Report includes: Errors, Warnings, Exclusions **
 
-** Found 31 DRC violations **
-[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
-    Local override; error
-    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
-    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+** Found 29 DRC violations **
 [starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; 1 spokes connected to isolated island)
     Local override; error
     @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
-    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+    @(115.7000 mm, 113.3800 mm): PTH pad 2 [GND] of J7
 [starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
     Local override; error
     @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
-    @(145.7000 mm, 133.3200 mm): PTH pad 2 [GND] of J4
+    @(145.7000 mm, 113.3800 mm): PTH pad 2 [GND] of J8
+[starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; zone min spoke count 2; actual 1)
+    Local override; error
+    @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
+    @(205.7000 mm, 113.3800 mm): PTH pad 2 [GND] of J10
 [lib_footprint_mismatch]: Footprint 'Fuse_1206_3216Metric' does not match copy in library 'Fuse'
     Local override; warning
     @(128.2500 mm, 113.3750 mm): Footprint F1
@@ -93,14 +93,6 @@
 [lib_footprint_mismatch]: Footprint 'L_0805_2012Metric' does not match copy in library 'Inductor_SMD'
     Local override; warning
     @(179.1600 mm, 125.8600 mm): Footprint L6
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; warning
-    @(133.3600 mm, 101.5000 mm): PCB text '+5V' on F.Silkscreen
-    @(132.5850 mm, 101.9000 mm): Pad MP [<no net>] of J1 on F.Cu
-[silk_over_copper]: Silkscreen clipped by solder mask
-    Local override; warning
-    @(159.0000 mm, 135.5000 mm): PCB text 'HERON CLOCK DIST rev C   SiT5155 10 MHz + PPS x4   water-soluble flux only' on B.Silkscreen
-    @(187.5700 mm, 135.0600 mm): PTH pad 2 [GND] of J2
 
 ** Found 0 unconnected pads **
 

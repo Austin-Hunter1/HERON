@@ -28,6 +28,9 @@ import sys
 
 import pcbnew
 
+from silk_art import add_silk_art
+from silk_refs import place_labels
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "clock_board_revB", "project")
 DST = os.path.join(HERE, "project")
@@ -52,10 +55,10 @@ MPN_MAP = {
     "RC0402FR-0717R4L": "RC0603FR-0717R4L",
     "RC0402FR-0722RL": "RMCF0603FT22R0",           # 22 R: Stackpole (YAGEO RC0603FR-0722RL out of stock, 2026-10-07)
     "RC0402FR-0749R9L": "RC0603FR-0749R9L",
-    "RC0402FR-07100RL": "RC0603FR-07100RL",
+    "RC0402FR-07100RL": "AC0603FR-07100RL",
     "ERJ-2RKF2940X": "ERJ-3EKF2940V",              # 294 R, Panasonic 0603
     "RC0402FR-071KL": "RC0603FR-071KL",
-    "RC0402FR-0710KL": "RC0603FR-0710KL",
+    "RC0402FR-0710KL": "AC0603FR-0710KL",
     "TPD1E05U06DPYR": "TPD1E05U06DYAR",            # same TI part, SOD-523 package
 }
 # New MPN -> manufacturer, for the lines where the manufacturer changes.
@@ -656,6 +659,10 @@ def main():
     drop_blocked_stitch_vias(board)
     prune_dangling(board, keep)
     set_revision_text(board)
+    add_silk_art(board)
+    hidden = place_labels(board)
+    if hidden:
+        print("no clear spot, label hidden: " + " ".join(hidden))
     # Refill the pours: the old fill follows the old, smaller pads.
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     board.Save(os.path.join(DST, "heron_clock.kicad_pcb"))

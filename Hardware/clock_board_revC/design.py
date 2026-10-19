@@ -56,10 +56,10 @@ RES_MPN = {
     "17.4R": ("YAGEO", "RC0603FR-0717R4L"),
     "22R": ("Stackpole Electronics Inc", "RMCF0603FT22R0"),  # YAGEO RC0603FR-0722RL out of stock on 2026-10-07
     "49.9R": ("YAGEO", "RC0603FR-0749R9L"),
-    "100R": ("YAGEO", "RC0603FR-07100RL"),
+    "100R": ("YAGEO", "AC0603FR-07100RL"),
     "294R": ("Panasonic", "ERJ-3EKF2940V"),  # Panasonic, as rev B (the YAGEO 0402 294R had no stock on 2026-10-05)
     "1k": ("YAGEO", "RC0603FR-071KL"),
-    "10k": ("YAGEO", "RC0603FR-0710KL"),
+    "10k": ("YAGEO", "AC0603FR-0710KL"),
 }
 
 

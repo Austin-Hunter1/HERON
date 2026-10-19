@@ -69,7 +69,7 @@ The jacks and their footprint are the same as rev B.
 - All eight jacks have the tab toward +x. The 10 MHz traces leave the tab straight to the filter
   column. The PPS jacks have a dog-leg around the lower-right leg to the ESD diode (J7, J8, J10 on F.Cu;
   J9 through two vias and B.Cu, because the PPS4_Y trace passes next to J9).
-- DRC warning that remains by design: starved thermal reliefs on one J10 leg pad on F.Cu (the legs
+- DRC items that remain by design (D-039): starved thermal reliefs on one leg pad of J7, J8 and J10 on F.Cu (the legs
   also connect to the solid GND plane on In1). The 8 rev B courtyard overlaps between the 10 MHz jack
   tab side and the filter column are gone in rev C, because no shunt part is on the tab side now.
 - **Check before you order (Q-015):** the 2.49 mm legs on the 1.6 mm board leave 0.9 mm for the back
@@ -119,7 +119,7 @@ The jacks and their footprint are the same as rev B.
 
 | Check | Result |
 | --- | --- |
-| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-07) | 0 errors, 0 unconnected pads, 0 parity issues. Warnings: 3 starved thermal reliefs (one J10 leg, the same as rev B) and 2 silkscreen texts clipped by the solder mask (cosmetic, the same as rev B). 26 `lib_footprint_mismatch` notes: the board keeps the KiCad 7 copies of the stock footprints that did not change. These notes are not errors. |
+| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-19) | 29 violations, 0 unconnected pads, 0 parity issues. 3 `starved_thermal`: one upper-right leg pad of J7, J8 and J10 on F.Cu (J7: the one spoke goes to an isolated island). The project rules call them errors. They are accepted by design (D-039): the SMP jack is a partial through-hole part, and each leg also connects to the solid GND plane on In1. 26 `lib_footprint_mismatch` notes: the board keeps the KiCad 7 copies of the stock footprints that did not change. These notes are not errors. No silkscreen warnings: the new back title does not touch J2 (D-037), and the old "+5V" text on the J1 pad is deleted (D-039). |
 | ERC (KiCad 10.0.6 `kicad-cli sch erc`, 2026-10-07) | 0 errors, 0 warnings. (Rev B had no ERC run.) |
 | Netlist (`check_net.py`) | All nets have 2 or more nodes. Exceptions: the intentional NC pins U1.4, U2.4 and U5.1. |
 | Netlist compared to rev B | All 51 nets have the same names and the same pins. |
@@ -175,6 +175,8 @@ folder, and run the script in Git Bash.
 | `project/fab/` | Gerber zip with drill files, BOM, CPL, schematic PDF, assembly PDF, DRC and ERC reports, top view PNG |
 | `make_revc.py` | Rev B to rev C: footprint and MPN change, filter column and PPS output placement and routes, small moves, clean-up of loose GND stubs and blocked stitching vias |
 | `design.py` | The parts and nets as Python (rev C parts). It matches the schematic (checked). It uses `gen_sch.py`; `gen_lib.py` makes the project library. Both are the rev B generators (KiCad 7 libraries). |
+| `silk_art.py` | The HERON logo and the title block on the silkscreen (D-037). Back: 20 mm logo, name, "Rev C - 10/2026", designer, flux warning. Front: 8.6 mm logo, name, revision, "+5V IN / 5.5V MAX" at J1, R23 DNP note at J2. Positions and texts are constants at the top. It deletes and adds its own group (`HERON_SILK_ART`), so you can run it again. `make_revc.py` calls it. Run it alone on a hand-edited board: `python3 silk_art.py`. The logo comes from `../../HERON/Templates and Logos/HERON_pixel_20mm.svg`. |
+| `silk_refs.py` | Shows the reference designators of all 110 parts on the front silkscreen (D-038). It finds a clear spot for each label (0.8 mm text, no contact with pads, other silk or the SMP jack bodies) and does not move parts. The labels of J1, J2, the ICs and the test points stay where they were. A crowded part that finds no spot is placed first in the next pass, with a larger search distance (up to 6.4 mm). `make_revc.py` calls it after `silk_art.py`. Run it alone on a hand-edited board: `python3 silk_refs.py`. It prints the labels that find no spot (none on 2026-10-19). In the crowded filter columns some labels are up to about 5 mm from their part: use the assembly PDF to confirm a part. |
 | `check_net.py`, `make_bom.py`, `make_fab.sh` | Netlist check, BOM, rebuild and fab outputs |
 | `bom_sources.csv` | Purchase data for each MPN: Digi-Key stock and price on the check date, notes. Also the off-board parts (8 Cinch 134-1019-451 SMA-to-SMP adapters). `make_bom.py` merges it into `fab/heron_clock_bom.csv` and fails when a fitted part has no MPN or no row. |
 | `project/fab/heron_clock_bom_digikey.csv` | Digi-Key list upload: one product per line, `quantity,Digi-Key PN,references` (falls back to the MPN when `bom_sources.csv` has no Digi-Key PN), comma-delimited, no header. DNP parts and parts marked "In hand" in `bom_sources.csv` (the SiT5155) are left out. The 8 off-board adapters are included, and 5 spare R23 resistors (`Spare qty`). For more boards: `python make_bom.py heron_clock.net fab/heron_clock_bom.csv <boards>` in `project/`. |

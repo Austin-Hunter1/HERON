@@ -1,8 +1,8 @@
 (export
 	(version "E")
 	(design
-		(source "C:\\Users\\Nathan\\Documents\\Github\\HERON\\Hardware\\clock_board_revC\\project\\heron_clock.kicad_sch")
-		(date "2026-10-07T14:24:16")
+		(source "/Users/nathan/Documents/GitHub/HERON/Hardware/clock_board_revC/project/heron_clock.kicad_sch")
+		(date "2026-10-19T15:25:29")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -4666,7 +4666,7 @@
 				(field
 					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "RC0603FR-0710KL")
+					(name "MPN") "AC0603FR-0710KL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0603_1608Metric")
 				(field
@@ -4691,7 +4691,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "RC0603FR-0710KL")
+				(value "AC0603FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -4810,7 +4810,7 @@
 				(field
 					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "RC0603FR-0710KL")
+					(name "MPN") "AC0603FR-0710KL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0603_1608Metric")
 				(field
@@ -4835,7 +4835,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "RC0603FR-0710KL")
+				(value "AC0603FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -6034,7 +6034,7 @@
 				(field
 					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "RC0603FR-0710KL")
+					(name "MPN") "AC0603FR-0710KL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0603_1608Metric")
 				(field
@@ -6059,7 +6059,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "RC0603FR-0710KL")
+				(value "AC0603FR-0710KL")
 			)
 			(property
 				(name "Sheetname")
@@ -6106,7 +6106,7 @@
 				(field
 					(name "Manufacturer") "YAGEO")
 				(field
-					(name "MPN") "RC0603FR-07100RL")
+					(name "MPN") "AC0603FR-07100RL")
 				(field
 					(name "Footprint") "Resistor_SMD:R_0603_1608Metric")
 				(field
@@ -6131,7 +6131,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "RC0603FR-07100RL")
+				(value "AC0603FR-07100RL")
 			)
 			(property
 				(name "Sheetname")
