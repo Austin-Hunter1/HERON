@@ -12,7 +12,7 @@ Qty,References,Value,Footprint,Manufacturer,MPN,Digi-Key PN,Dielectric,Tolerance
 1,D9,YEL PPS,LED_0603_1608Metric,Wurth,150060YS75000,732-4981-1-ND,,,Fit,110706,0.15,
 1,F1,500mA,Fuse_1206_3216Metric,Bourns,MF-NSMF050-2,MF-NSMF050-2CT-ND,,,Fit,29689,0.40,
 1,FB1,BLM18PG221,L_0603_1608Metric,Murata,BLM18PG221SN1D,490-5221-1-ND,,,Fit,273730,0.14,
-1,J1,5V_IN,JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal,JST,SM02B-GHS-TB(LF)(SN),455-1564-1-ND,,,Fit,11744,0.35,Mating housing GHR-02V-S (cable side) is not in this BOM
+1,J1,5V_IN,JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal,JST,S2B-XH-A-1(LF)(SN),455-S2B-XH-A-1-ND,,,Fit,9411,0.15,"J1, through-hole. Replaces SM02B-GHS-TB(LF)(SN) (out of stock at Digi-Key until 2026-11-16) (D-040). Stock checked 2026-10-20. Mating housing XHP-2 and crimp terminals SXH-001T-P0.6 (cable side) are not in this BOM"
 1,J2,PPS_IN,SMA_Amphenol_132134_Vertical,Amphenol RF,132134,ACX1230-ND,,,Fit,23072,7.30,
 8,J3 J4 J5 J6 J7 J8 J9 J10,PPS_B200_1 / PPS_B200_2 / PPS_B210_1 / PPS_B210_2 / REF_B200_1 / REF_B200_2 / REF_B210_1 / REF_B210_2,SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float,Amphenol RF,SMP-MSSB-PCT10T,115-SMP-MSSB-PCT10TCT-ND,,,Fit,407,6.89,"Smooth bore, THT legs + SMD signal tab (2026-10-07). Was SMP-MSSB-PCT ($29.11). Remove the pick-and-place cap before mating. Stock checked 2026-10-07"
 8,L1 L2 L3 L4 L5 L6 L7 L8,820nH,L_0805_2012Metric,Abracon,AISC-0805-R82J-T,535-10512-1-ND,,,Fit,14360,0.42,"Replaces Coilcraft 0805CS-821XJRC (Digi-Key Marketplace only). Same size, ceramic core, 2.3 ohm, Q 23 @ 50 MHz, SRF 250 MHz. Stock checked 2026-10-07"

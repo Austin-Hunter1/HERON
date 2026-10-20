@@ -2,7 +2,7 @@
 	(version "E")
 	(design
 		(source "/Users/nathan/Documents/GitHub/HERON/Hardware/clock_board_revC/project/heron_clock.kicad_sch")
-		(date "2026-10-19T15:25:29")
+		(date "2026-10-20T14:25:03")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -3399,14 +3399,14 @@
 		(comp
 			(ref "J1")
 			(value "5V_IN")
-			(footprint "Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal")
+			(footprint "Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal")
 			(fields
 				(field
 					(name "Manufacturer") "JST")
 				(field
-					(name "MPN") "SM02B-GHS-TB(LF)(SN)")
+					(name "MPN") "S2B-XH-A-1(LF)(SN)")
 				(field
-					(name "Footprint") "Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal")
+					(name "Footprint") "Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal")
 				(field
 					(name "Datasheet")
 				)
@@ -3425,7 +3425,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "SM02B-GHS-TB(LF)(SN)")
+				(value "S2B-XH-A-1(LF)(SN)")
 			)
 			(property
 				(name "Sheetname")

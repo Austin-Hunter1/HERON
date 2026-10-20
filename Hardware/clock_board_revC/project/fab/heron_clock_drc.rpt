@@ -1,8 +1,8 @@
 ** Drc report for heron_clock.kicad_pcb **
-** Created on 2026-10-19T15:25:32 **
+** Created on 2026-10-20T14:25:06 **
 ** Report includes: Errors, Warnings, Exclusions **
 
-** Found 29 DRC violations **
+** Found 28 DRC violations **
 [starved_thermal]: Thermal relief connection to zone incomplete (layer F.Cu; 1 spokes connected to isolated island)
     Local override; error
     @(100.3000 mm, 100.3000 mm): Zone [GND] on F.Cu, priority 0
@@ -54,9 +54,6 @@
 [lib_footprint_mismatch]: Footprint 'TSSOP-8_4.4x3mm_P0.65mm' does not match copy in library 'Package_SO'
     Local override; warning
     @(155.2650 mm, 118.9650 mm): Footprint U4
-[lib_footprint_mismatch]: Footprint 'JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal' does not match copy in library 'Connector_JST'
-    Local override; warning
-    @(130.1100 mm, 103.2500 mm): Footprint J1
 [lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
     Local override; warning
     @(123.6500 mm, 124.6750 mm): Footprint C3

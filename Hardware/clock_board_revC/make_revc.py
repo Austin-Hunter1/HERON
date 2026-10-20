@@ -8,6 +8,8 @@ size larger.
 - The nine TPD1E05U06 ESD diodes change from the X1SON (DPY, 0.6 x 1 mm)
   package to the SOD-523 (DYA, 1.6 x 0.8 mm) package of the same TI part.
   The pinout is the same: pin 1 = I/O, pin 2 = GND (TI datasheet Table 4-1).
+- J1 (power input) changes from JST-GH (SMD) to JST XH (through-hole),
+  because the GH header is out of stock (D-040). power_conn.py does it.
 
 Why a script and not the generators: the rev B KiCad files were edited after
 the last generator run (the SMP swap), and the full generator flow needs
@@ -28,6 +30,7 @@ import sys
 
 import pcbnew
 
+import power_conn
 from silk_art import add_silk_art
 from silk_refs import place_labels
 
@@ -648,6 +651,7 @@ def set_revision_text(board):
 
 def main():
     convert_schematic(os.path.join(SRC, "heron_clock.kicad_sch"), os.path.join(DST, "heron_clock.kicad_sch"))
+    power_conn.apply_schematic(os.path.join(DST, "heron_clock.kicad_sch"))
     board = pcbnew.LoadBoard(os.path.join(SRC, "heron_clock.kicad_pcb"))
     keep = loose_ids(board)
     swap_all(board)
@@ -659,6 +663,7 @@ def main():
     drop_blocked_stitch_vias(board)
     prune_dangling(board, keep)
     set_revision_text(board)
+    power_conn.apply_board(board, swap_footprint)   # J1: JST-GH -> JST XH (D-040)
     add_silk_art(board)
     hidden = place_labels(board)
     if hidden:

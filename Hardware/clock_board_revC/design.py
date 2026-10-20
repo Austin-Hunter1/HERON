@@ -3,7 +3,7 @@
 Run: python3 design.py  ->  project/heron_clock.kicad_sch
 
 Signal flow
-- 5 V in (JST-GH) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
+- 5 V in (JST XH, D-040) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
 - Two 3.3 V LDOs, same SOT-23-5 pinout: LP5907 for +3V3_OSC (SiT5155 only,
   low noise) and TLV75533P for +3V3_CLK (buffers; it accepts the ~13 uF on
   that rail, which is above the LP5907 10 uF limit).
@@ -141,10 +141,10 @@ def build():
             s.label(e, net, (1, 0))
 
     # ------------------------------------------------ A: power input
-    s.text((20.32, 22.86), "POWER INPUT: 5 V from payload rail (JST-GH, locking)", 2.0)
+    s.text((20.32, 22.86), "POWER INPUT: 5 V from payload rail (JST XH, friction lock)", 2.0)
     j1 = s.symbol("Connector_Generic:Conn_01x02", "J1", "5V_IN", (25.4, 40.64), mirror=True,
-                  fp="Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal",
-                  fields=(("Manufacturer", "JST"), ("MPN", "SM02B-GHS-TB(LF)(SN)")),
+                  fp="Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal",   # D-040: GH header out of stock
+                  fields=(("Manufacturer", "JST"), ("MPN", "S2B-XH-A-1(LF)(SN)")),
                   ref_off=(0, -3.81, "center"), val_off=(0, 6.35, "center"))
     g = j1["2"]; e1 = (g[0] + 2.54, g[1]); s.wire(g[:2], e1)
     m = (e1[0], e1[1] + 2.54); e2 = (e1[0], e1[1] + 5.08); s.wire(e1, m); s.wire(m, e2)

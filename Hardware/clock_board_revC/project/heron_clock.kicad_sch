@@ -3709,7 +3709,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "POWER INPUT: 5 V from payload rail (JST-GH, locking)"
+	(text "POWER INPUT: 5 V from payload rail (JST XH, friction lock)"
 		(exclude_from_sim no)
 		(at 20.32 22.86 0)
 		(effects
@@ -17114,7 +17114,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_JST:JST_GH_SM02B-GHS-TB_1x02-1MP_P1.25mm_Horizontal"
+		(property "Footprint" "Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal"
 			(at 25.4 40.64 0)
 			(hide yes)
 			(show_name no)
@@ -17157,7 +17157,7 @@
 				)
 			)
 		)
-		(property "MPN" "SM02B-GHS-TB(LF)(SN)"
+		(property "MPN" "S2B-XH-A-1(LF)(SN)"
 			(at 25.4 40.64 0)
 			(hide yes)
 			(show_name no)

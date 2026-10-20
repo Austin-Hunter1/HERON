@@ -14,7 +14,7 @@ Jack positions come from the `CLK_J<n>_X` and `CLK_J<n>_Z` parameters. So
 SMP or SMA is read from the KiCad file at build time (`kicad_clock.jack_kind`).
 This is static: a new jack kind needs a rebuild of this part.
 
-Order of features: 1. PCB  2. holes (cut)  3. J1 (JST-GH)  4. SMP bodies,
+Order of features: 1. PCB  2. holes (cut)  3. J1 (JST XH)  4. SMP bodies,
 SMP flanges, SMP shrouds  5. SMA bodies and barrels. The jacks are joined
 to the PCB. The shroud end is the mating face, `SMP_JACK_H` from the front face.
 """
@@ -23,7 +23,7 @@ import kicad_clock as kc
 
 NAME = "REF_clock_board_revC"
 CATEGORY = "ref"
-JST_REF = "J1"   # the JST-GH connector (clock_board_ref: ref == "J1")
+JST_REF = "J1"   # the JST XH power connector (clock_board_ref: ref == "J1")
 
 
 def _holes():
@@ -39,18 +39,21 @@ def _layer(comp, name: str, depth_expr: str):
     return fl.plane_sketch(comp, name, plane)
 
 
-def _boxes(ctx, comp, name: str, refs, side: str, depth: str, depth_start: str, height: str = None) -> None:
+def _boxes(ctx, comp, name: str, refs, side: str, depth: str, depth_start: str, height: str = None,
+           dx: str = "0", dz: str = "0") -> None:
     """Join one square (or rectangular) body for each jack in `refs`.
 
     side: expression of the box width (X). height: box height (Z), default = side.
     depth_start: local z where the box starts. depth: box depth along local z.
+    dx, dz: box centre offset from the jack position. Why: the J1 footprint
+    origin is pin 1, not the body centre.
     """
     if not refs:
         return
     height = height or side
     sk = _layer(comp, name, depth_start)
     for ref in refs:
-        x, z = f"CLK_{ref}_X", f"CLK_{ref}_Z"
+        x, z = f"(CLK_{ref}_X + ({dx}))", f"(CLK_{ref}_Z + ({dz}))"
         fl.sk_rect(ctx, sk, f"{x} - ({side}) / 2", f"{z} - ({height}) / 2",
                    f"{x} + ({side}) / 2", f"{z} + ({height}) / 2")
     fl.extrude(comp, sk, depth, op="join", name=name)
@@ -80,8 +83,9 @@ def build(ctx):
     for hx, hz in _holes():
         fl.sk_circle(ctx, sk, hx, hz, "CLKREF_HOLE_D")
     fl.extrude(comp, sk, None, op="cut", through=True, name="pcb_holes")
-    # 3. J1 (JST-GH): a plain box from the front face
-    _boxes(ctx, comp, "jst_body", jst, "CLKREF_JST_W", "CLKREF_JST_D", "CLK_PCB_T", "CLKREF_JST_H")
+    # 3. J1 (JST XH): a plain box from the front face, offset from pin 1 to the body centre
+    _boxes(ctx, comp, "jst_body", jst, "CLKREF_JST_W", "CLKREF_JST_D", "CLK_PCB_T", "CLKREF_JST_H",
+           dx="CLKREF_JST_DX", dz="CLKREF_JST_DZ")
     # 4. SMP jacks: square body, round flange, round shroud (ends at the mating face)
     _boxes(ctx, comp, "smp_body", smp, "CLKREF_SMP_BODY", "CLKREF_SMP_BODY_D", "CLK_PCB_T")
     _discs(ctx, comp, "smp_flange", smp, "CLKREF_SMP_BODY", "CLKREF_SMP_FLANGE_END - CLKREF_SMP_BODY_D",

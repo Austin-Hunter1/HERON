@@ -62,10 +62,10 @@ FRONT_TEXT = [
     ("HERON Clock Distribution Board", (66.5, 37.3), 1.2),
     ("10 MHz + PPS to 4 SDRs", (66.5, 39.5), 0.9),
     ("Rev C - 10/2026", (66.5, 41.5), 0.9),
-    # Input limit, left of J1 (free area x 16.5-26.4, y 0.5-6.5). Why: U1 and U2
-    # (LP5907, TLV755) have a 5.5 V absolute maximum input.
-    ("+5V IN", (21.3, 2.3), 0.9),
-    ("5.5V MAX", (21.3, 3.8), 0.9),
+    # Input limit, left of J1 (free area x 18.1-30.5, y 0.5-6.5; J1 moved right
+    # in D-040). Why: U1 and U2 (LP5907, TLV755) have a 5.5 V absolute maximum input.
+    ("+5V IN", (27.4, 2.3), 0.9),
+    ("5.5V MAX", (27.4, 3.8), 0.9),
     # R23 note, right of J2 (free area x 94.6-110.2, y 35.0-43.6). Why: R23 is DNP.
     # Fit it only when the GNSS PPS source needs a 50 ohm load.
     ("R23: 50 ohm PPS load", (102.4, 37.6), 0.8),

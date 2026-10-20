@@ -307,9 +307,11 @@ CLK_X0 = { expr = "SLOT_X0_B210_1 + CLK_X_OFF", unit = "mm", comment = "Board le
 CLK_Z0 = { expr = "CLK_TOP_Z - CLK_H", unit = "mm", comment = "Board bottom edge" }
 CLK_HOLE_INSET = { value = 4.0, unit = "mm", comment = "clk_holes: mounting hole inset from the board corners" }
 CLKREF_HOLE_D = { value = 3.2, unit = "mm", comment = "clock_board_ref: hole diameter in the PCB reference" }
-CLKREF_JST_W = { value = 7.0, unit = "mm", comment = "clock_board_ref J1: JST-GH body width" }
-CLKREF_JST_H = { value = 6.4, unit = "mm", comment = "clock_board_ref J1: JST-GH body height" }
-CLKREF_JST_D = { value = 4.3, unit = "mm", comment = "clock_board_ref J1: JST-GH body depth" }
+CLKREF_JST_W = { value = 7.4, unit = "mm", comment = "clock_board_ref J1: JST XH S2B-XH-A-1 body width (D-040)" }
+CLKREF_JST_H = { value = 11.5, unit = "mm", comment = "clock_board_ref J1: JST XH body length along Z (mouth up)" }
+CLKREF_JST_D = { value = 6.1, unit = "mm", comment = "clock_board_ref J1: JST XH body height above the board" }
+CLKREF_JST_DX = { value = -1.25, unit = "mm", comment = "clock_board_ref J1: body centre X from the KiCad origin (pin 1)" }
+CLKREF_JST_DZ = { value = 1.85, unit = "mm", comment = "clock_board_ref J1: body centre Z from the KiCad origin (pin 1)" }
 CLKREF_SMP_BODY = { value = 6.0, unit = "mm", comment = "clock_board_ref SMP: square body side (also flange diameter)" }
 CLKREF_SMP_BODY_D = { value = 1.22, unit = "mm", comment = "clock_board_ref SMP: square body depth" }
 CLKREF_SMP_FLANGE_END = { value = 2.31, unit = "mm", comment = "clock_board_ref SMP: flange ends at this depth" }

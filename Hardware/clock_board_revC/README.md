@@ -17,6 +17,7 @@ jack positions do not change. Rev B stays as it is.
 | PPS output chains | 22 R upright under the ESD diode | 22 R flat. J7, J8, J10: in the row at y 17.53. J9: left of its ESD diode. |
 | Smallest parts | 0402, X1SON | 0603, SOD-523. The finest-pitch parts that remain have no larger package: U3 SiT5155 (5 × 3.2 mm, 10 pads), U4 and U6 (TSSOP, 0.65 mm pitch), SOT-23-5. |
 | Source of the KiCad files | Generators, then the SMP swap script | `make_revc.py`. It reads the rev B KiCad files and writes the rev C files. |
+| Power input J1 (D-040, 2026-10-20) | JST-GH SM02B-GHS-TB(LF)(SN), SMD, locking | JST XH **S2B-XH-A-1(LF)(SN)**, through-hole, side entry, friction lock. The GH header was out of stock. Same pinout: pin 1 = +5 V, pin 2 = GND. The body is 7.4 × 11.5 mm and 6.1 mm high, so J1 moved right, between D2 and J8 (pin 1 at 36.10, 7.85). The mouth faces the top edge, 0.2 mm inside it. The +5 V track to F1 has a new start; three GND stitch vias are removed. `power_conn.py` makes the change. |
 
 ## Fit in the rack
 
@@ -78,7 +79,7 @@ The jacks and their footprint are the same as rev B.
 ## Layout
 
 ```
- J1 (+5 V, top edge)
+                         J1 (+5 V, JST XH, top edge)
  H1 ┌───────────────────────────────────────────────────────────────────────────┐ H2
     │ B210_1        B210_2           B200_1             B200_2                   │
     │ [J7 PPS]      [J8 PPS]         [J9 PPS]           [J10 PPS]                │
@@ -119,13 +120,13 @@ The jacks and their footprint are the same as rev B.
 
 | Check | Result |
 | --- | --- |
-| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-19) | 29 violations, 0 unconnected pads, 0 parity issues. 3 `starved_thermal`: one upper-right leg pad of J7, J8 and J10 on F.Cu (J7: the one spoke goes to an isolated island). The project rules call them errors. They are accepted by design (D-039): the SMP jack is a partial through-hole part, and each leg also connects to the solid GND plane on In1. 26 `lib_footprint_mismatch` notes: the board keeps the KiCad 7 copies of the stock footprints that did not change. These notes are not errors. No silkscreen warnings: the new back title does not touch J2 (D-037), and the old "+5V" text on the J1 pad is deleted (D-039). |
+| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-20, after the J1 change) | 28 violations, 0 unconnected pads, 0 parity issues. 3 `starved_thermal`: one upper-right leg pad of J7, J8 and J10 on F.Cu (J7: the one spoke goes to an isolated island). The project rules call them errors. They are accepted by design (D-039): the SMP jack is a partial through-hole part, and each leg also connects to the solid GND plane on In1. 25 `lib_footprint_mismatch` notes: the board keeps the KiCad 7 copies of the stock footprints that did not change (the old J1 was the 26th; the new J1 is a KiCad 10 stock footprint). These notes are not errors. No silkscreen warnings: the new back title does not touch J2 (D-037), and the old "+5V" text on the J1 pad is deleted (D-039). |
 | ERC (KiCad 10.0.6 `kicad-cli sch erc`, 2026-10-07) | 0 errors, 0 warnings. (Rev B had no ERC run.) |
 | Netlist (`check_net.py`) | All nets have 2 or more nodes. Exceptions: the intentional NC pins U1.4, U2.4 and U5.1. |
 | Netlist compared to rev B | All 51 nets have the same names and the same pins. |
 | `design.py` compared to the schematic | All 110 parts have the same value, footprint, manufacturer and MPN. |
 | U3 layout rules | Pass. See Layout. |
-| Fit in the rack (`../payload_rack/check_fit.py`, 2026-10-07) | The rack model reads rev C. 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error. Stop screw access: clear. |
+| Fit in the rack (`../payload_rack/check_fit.py`, 2026-10-20, after the J1 change) | The rack model reads rev C. 0 clashes. J1 (6.1 mm high) is 1.41 mm from the nearest part, the B210_2 PPS adapter; the space 30 mm above the J1 mouth is clear for the cable plug. Mate report: all 8 jacks 0.000 mm radial and axial error. Stop screw access: clear. |
 | Hardware test | Not done. Use the rev A bring-up checklist. |
 
 ## Assembly
@@ -136,7 +137,7 @@ The jacks and their footprint are the same as rev B.
    The smallest passive parts are 0603. The ESD diodes are SOD-523. Pin 1 (I/O) connects to the
    signal and pin 2 to GND. Compare the pin-1 mark on the part (TI DYA drawing) with the assembly
    drawing before you place them.
-3. Solder J2 (132134 SMA) by hand after reflow.
+3. Solder J1 (S2B-XH-A-1, through-hole) and J2 (132134 SMA) by hand after reflow.
 4. **J3–J10 (SMP): solder in place in the rack.** This aligns each jack to its own SDR.
    1. Remove the pick-and-place cap from each jack. Mount the board on the rear plate. Put each SMP
       jack loose in its holes.
@@ -177,6 +178,7 @@ folder, and run the script in Git Bash.
 | `design.py` | The parts and nets as Python (rev C parts). It matches the schematic (checked). It uses `gen_sch.py`; `gen_lib.py` makes the project library. Both are the rev B generators (KiCad 7 libraries). |
 | `silk_art.py` | The HERON logo and the title block on the silkscreen (D-037). Back: 20 mm logo, name, "Rev C - 10/2026", designer, flux warning. Front: 8.6 mm logo, name, revision, "+5V IN / 5.5V MAX" at J1, R23 DNP note at J2. Positions and texts are constants at the top. It deletes and adds its own group (`HERON_SILK_ART`), so you can run it again. `make_revc.py` calls it. Run it alone on a hand-edited board: `python3 silk_art.py`. The logo comes from `../../HERON/Templates and Logos/HERON_pixel_20mm.svg`. |
 | `silk_refs.py` | Shows the reference designators of all 110 parts on the front silkscreen (D-038). It finds a clear spot for each label (0.8 mm text, no contact with pads, other silk or the SMP jack bodies) and does not move parts. The labels of J1, J2, the ICs and the test points stay where they were. A crowded part that finds no spot is placed first in the next pass, with a larger search distance (up to 6.4 mm). `make_revc.py` calls it after `silk_art.py`. Run it alone on a hand-edited board: `python3 silk_refs.py`. It prints the labels that find no spot (none on 2026-10-19). In the crowded filter columns some labels are up to about 5 mm from their part: use the assembly PDF to confirm a part. |
+| `power_conn.py` | J1 change from JST-GH to JST XH (D-040): schematic strings, footprint, place, +5 V track, stitch vias, J1 and J8 "PPS" labels. `make_revc.py` calls it. Run it alone on the rev C files: `<KiCad 10>/bin/python3 power_conn.py` (set `KICAD10_FOOTPRINT_DIR` on macOS). A second run does nothing. |
 | `check_net.py`, `make_bom.py`, `make_fab.sh` | Netlist check, BOM, rebuild and fab outputs |
 | `bom_sources.csv` | Purchase data for each MPN: Digi-Key stock and price on the check date, notes. Also the off-board parts (8 Cinch 134-1019-451 SMA-to-SMP adapters). `make_bom.py` merges it into `fab/heron_clock_bom.csv` and fails when a fitted part has no MPN or no row. |
 | `project/fab/heron_clock_bom_digikey.csv` | Digi-Key list upload: one product per line, `quantity,Digi-Key PN,references` (falls back to the MPN when `bom_sources.csv` has no Digi-Key PN), comma-delimited, no header. DNP parts and parts marked "In hand" in `bom_sources.csv` (the SiT5155) are left out. The 8 off-board adapters are included, and 5 spare R23 resistors (`Spare qty`). For more boards: `python make_bom.py heron_clock.net fab/heron_clock_bom.csv <boards>` in `project/`. |
@@ -184,6 +186,8 @@ folder, and run the script in Git Bash.
 
 ## Open items
 
+- **J1 JST XH (D-040, 2026-10-20):** make the power cable with an XHP-2 housing and SXH-001T-P0.6
+  terminals (not in the BOM).
 - **Rev C part numbers (2026-10-07):** the 12 new 0603 and SOD-523 MPNs have no Digi-Key part number,
   stock or price in `bom_sources.csv` yet. The Digi-Key upload uses the MPN for them. Check them before
   you order.

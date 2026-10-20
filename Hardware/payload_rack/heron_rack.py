@@ -444,6 +444,10 @@ def sdr_sma_x(i):
 
 CLK_W, CLK_H = 118.0, 44.0          # clock board rev C (Hardware/clock_board_revC; same outline as rev B)
 CLK_TOP_Z = 54.0                    # board top edge height (KiCad y=0)
+# J1 body envelope from its KiCad origin (pin 1), world axes: (x0, x1, z0, z1, height
+# toward the SDRs). JST S2B-XH-A-1 at rotation 180 (KiCad 10 STEP model and Digi-Key:
+# 7.4 x 11.5 mm, 6.1 mm high). The mouth faces up, 0.2 mm below the board top edge (D-040).
+J1_BODY = (-4.95, 2.45, -3.9, 7.6, 6.1)
 
 def clk_outline():
     idx = sdr_indices()
@@ -513,7 +517,8 @@ def mate_pairs():
 
 def clock_board_ref():
     """clock board rev C: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
-    J3-J10: Amphenol SMP-MSSB-PCT10T envelope. J2: Amphenol 132134 SMA envelope."""
+    J1: JST S2B-XH-A-1 envelope (J1_BODY). J3-J10: Amphenol SMP-MSSB-PCT10T envelope.
+    J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
     for (hx, hz) in clk_holes():
@@ -521,8 +526,9 @@ def clock_board_ref():
     toward_sdr = cq.Vector(0, -1, 0)
     for ref, (kx, ky, fp) in _clk_read().items():
         wx, wz = clk_to_world(kx, ky)
-        if ref == "J1":   # JST-GH, mouth up
-            pcb = pcb.fuse(box(wx - 3.5, CLK_Y0 - 4.3, wz - 3.2, wx + 3.5, CLK_Y0, wz + 3.2))
+        if ref == "J1":   # JST XH S2B-XH-A-1, mouth up (D-040). KiCad origin = pin 1, rotation 180
+            pcb = pcb.fuse(box(wx + J1_BODY[0], CLK_Y0 - J1_BODY[4], wz + J1_BODY[2],
+                               wx + J1_BODY[1], CLK_Y0, wz + J1_BODY[3]))
         elif clk_jack_kind(ref, fp) == "smp":
             # SMP-MSSB-PCT10T (square body 5.99, mating face at SMP_JACK_H), Y measured from the board front face toward the SDR (Amphenol IGES model):
             # 6.0 sq body 0 - 1.22, dia 6.0 flange 1.22 - 2.31, dia 4.19 shroud 2.31 - SMP_JACK_H

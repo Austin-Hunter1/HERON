@@ -6,6 +6,25 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 
 **Envelope:** 172 W × 210 D × 126 H mm (front = RF side). Rack mass without boards is about 0.46 kg in 3 mm plywood plus printed parts. That excludes screws, inserts and standoffs (about 40 g) and the copper tape (about 25 g).
 
+## Run the tools
+
+This folder is its own `uv` project (`pyproject.toml`, `uv.lock`), because
+CadQuery has large binary wheels and needs Python 3.11 or 3.12. Run the
+commands in this folder:
+
+```bash
+uv sync
+```
+
+```bash
+uv run python check_fit.py
+```
+
+- `uv sync` installs CadQuery 2.8 and the other dependencies in `.venv/` (not in git).
+- `uv run python check_fit.py` runs the interference check, the mate report and the stop screw check (about 10 s).
+- `uv run python heron_rack.py` makes the `out/` files. `uv run pytest fusion/tests` runs the Fusion helper tests.
+- Do not use the system `python3`: it has no CadQuery.
+
 ## How it works
 - **Blades.** Each module screws to a 3 mm laser-cut tray through its own mounting holes. A TPU C-rail clips onto the tray's top edge and another onto its bottom edge.
   - The four SDR trays are solid. Each carries a grounded copper-tape shield (see below). The NUC tray is skeletal.
@@ -95,12 +114,12 @@ A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 
 | File | What |
 |---|---|
 | `HERON_rack_revA_assembly.step` | Full assembly with the real Ettus B210/B200 models (82 MB). Open it in Fusion (File → Open / Upload). Not in git: run `heron_rack.py` to make it. Put the Ettus STEP files in `ref/` first. |
-| `HERON_rack_revA_assembly_noboards.step` | Rack parts only, without boards (7 MB). Not in git: `python3 heron_rack.py --norefs` makes it. |
+| `HERON_rack_revA_assembly_noboards.step` | Rack parts only, without boards (7 MB). Not in git: `uv run python heron_rack.py --norefs` makes it. |
 | `laser_dxf/*.dxf` | Cut files, 1:1 mm, closed outlines. The suffix is the quantity. |
 | `print_stl/*.stl`, `step_parts/*.step` | Printed parts plus a STEP of every unique part. |
 | `mass.csv` | Per-part volume and mass for plywood, acrylic or Delrin sheet. |
 | `section_y80.png`, `section_y170.png`, `preview_*.png` | Sections through the blades (y 80) and the SSD bay (y 170), and views. |
-| `../heron_rack.py` | Parametric generator. Edit the numbers at the top and run `python3 heron_rack.py` (CadQuery). `check_fit.py` reruns the interference check. |
+| `../heron_rack.py` | Parametric generator. Edit the numbers at the top and run `uv run python heron_rack.py` (CadQuery, see Run the tools). `check_fit.py` reruns the interference check. |
 
 ## Cut and print list
 **Laser (3 mm):** bottom plate ×1, top plate ×1 (with the SSD hatch), side wall ×2, rear plate ×1, SDR tray (solid) ×4, NUC tray ×1.

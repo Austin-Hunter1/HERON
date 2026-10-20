@@ -1,0 +1,27 @@
+# HERON payload rack: CadQuery model, fit check and renders.
+#
+# Why its own uv project: CadQuery (OCP) has large binary wheels and a narrow
+# Python range. It must not slow down or constrain the software workspace in
+# HERON_DEPLOY_SOFTWARE. Run the scripts from this folder:
+#
+#     uv run python check_fit.py
+#     uv run python heron_rack.py
+#     uv run pytest fusion/tests
+#
+# This is not a package: the scripts import each other from this folder.
+[project]
+name = "heron-payload-rack"
+version = "0.1.0"
+description = "HERON payload rack: parametric CadQuery model, interference and mate check, renders."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "cadquery>=2.5",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.uv]
+package = false

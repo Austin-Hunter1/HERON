@@ -72,6 +72,10 @@ You are a test engineer on this project. Obey these rules at all times:
     D-026). Python generators make the KiCad 7 files; see its
     `README.md` before you edit the board.
   - `datasheets/` — Datasheets for parts on HERON boards.
+  - `payload_rack/` — The CadQuery rack model and fit check. Own `uv`
+    project with CadQuery: run `uv sync`, then `uv run python
+    check_fit.py` in that folder. Run the fit check after each clock
+    board change that moves or resizes a part.
 - `HERON_WRITING/` — Reports and papers (git submodule).
 - `gps-tracking-example/` — Upstream reference GNSS tracking code (git
   submodule, read only; edit `gnss_processing/` instead).

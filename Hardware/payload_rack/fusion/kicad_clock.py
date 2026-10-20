@@ -67,7 +67,7 @@ def jack_kind(ref: str, footprint: str = "") -> str:
 def jack_groups(jacks: Mapping[str, Jack], jst_ref: str = "J1") -> Tuple[List[str], List[str], List[str]]:
     """Split the jack references into (jst, smp, sma) lists in natural order.
 
-    Why: the clock board reference draws three connector shapes. The JST-GH
+    Why: the clock board reference draws three connector shapes. The JST XH
     connector is named by `jst_ref` (J1). The kind of every other jack follows
     `jack_kind`. The build and the tests use this same split.
     """
