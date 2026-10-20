@@ -29,7 +29,12 @@ H      = 120.0   # interior height (bottom plate top -> top plate underside)
 SDR_W, SDR_L, PCB_T = 99.949, 154.686, 1.575
 SDR_TOP = 14.125          # tallest part above board bottom (USB-B)
 SDR_HOLES = [(3.17, -20.19), (96.77, -20.19), (3.17, -140.21), (96.77, -140.21)]  # (bx, by), d3.18
-SDR_REAR_SMA = {"ref_a": 14.22, "ref_b": 34.16, "aux": 70.89}   # bx of rear SMAs; which is 10 MHz / PPS: VERIFY on silkscreen
+# bx of the rear SMAs that mate with the clock board. Silkscreen order on a B210
+# and a B200 (photos, 2026-10-20, Q-015 b): GPS ANT 14.22, 10 MHz 34.16,
+# USB-B 51.69, PPS 70.89, DC 89.43. ref_a = 10 MHz (clock board J3-J6),
+# ref_b = PPS (J7-J10). GPS ANT stays free for a cable (clock board rev D, D-042).
+SDR_REAR_SMA = {"ref_a": 34.16, "ref_b": 70.89}
+SDR_GPS_BX = 14.22
 SDR_USB_BX, SDR_PWR_BX = 51.69, 89.43
 SMA_BZ = 1.96             # SMA axis height above board bottom
 SMA_OVERHANG = 11.48      # SMA tip beyond board edge
@@ -402,6 +407,9 @@ def rear_plate_local():
     cx0, cx1, cz0, cz1 = clk_outline()
     # soldering windows: one behind each SDR jack column
     cuts += solder_windows()
+    # USB openings: the SDR USB cable passes through the clock board and this plate
+    for i in sdr_indices():
+        cuts.append(rrect(sdr_sma_x(i) + USB_DX, Z_BOARD + SDR_USB_BX, REAR_USB_W, REAR_USB_H, 2.0))
     # access holes: one on the axis of each rear stop screw
     for (ax, az) in stop_axes():
         cuts.append(circ(ax, az, STOP_ACCESS_D))
@@ -442,8 +450,13 @@ def sdr_indices():
 def sdr_sma_x(i):
     return tray_x(i) + T / 2 + STANDOFF + SMA_BZ
 
-CLK_W, CLK_H = 118.0, 44.0          # clock board rev C (Hardware/clock_board_revC; same outline as rev B)
-CLK_TOP_Z = 54.0                    # board top edge height (KiCad y=0)
+CLK_W, CLK_H = 118.0, 60.0          # clock board rev D (Hardware/clock_board_revD/revd_geom.py)
+CLK_TOP_Z = 90.0                    # board top edge height (KiCad y=0): below the SDR DC plugs
+# USB-B: the plug of each SDR passes through a hole in the clock board and an
+# opening in the rear plate (user, 2026-10-20). USB axis: 5.89 mm from the SMA
+# axis toward the SDR component side (revd_geom.USB_DX).
+USB_DX = (PCB_T + SDR_TOP) / 2 - SMA_BZ
+REAR_USB_W, REAR_USB_H = 20.0, 22.0   # PROPOSED: rear plate opening (board hole 16 x 18 + 2 mm each side)
 # J1 body envelope from its KiCad origin (pin 1), world axes: (x0, x1, z0, z1, height
 # toward the SDRs). JST S2B-XH-A-1 at rotation 180 (KiCad 10 STEP model and Digi-Key:
 # 7.4 x 11.5 mm, 6.1 mm high). The mouth faces up, 0.2 mm below the board top edge (D-040).
@@ -464,9 +477,9 @@ def clk_to_world(kx, ky):
     return x0 + kx, z1 - ky
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revC", "project", "heron_clock.kicad_pcb"),
+CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revD", "project", "heron_clock.kicad_pcb"),
                             os.path.join(_HERE, "..", "clockB", "project", "heron_clock.kicad_pcb")) if os.path.exists(p)),
-               "")   # rev C KiCad board (D-028); the jack positions come from this file
+               "")   # rev D KiCad board (D-042); the jack positions come from this file
 
 def _clk_read():
     """{ref: (kx, ky, footprint_name)} for J1..J10 from the KiCad file (rev C)."""
@@ -516,11 +529,15 @@ def mate_pairs():
     return out
 
 def clock_board_ref():
-    """clock board rev C: PCB in the XZ plane, jacks facing the SDRs, J1 on top.
+    """clock board rev D: PCB in the XZ plane, jacks facing the SDRs, J1 on top,
+    one USB hole on each SDR USB axis (16 x 18 mm, revd_geom.USB_W/H).
     J1: JST S2B-XH-A-1 envelope (J1_BODY). J3-J10: Amphenol SMP-MSSB-PCT10T envelope.
     J2: Amphenol 132134 SMA envelope."""
     x0, x1, z0, z1 = clk_outline()
     pcb = box(x0, CLK_Y0, z0, x1, CLK_Y0 + 1.6, z1)
+    for i in sdr_indices():
+        ux, uz = sdr_sma_x(i) + USB_DX, Z_BOARD + SDR_USB_BX
+        pcb = pcb.cut(box(ux - 8.0, CLK_Y0 - 1, uz - 9.0, ux + 8.0, CLK_Y0 + 3, uz + 9.0))
     for (hx, hz) in clk_holes():
         pcb = pcb.cut(cq.Solid.makeCylinder(1.6, 5, cq.Vector(hx, CLK_Y0 - 1, hz), cq.Vector(0, 1, 0)))
     toward_sdr = cq.Vector(0, -1, 0)
@@ -733,7 +750,7 @@ def build(with_refs=True):
                 refs.append(("REF_NUC7i3DNB_envelope", nuc_ref(i)))
         refs += mate_refs()
         refs.append(("REF_SSD_2.5in", ssd_ref()))
-        refs.append(("REF_clock_board_revC", clock_board_ref()))
+        refs.append(("REF_clock_board_revD", clock_board_ref()))
     return parts, refs
 
 DENS = {"laser_ply": 0.68, "laser_acrylic": 1.19, "laser_delrin": 1.41, "asa": 1.07, "tpu": 1.21}

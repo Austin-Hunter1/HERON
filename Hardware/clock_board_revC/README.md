@@ -6,6 +6,9 @@ jack positions do not change. Rev B stays as it is.
 
 **Status: proposed. Not ordered. Not built.**
 
+**DO NOT ORDER (2026-10-20): superseded by rev D (`../clock_board_revD/`, D-042).** The jack positions do not match
+the SDR rear SMAs. See Q-015 (b) in `docs/DECISIONS.md` and the note below.
+
 ## What changed from rev B
 
 | Item | Rev B | Rev C |
@@ -18,6 +21,7 @@ jack positions do not change. Rev B stays as it is.
 | Smallest parts | 0402, X1SON | 0603, SOD-523. The finest-pitch parts that remain have no larger package: U3 SiT5155 (5 × 3.2 mm, 10 pads), U4 and U6 (TSSOP, 0.65 mm pitch), SOT-23-5. |
 | Source of the KiCad files | Generators, then the SMP swap script | `make_revc.py`. It reads the rev B KiCad files and writes the rev C files. |
 | Power input J1 (D-040, 2026-10-20) | JST-GH SM02B-GHS-TB(LF)(SN), SMD, locking | JST XH **S2B-XH-A-1(LF)(SN)**, through-hole, side entry, friction lock. The GH header was out of stock. Same pinout: pin 1 = +5 V, pin 2 = GND. The body is 7.4 × 11.5 mm and 6.1 mm high, so J1 moved right, between D2 and J8 (pin 1 at 36.10, 7.85). The mouth faces the top edge, 0.2 mm inside it. The +5 V track to F1 has a new start; three GND stitch vias are removed. `power_conn.py` makes the change. |
+| D2 land (D-041, 2026-10-20) | Stock `D_SOD-323F`: two 0.5 × 0.5 mm pads | Project footprint `HERON_Clock:D_SOD-323HE_Panjit` from the Panjit SS1030HEWS datasheet rev 06, page 3: cathode pad 1.85 × 1.1 mm (under the large cathode tab), anode pad 0.9 × 1.0 mm, 1.825 mm between centres. Same position, rotation and polarity. The F.Cu GND pour no longer runs under the cathode tab. `gen_lib.py` makes the footprint; `d2_land.py` makes the change. |
 
 ## Fit in the rack
 
@@ -42,10 +46,10 @@ jack positions do not change. Rev B stays as it is.
 
 Board coordinates are in mm, with (0, 0) at the top-left corner, seen from the component side.
 
-**Verify before you order:** the rack model assumes that the two adjacent rear SMAs
-of each B2x0 (14.2 mm and 34.2 mm from the board corner) are 10 MHz (lower) and PPS (upper). Read the
-silkscreen on one SDR. A direct mate cannot cross cables. If the order is different, swap the nets of
-J3–J6 and J7–J10 before you order.
+**Jack positions are wrong for the B210 (2026-10-20):** the rack model assumed that the two adjacent rear
+SMAs of each B2x0 (14.2 mm and 34.2 mm from the board corner) are 10 MHz (lower) and PPS (upper). The
+B210 silkscreen shows that 14.2 mm is GPS ANT, 34.2 mm is 10 MHz, and PPS is at 70.9 mm, on the other
+side of the USB connector. A net swap cannot fix this. The B200 rear edge is not checked yet.
 
 ## SMP jack footprint (J3–J10)
 
@@ -178,6 +182,7 @@ folder, and run the script in Git Bash.
 | `design.py` | The parts and nets as Python (rev C parts). It matches the schematic (checked). It uses `gen_sch.py`; `gen_lib.py` makes the project library. Both are the rev B generators (KiCad 7 libraries). |
 | `silk_art.py` | The HERON logo and the title block on the silkscreen (D-037). Back: 20 mm logo, name, "Rev C - 10/2026", designer, flux warning. Front: 8.6 mm logo, name, revision, "+5V IN / 5.5V MAX" at J1, R23 DNP note at J2. Positions and texts are constants at the top. It deletes and adds its own group (`HERON_SILK_ART`), so you can run it again. `make_revc.py` calls it. Run it alone on a hand-edited board: `python3 silk_art.py`. The logo comes from `../../HERON/Templates and Logos/HERON_pixel_20mm.svg`. |
 | `silk_refs.py` | Shows the reference designators of all 110 parts on the front silkscreen (D-038). It finds a clear spot for each label (0.8 mm text, no contact with pads, other silk or the SMP jack bodies) and does not move parts. The labels of J1, J2, the ICs and the test points stay where they were. A crowded part that finds no spot is placed first in the next pass, with a larger search distance (up to 6.4 mm). `make_revc.py` calls it after `silk_art.py`. Run it alone on a hand-edited board: `python3 silk_refs.py`. It prints the labels that find no spot (none on 2026-10-19). In the crowded filter columns some labels are up to about 5 mm from their part: use the assembly PDF to confirm a part. |
+| `d2_land.py` | D2 change from the stock SOD-323F land to the Panjit SOD-323HE land (D-041). `make_revc.py` calls it. Run it alone like `power_conn.py`. |
 | `power_conn.py` | J1 change from JST-GH to JST XH (D-040): schematic strings, footprint, place, +5 V track, stitch vias, J1 and J8 "PPS" labels. `make_revc.py` calls it. Run it alone on the rev C files: `<KiCad 10>/bin/python3 power_conn.py` (set `KICAD10_FOOTPRINT_DIR` on macOS). A second run does nothing. |
 | `check_net.py`, `make_bom.py`, `make_fab.sh` | Netlist check, BOM, rebuild and fab outputs |
 | `bom_sources.csv` | Purchase data for each MPN: Digi-Key stock and price on the check date, notes. Also the off-board parts (8 Cinch 134-1019-451 SMA-to-SMP adapters). `make_bom.py` merges it into `fab/heron_clock_bom.csv` and fails when a fitted part has no MPN or no row. |
@@ -197,8 +202,7 @@ folder, and run the script in Git Bash.
   1-200 uF), because +3V3_CLK has about 13 uF, above the LP5907 limit. Same SOT-23-5 pinout, no layout
   change. Both have a 5.5 V maximum input: keep the payload 5 V rail below about 5.8 V. Check their stock.
 - Five parts changed on 2026-10-05 (approved 2026-10-07) because of obsolete or out-of-stock parts (see `design.py` and
-  `bom_sources.csv`). D2 is now a Panjit SS1030HEWS (SOD-323HE). Check its land pattern against the
-  SOD-323F footprint.
+  `bom_sources.csv`). D2 is now a Panjit SS1030HEWS (SOD-323HE), on its own Panjit land (D-041).
 - Which rear SMA of the B2x0 is 10 MHz and which is PPS (see above, Q-015).
 - The adapter reach (`ADAPTER_REACH`, measure it with the adapter fitted and mated) and the board thickness check (Q-015).
 - The PPS source (GNSS receiver model) is still open. J2 (PPS IN) faces forward, between the B200_1 and B200_2

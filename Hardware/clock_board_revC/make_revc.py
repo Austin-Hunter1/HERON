@@ -10,6 +10,8 @@ size larger.
   The pinout is the same: pin 1 = I/O, pin 2 = GND (TI datasheet Table 4-1).
 - J1 (power input) changes from JST-GH (SMD) to JST XH (through-hole),
   because the GH header is out of stock (D-040). power_conn.py does it.
+- D2 gets the Panjit SOD-323HE land in place of SOD-323F (D-041).
+  d2_land.py does it.
 
 Why a script and not the generators: the rev B KiCad files were edited after
 the last generator run (the SMP swap), and the full generator flow needs
@@ -30,6 +32,7 @@ import sys
 
 import pcbnew
 
+import d2_land
 import power_conn
 from silk_art import add_silk_art
 from silk_refs import place_labels
@@ -99,9 +102,10 @@ def convert_schematic(src, dst):
 
 # ------------------------------------------------------------------ PCB swap
 def load_fp(lib_id):
-    """Load a stock KiCad 10 footprint by 'Lib:Name'."""
+    """Load a footprint by 'Lib:Name': the project library HERON_Clock, or a stock KiCad 10 one."""
     lib, name = lib_id.split(":")
-    fp = pcbnew.FootprintLoad(os.path.join(FPLIB, f"{lib}.pretty"), name)
+    folder = os.path.join(DST, f"{lib}.pretty") if lib == "HERON_Clock" else os.path.join(FPLIB, f"{lib}.pretty")
+    fp = pcbnew.FootprintLoad(folder, name)
     if fp is None:
         sys.exit(f"footprint {lib_id} not found in {FPLIB}")
     fp.SetFPID(pcbnew.LIB_ID(lib, name))
@@ -652,6 +656,7 @@ def set_revision_text(board):
 def main():
     convert_schematic(os.path.join(SRC, "heron_clock.kicad_sch"), os.path.join(DST, "heron_clock.kicad_sch"))
     power_conn.apply_schematic(os.path.join(DST, "heron_clock.kicad_sch"))
+    d2_land.apply_schematic(os.path.join(DST, "heron_clock.kicad_sch"))
     board = pcbnew.LoadBoard(os.path.join(SRC, "heron_clock.kicad_pcb"))
     keep = loose_ids(board)
     swap_all(board)
@@ -664,6 +669,7 @@ def main():
     prune_dangling(board, keep)
     set_revision_text(board)
     power_conn.apply_board(board, swap_footprint)   # J1: JST-GH -> JST XH (D-040)
+    d2_land.apply_board(board, swap_footprint)      # D2: Panjit SOD-323HE land (D-041)
     add_silk_art(board)
     hidden = place_labels(board)
     if hidden:

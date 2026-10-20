@@ -1,4 +1,4 @@
-"""Clock board rev C reference envelope (ref): `REF_clock_board_revC`.
+"""Clock board rev D reference envelope (ref): `REF_clock_board_revD`.
 
 Mirror of `clock_board_ref()` in heron_rack.py. It is NOT a part to make. It
 shows where the board and its connectors go, so that the rear plate, the SDR
@@ -21,7 +21,7 @@ to the PCB. The shroud end is the mating face, `SMP_JACK_H` from the front face.
 import fusion_lib as fl
 import kicad_clock as kc
 
-NAME = "REF_clock_board_revC"
+NAME = "REF_clock_board_revD"
 CATEGORY = "ref"
 JST_REF = "J1"   # the JST XH power connector (clock_board_ref: ref == "J1")
 
@@ -72,7 +72,7 @@ def _discs(ctx, comp, name: str, refs, diameter: str, depth: str, depth_start: s
 def build(ctx):
     """Build the clock board reference component in its local frame and return it."""
     if not ctx.jacks:
-        raise fl.ConfigError("REF_clock_board_revC needs the KiCad jacks, but none were found")
+        raise fl.ConfigError("REF_clock_board_revD needs the KiCad jacks, but none were found")
     comp = fl.new_component(ctx, NAME, CATEGORY)
     jst, smp, sma = kc.jack_groups(ctx.jacks, JST_REF)
     # 1. PCB (outline = clk_outline) and 2. its four mounting holes

@@ -157,7 +157,7 @@ def build():
         dict(kind="P", lib="Device:D_Zener", rot=270, ref=ref("D"), value="SMF5.0A", step=12.7,
              fp="Diode_SMD:D_SOD-123F", fields=(("Manufacturer", "Littelfuse"), ("MPN", "SMF5.0A"))),
         dict(kind="S", lib="Device:D_Schottky", rot=180, ref=ref("D"), value="SS1030HEWS",
-             fp="Diode_SMD:D_SOD-323F",   # SOD-323HE body fits the SOD-323F land (VERIFY on the Panjit drawing)
+             fp="HERON_Clock:D_SOD-323HE_Panjit",   # Panjit land, datasheet rev 06 p.3 (D-041; gen_lib.py)
              fields=(("Manufacturer", "Panjit"), ("MPN", "SS1030HEWS_R1_00001"))),   # 30 V 1 A; was PMEG3020EJ (no stock)
         dict(kind="GAP", len=7.62),
         dict(kind="S", lib="Device:FerriteBead_Small", ref=ref("FB"), value="BLM18PG221", fp=L0603,

@@ -1,0 +1,93 @@
+(footprint "D_SOD-323HE_Panjit"
+  (version 20221018)
+  (generator pcbnew)
+  (layer "F.Cu")
+  (descr "SOD-323HE (Panjit). Large cathode pad under the body. Land from Panjit SS1030HEWS datasheet rev 06, page 3")
+  (tags "SOD-323HE diode Panjit")
+  (attr smd)
+  (fp_text reference "REF**"
+    (at 0 -1.6)
+    (layer "F.SilkS")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "3b6c0657-e0a2-4055-8bb9-5043e44f4032"))
+  (fp_text value "SOD-323HE"
+    (at 0 1.6)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "f58546de-e13b-43f7-b227-b1485059bfc9"))
+  (fp_text user "${REFERENCE}"
+    (at 0 0)
+    (layer "F.Fab")
+    (effects
+      (font
+        (size 0.8 0.8)
+        (thickness 0.12)))
+    (tstamp "2fd1a9d6-0ba1-4cfc-96fb-9a28e1ce5248"))
+  (fp_rect
+    (start -0.925 -0.65)
+    (end 0.925 0.65)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (fill none)
+    (layer "F.Fab")
+    (tstamp "92d4f3a4-0d94-4158-8a68-f8309f9402ef"))
+  (fp_line
+    (start -0.625 -0.65)
+    (end -0.625 0.65)
+    (stroke
+      (width 0.1)
+      (type solid))
+    (layer "F.Fab")
+    (tstamp "aff60691-b629-462d-9d59-9e621ff658ba"))
+  (fp_line
+    (start -1.8 -0.75)
+    (end -1.8 0.75)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "006fab92-66e4-475f-94fa-63e67b73c357"))
+  (fp_line
+    (start -1.8 -0.75)
+    (end 0 -0.75)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "d8caab02-4fbd-4765-845b-b0d496a13547"))
+  (fp_line
+    (start -1.8 0.75)
+    (end 0 0.75)
+    (stroke
+      (width 0.12)
+      (type solid))
+    (layer "F.SilkS")
+    (tstamp "e66d28c2-ea08-4fca-afea-b173f85f24f2"))
+  (fp_rect
+    (start -1.85 -0.9)
+    (end 1.85 0.9)
+    (stroke
+      (width 0.05)
+      (type solid))
+    (fill none)
+    (layer "F.CrtYd")
+    (tstamp "08520d5b-8389-440f-aa10-aa9fb1ee177b"))
+  (pad "1" smd roundrect
+    (at -0.675 0)
+    (size 1.85 1.1)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "86724006-0aa5-4294-913e-35c7fd019b1d"))
+  (pad "2" smd roundrect
+    (at 1.15 0)
+    (size 0.9 1)
+    (layers "F.Cu" "F.Paste" "F.Mask")
+    (roundrect_rratio 0.1)
+    (tstamp "2b63a635-7f86-4c56-a2bd-18091e6cf52a")))

@@ -18,7 +18,7 @@
 # Clock board rev C file. Path is relative to this folder. The builder reads
 # J1..J10 from it and makes the CLK_J<n>_KX / _KY parameters (sync_kicad.py
 # updates them later).
-pcb = "../../clock_board_revC/project/heron_clock.kicad_pcb"
+pcb = "../../clock_board_revD/project/heron_clock.kicad_pcb"
 # KiCad page origin offset: heron_rack.py `_clk_read` subtracts 100.0 from x and y.
 origin = 100.0
 
@@ -90,9 +90,9 @@ SDR_HOLE3_BX = { value = 3.17,   unit = "mm", comment = "SDR_HOLES[2] bx" }
 SDR_HOLE3_BY = { value = -140.21, unit = "mm", comment = "SDR_HOLES[2] by" }
 SDR_HOLE4_BX = { value = 96.77,  unit = "mm", comment = "SDR_HOLES[3] bx" }
 SDR_HOLE4_BY = { value = -140.21, unit = "mm", comment = "SDR_HOLES[3] by" }
-SDR_REAR_SMA_REF_A = { value = 14.22, unit = "mm", comment = "bx of rear SMA ref_a. Which is 10 MHz / PPS: VERIFY on silkscreen" }
-SDR_REAR_SMA_REF_B = { value = 34.16, unit = "mm", comment = "bx of rear SMA ref_b. VERIFY on silkscreen" }
-SDR_REAR_SMA_AUX   = { value = 70.89, unit = "mm", comment = "bx of rear SMA aux. VERIFY on silkscreen" }
+SDR_REAR_SMA_REF_A = { value = 34.16, unit = "mm", comment = "bx of the rear 10 MHz SMA (mates with clock board J3-J6). Silkscreen checked on a B210 and a B200, 2026-10-20" }
+SDR_REAR_SMA_REF_B = { value = 70.89, unit = "mm", comment = "bx of the rear PPS SMA (mates with clock board J7-J10). Silkscreen checked 2026-10-20" }
+SDR_GPS_BX         = { value = 14.22, unit = "mm", comment = "bx of the rear GPS ANT SMA (kept free for a cable, D-042)" }
 SDR_USB_BX = { value = 51.69, unit = "mm", comment = "USB connector bx" }
 SDR_PWR_BX = { value = 89.43, unit = "mm", comment = "Power connector bx" }
 SMA_BZ     = { value = 1.96,  unit = "mm", comment = "SMA axis height above board bottom" }
@@ -299,9 +299,14 @@ REARWIN_R_NY = { value = 1, unit = "none", comment = "Right window block count i
 REARWIN_R_RIB = { value = 8.0, unit = "mm", comment = "Right window block rib width" }
 
 # ---- clock board rev C (outline and reference envelope)
-CLK_W = { value = 118.0, unit = "mm", comment = "Clock board rev C width (same outline as rev B)" }
-CLK_H = { value = 44.0, unit = "mm", comment = "Clock board rev C height" }
-CLK_TOP_Z = { value = 54.0, unit = "mm", comment = "Board top edge height (KiCad y=0)" }
+CLK_W = { value = 118.0, unit = "mm", comment = "Clock board rev D width (Hardware/clock_board_revD/revd_geom.py)" }
+CLK_H = { value = 60.0, unit = "mm", comment = "Clock board rev D height" }
+CLK_TOP_Z = { value = 90.0, unit = "mm", comment = "Board top edge height (KiCad y=0), below the SDR DC plugs" }
+USB_DX = { expr = "(PCB_T + SDR_TOP) / 2 - SMA_BZ", unit = "mm", comment = "SDR USB-B axis offset from the SMA axis, toward the component side (revd_geom.USB_DX)" }
+CLK_USB_W = { value = 16.0, unit = "mm", comment = "Clock board USB hole width along X (revd_geom.USB_W)" }
+CLK_USB_H = { value = 18.0, unit = "mm", comment = "Clock board USB hole height along Z (revd_geom.USB_H)" }
+REAR_USB_W = { value = 20.0, unit = "mm", comment = "PROPOSED: rear plate USB opening width (heron_rack.REAR_USB_W)" }
+REAR_USB_H = { value = 22.0, unit = "mm", comment = "PROPOSED: rear plate USB opening height (heron_rack.REAR_USB_H)" }
 CLK_X_OFF = { value = 2.0, unit = "mm", comment = "clk_outline: board x0 is the first SDR slot start + 2.0" }
 CLK_X0 = { expr = "SLOT_X0_B210_1 + CLK_X_OFF", unit = "mm", comment = "Board left edge (KiCad x=0). First SDR slot is B210_1" }
 CLK_Z0 = { expr = "CLK_TOP_Z - CLK_H", unit = "mm", comment = "Board bottom edge" }

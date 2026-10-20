@@ -274,9 +274,79 @@ def build_smp_footprint():
     return fp
 
 
+# ------------------------------------------------ SOD-323HE footprint (D2)
+# Panjit SS1030HEWS, SOD-323HE. Why a project footprint: the package is not
+# symmetric. The cathode is a large tab under the body (1.15-1.55 mm long);
+# the anode is a short end terminal. The stock SOD-323F land (two 0.5 mm
+# pads) catches only the outer end of the cathode tab and lets the GND pour
+# run under the rest of it (D-041). Dimensions: Panjit SS1030HEWS datasheet
+# rev 06 (2025-08-19), page 3, "Mounting Pad Layout".
+SOD323HE_FP_NAME = "D_SOD-323HE_Panjit"
+SOD323HE_K = (1.85, 1.1)       # cathode pad (x, y) size
+SOD323HE_A = (0.9, 1.0)        # anode pad (x, y) size
+SOD323HE_SPAN = 3.2            # outer edge to outer edge of the two pads
+SOD323HE_BODY = (1.85, 1.30)   # Fab body outline: nominal body length, nominal width (1.20-1.40)
+
+
+def build_sod323he_footprint():
+    """Panjit SOD-323HE land pattern. Pad 1 = cathode on -x, as the stock diode footprints.
+
+    The origin is the centre of the land span, so the footprint takes the
+    place of D_SOD-323F at the same position and rotation.
+    """
+    h = SOD323HE_SPAN / 2
+    kx = round(-h + SOD323HE_K[0] / 2, 4)
+    ax = round(h - SOD323HE_A[0] / 2, 4)
+    fp = [S("footprint"), SOD323HE_FP_NAME, [S("version"), 20221018],
+          [S("generator"), S("pcbnew")], [S("layer"), "F.Cu"],
+          [S("descr"), "SOD-323HE (Panjit). Large cathode pad under the body. "
+                       "Land from Panjit SS1030HEWS datasheet rev 06, page 3"],
+          [S("tags"), "SOD-323HE diode Panjit"],
+          [S("attr"), S("smd")]]
+    txt = lambda kind, val, y, layer: [S("fp_text"), S(kind), val, [S("at"), 0, y], [S("layer"), layer],
+                                       [S("effects"), [S("font"), [S("size"), 0.8, 0.8], [S("thickness"), 0.12]]],
+                                       [S("tstamp"), u()]]
+    fp += [txt("reference", "REF**", -1.6, "F.SilkS"), txt("value", "SOD-323HE", 1.6, "F.Fab"),
+           txt("user", "${REFERENCE}", 0, "F.Fab")]
+
+    def line(x0, y0, x1, y1, layer, w):
+        return [S("fp_line"), [S("start"), x0, y0], [S("end"), x1, y1],
+                [S("stroke"), [S("width"), w], [S("type"), S("solid")]], [S("layer"), layer], [S("tstamp"), u()]]
+    bx, by = SOD323HE_BODY[0] / 2, SOD323HE_BODY[1] / 2
+    fp.append([S("fp_rect"), [S("start"), -bx, -by], [S("end"), bx, by],
+               [S("stroke"), [S("width"), 0.1], [S("type"), S("solid")]], [S("fill"), S("none")],
+               [S("layer"), "F.Fab"], [S("tstamp"), u()]])
+    fp.append(line(-bx + 0.3, -by, -bx + 0.3, by, "F.Fab", 0.1))             # cathode band
+    # Silk: a cathode bracket outside the pads, so that no silk falls on a pad.
+    sy = round(SOD323HE_K[1] / 2 + 0.2, 3)
+    sx = round(h + 0.2, 3)
+    fp.append(line(-sx, -sy, -sx, sy, "F.SilkS", 0.12))
+    fp.append(line(-sx, -sy, 0.0, -sy, "F.SilkS", 0.12))
+    fp.append(line(-sx, sy, 0.0, sy, "F.SilkS", 0.12))
+    cx, cy = round(h + 0.25, 3), round(max(SOD323HE_K[1] / 2, by) + 0.25, 3)
+    fp.append([S("fp_rect"), [S("start"), -cx, -cy], [S("end"), cx, cy],
+               [S("stroke"), [S("width"), 0.05], [S("type"), S("solid")]], [S("fill"), S("none")],
+               [S("layer"), "F.CrtYd"], [S("tstamp"), u()]])
+    for n, x, (w, hh) in (("1", kx, SOD323HE_K), ("2", ax, SOD323HE_A)):
+        fp.append([S("pad"), n, S("smd"), S("roundrect"), [S("at"), x, 0], [S("size"), w, hh],
+                   [S("layers"), "F.Cu", "F.Paste", "F.Mask"], [S("roundrect_rratio"), 0.1],
+                   [S("tstamp"), u()]])
+    return fp
+
+
+def write_sod323he():
+    """Write only the SOD-323HE footprint. Why: main() also rewrites the
+    symbol library with new UUIDs, which a footprint change does not need."""
+    os.makedirs(OUT + "/HERON_Clock.pretty", exist_ok=True)
+    path = f"{OUT}/HERON_Clock.pretty/{SOD323HE_FP_NAME}.kicad_mod"
+    open(path, "w").write(dump(build_sod323he_footprint()) + "\n")
+    return path
+
+
 def main():
     os.makedirs(OUT + "/HERON_Clock.pretty", exist_ok=True)
     open(f"{OUT}/HERON_Clock.pretty/{SMP_FP_NAME}.kicad_mod", "w").write(dump(build_smp_footprint()) + "\n")
+    write_sod323he()
     lib = [S("kicad_symbol_lib"), [S("version"), 20220914], [S("generator"), S("heron_gen_lib")]]
     lib += build_symbols()
     open(OUT + "/HERON_Clock.kicad_sym", "w").write(dump(lib) + "\n")

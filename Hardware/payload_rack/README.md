@@ -42,7 +42,7 @@ uv run python check_fit.py
   - The cable leaves the base toward the NUC. A swing latch on the top plate holds the sled handle down.
   - To swap: open the latch and pull the cord loop on the handle. The removal path is checked clear of all parts.
   - Swap with the payload powered off.
-- **Clock board rev C.** A 118 × 44 mm strip on the rear plate, behind the four SDRs (`../clock_board_revC/`).
+- **Clock board rev D.** A 118 × 60 mm board on the rear plate, behind the four SDRs (`../clock_board_revD/`, D-042). Each SDR USB-B plug passes through a hole in the board and an opening in the rear plate.
   - Its 8 SDR jacks (J3–J10) are Amphenol RF SMP-MSSB-PCT10T SMP male jacks (smooth bore). They face forward, coaxial with each SDR's rear reference SMAs. J2 (PPS IN) stays an SMA jack.
   - There are no cable jumpers. Each SDR blade plugs directly onto the board. See "SMP direct mate" below.
 
@@ -163,7 +163,7 @@ uv run python check_fit.py
 1. **NUC7i3DNB mounting holes and cooler height** (`NUC_HOLES`, `NUC_TOP`). These are placeholders because Intel's spec doesn't give the numbers in text. Measure your board; the NUC tray holes come from these values.
 1a. **SMP stack-up.** Measure `ADAPTER_REACH` on a real B210 with the 134-1019-451 adapter fitted and mated on a jack. The 9.0 mm value is a placeholder. Change the value and rerun. Everything downstream moves. Also check that the engage and disengage forces (15 N maximum and about 22 N typical, for each interface) are safe for the SDR SMA jacks and the board.
 1b. **PROPOSED, not confirmed:** `STOP_MATE_MARGIN`, `STOP_ADJ`, `CHAN_CLR`, `RAIL_BASE_GAP`, the rear stop block (`STOP_BLOCK_H`, `STOP_WALL`), the preload boss (`PRE_BOSS_D`, `PRE_BOSS_T`), the window sizes (`SOLDER_WIN_DX`, `SOLDER_WIN_DZ`, `CLK_HOLE_KEEP`) and `STOP_ACCESS_D`. `SSD_REAR_GAP` is confirmed (2026-10-05: the 8 mm smaller NUC cable gap is acceptable). Test the radial and axial repeatability on a prototype first.
-2. **Which rear SMAs are 10 MHz and PPS.** The model has three rear SMAs at 14.2, 34.2 and 70.9 mm along the board edge. I've assumed the adjacent pair (14.2 / 34.2) are 10 MHz / PPS; check the silkscreen. If it's a different pair, change `SDR_REAR_SMA` and rerun; the clock strip moves with it.
+2. **Rear SMAs (checked 2026-10-20 on a B210 and a B200).** Order along the board edge: GPS ANT 14.2, 10 MHz 34.2, USB-B 51.7, PPS 70.9, DC 89.4 mm. `SDR_REAR_SMA` holds the 10 MHz and PPS positions (clock board rev D).
 3. **SSD:**
    - Drive thickness (`SSD_T`, 7 or 9.5 mm).
    - The bottom-hole positions. The sled has slots that cover both common readings.
@@ -172,9 +172,9 @@ uv run python check_fit.py
 5. **Drone mount pattern.** Not added yet. Do not use the SSD hatch area of the top plate.
 6. **Laser kerf.** Tabs and slots assume 0.15 mm per side. Cut one corner joint first.
 
-## Clock board rev C
-The board is in `../clock_board_revC/` (118 × 44 mm, KiCad 10, D-028). Rev C has the rev B outline, holes and jack positions; only the small parts are larger. `heron_rack.py` reads the jack
+## Clock board rev D
+The board is in `../clock_board_revD/` (118 × 60 mm, KiCad 10, D-042). Rev D puts J3–J6 on the SDR 10 MHz SMAs and J7–J10 on the PPS SMAs, with a USB hole between them (the rev C jack rows faced the wrong SMAs). `heron_rack.py` reads the jack
 positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
 All 8 SDR jacks are coaxial with the SDR reference SMAs (error 0.000 mm).
 The board mounts on the rear plate with four M3 × 20 mm standoffs (`CLK_STANDOFF`). Its holes are at world (X, Z) =
-(50, 50), (160, 50), (50, 14) and (160, 14).
+(50, 86), (160, 86), (50, 34) and (160, 34). The rear plate has a 20 × 22 mm opening (PROPOSED, `REAR_USB_W`, `REAR_USB_H`) behind each USB hole, so the USB cables leave through the back of the rack.

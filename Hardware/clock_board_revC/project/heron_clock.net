@@ -2,7 +2,7 @@
 	(version "E")
 	(design
 		(source "/Users/nathan/Documents/GitHub/HERON/Hardware/clock_board_revC/project/heron_clock.kicad_sch")
-		(date "2026-10-20T14:25:03")
+		(date "2026-10-20T16:34:34")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -2109,14 +2109,14 @@
 		(comp
 			(ref "D2")
 			(value "SS1030HEWS")
-			(footprint "Diode_SMD:D_SOD-323F")
+			(footprint "HERON_Clock:D_SOD-323HE_Panjit")
 			(fields
 				(field
 					(name "Manufacturer") "Panjit")
 				(field
 					(name "MPN") "SS1030HEWS_R1_00001")
 				(field
-					(name "Footprint") "Diode_SMD:D_SOD-323F")
+					(name "Footprint") "HERON_Clock:D_SOD-323HE_Panjit")
 				(field
 					(name "Datasheet")
 				)

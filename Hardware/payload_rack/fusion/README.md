@@ -90,12 +90,12 @@ document without saving when you are done.
 - Category `ref`: not made, no material, translucent green (`[ref_look]` in the seed: library appearance
   `Plastic - Translucent Matte (Green)`, colour 0.2/0.55/0.3, body opacity 0.6; the CadQuery ref colour).
   `apply_materials.py` skips `ref` (its `MATERIAL_CATEGORIES` has only laser, rigid, flex). Keep it so.
-- `parts/clock_board_ref.py` builds `REF_clock_board_revC` (mirror of `clock_board_ref()`): PCB with 4 holes, J1 JST box,
+- `parts/clock_board_ref.py` builds `REF_clock_board_revD` (mirror of `clock_board_ref()`): PCB with 4 holes, J1 JST box,
   J3-J10 SMP jacks (square body, flange, shroud ending at `SMP_JACK_H`), J2 SMA (body and barrel). Local frame = the rear plate
   frame, origin on the board REAR face. Jack positions use `CLK_J<n>_X` / `_Z`, so `sync_kicad.py` moves them.
   Which J is SMP or SMA, and the J list, come from `kicad_clock.jack_groups` at build time (static).
 - `parts/ref_parts.py` builds `REF_smp_adapter` (one cylinder `ADAPTER_D` x `ADAPTER_REACH`), `REF_NUC_envelope` and `REF_SSD`.
-- `build_flight_rack.ref_rows` makes 11 rigid placements at the ROOT: `REF_clock_board_revC` (origin `CLK_Y0 + CLK_PCB_T`),
+- `build_flight_rack.ref_rows` makes 11 rigid placements at the ROOT: `REF_clock_board_revD` (origin `CLK_Y0 + CLK_PCB_T`),
   8 adapters `REF_adapter_<slot>_<ref_a|ref_b>` (origin on the SDR SMA axis at `SDR_SMA_TIP_Y`, cylinder toward +Y),
   `REF_NUC_envelope` and `REF_SSD`. New seed value: `NUCREF_INSET`.
 - Skipped on purpose: the SDR board stand-ins `REF_B210_1 ... REF_B200_2` (Ettus STEP files missing; the user chose no boards).

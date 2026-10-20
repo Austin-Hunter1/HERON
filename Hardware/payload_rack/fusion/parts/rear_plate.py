@@ -4,6 +4,8 @@ Mirror of `rear_plate_local` in heron_rack.py. Local frame: x = world X
 (0..W), y = world Z (0..H), sheet thickness along z (0..T). Tabs reach to
 -T and H + T in y, and to -T and W + T in x.
 
+USB openings sit on each SDR USB-B axis (clock board rev D, D-042).
+
 Solder windows use the clock board jack positions. The jack to SDR pairing
 comes from `kicad_clock.mate_pairs` at build time (static). The window sizes
 follow the CLK_J<n>_X / _Z parameters, so a jack move moves the window.
@@ -79,6 +81,13 @@ def build(ctx):
         fl.sk_rect(ctx, tabs, "W_", f"{tz} - REAR_SIDE_TAB_L / 2", "W_ + T_", f"{tz} + REAR_SIDE_TAB_L / 2")
     fl.extrude(comp, tabs, "T_", op="join", name="rear_tabs")
     _solder_windows(ctx, comp)
+    # USB openings: the SDR USB cable passes through the clock board and this plate (D-042)
+    usb = fl.plane_sketch(comp, "usb_openings")
+    for slot in _sdr_slots(ctx):
+        xc = f"(TRAY_X_{slot['name']} + T_ / 2 + STANDOFF + SMA_BZ + USB_DX)"
+        fl.sk_rounded_rect(ctx, usb, f"{xc} - REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX - REAR_USB_H / 2",
+                           f"{xc} + REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX + REAR_USB_H / 2", "SOLDER_WIN_R")
+    fl.extrude(comp, usb, None, op="cut", through=True, name="usb_openings")
     # T-slots, clock board holes, stop access holes
     cuts = fl.plane_sketch(comp, "slots_and_holes")
     sk_tslot(ctx, cuts, "REAR_SCREW_X1", "0 mm", +1, "y")

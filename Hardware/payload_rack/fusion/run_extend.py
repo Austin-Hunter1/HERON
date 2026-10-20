@@ -23,8 +23,8 @@ LOG_PATH = "/private/tmp/claude-501/-Users-nathan-Documents-GitHub-HERON/4ad3685
 # The four reference components (category "ref") and their 11 placements: the clock board,
 # the NUC envelope, the SSD and 8 SMP adapters (4 SDR slots x ref_a, ref_b).
 # The SDR board stand-ins (REF_B210_1 ...) are NOT added: the user chose no boards.
-PARTS = ["REF_clock_board_revC", "REF_smp_adapter", "REF_NUC_envelope", "REF_SSD"]
-LABELS = (["REF_clock_board_revC", "REF_NUC_envelope", "REF_SSD"]
+PARTS = ["REF_clock_board_revD", "REF_smp_adapter", "REF_NUC_envelope", "REF_SSD"]
+LABELS = (["REF_clock_board_revD", "REF_NUC_envelope", "REF_SSD"]
           + [f"REF_adapter_{slot}_{key}" for slot in ("B210_1", "B210_2", "B200_1", "B200_2")
              for key in ("ref_a", "ref_b")])
 PURGE = ("fusion_lib", "kicad_clock", "rack_config", "check_ref", "build_flight_rack", "parts")
