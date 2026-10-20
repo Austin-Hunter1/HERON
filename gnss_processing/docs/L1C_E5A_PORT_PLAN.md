@@ -626,7 +626,7 @@ summary if the file is large). Do not send `.env`.
 
 ## 8. Checklist
 
-- [ ] L0: baseline, OQ-0 to OQ-4, ICD differences reported
+- [~] L0: baseline saved, OQ-0 to OQ-14 answered (D-067, D-068); **ICD files not received yet**, so the ICD differences are not reported
 - [ ] L1: `utils/gps_l1c.py`, `test_l1c_codes.py` green
 - [ ] L2: L1C suite green or explained, baseline v2
 - [ ] T0: toggle design recorded (OQ-5, OQ-6, OQ-7)
