@@ -8,6 +8,10 @@ method: one phase at a time, ask before a decision the plan does not cover, comm
 
 ---
 
+> **Update 2026-10-20.** The ICD notes (`docs/icd/L1C_E5A_TRACKING_NOTES.md`) replace the ICDs for now.
+> The differences from this plan are in `docs/L1C_E5A_ICD_COMPARISON.md`. New questions: OQ-15 to OQ-17.
+> Blockers: the code-table files for Phase L1, the LDPC matrices for Phase L4, and the user's unpushed B1C fixes.
+
 ## 0. How to use this document
 
 1. Read sections 1 to 5 before you write code.
@@ -195,6 +199,9 @@ Ask these at the start of the matching phase. Record the answers in `docs/DECISI
 | OQ-12 | Recording length for F/NAV. A full ephemeris needs pages 1 to 4, and a subframe is about 50 s **[ICD]**. The 120 s recordings may be marginal. | The user records at least 300 s of L5 data (see 6.4). Plan for 150 s minimum tracking. | E4 |
 | OQ-13 | Combined fix: GPS L5 + B2a + E5a on one grid (one ISB per extra system), and GPS L1C/L1 C/A + B1C? | Yes, after the single-signal fixes work. Needs `GST` in `time_systems.py`. | E6 |
 | OQ-14 | The position-error limit of OQ-12 of the BeiDou plan (D-050) still open. | The user sets it. No phase may claim a position match until then. | all |
+| OQ-15 | Is Galileo **E5a-QP** (BPSK 5.115 Mcps, 330 chips, a fast-acquisition aid, new in ICD Issue 2.2) in scope? How does it combine with E5a-I/Q? The ICD does not say. | Out of scope. D-039 lists E5a only. Put it on the follow-up list. | E0 |
+| OQ-16 | The L1C tests cover **PRN 1 to 210**. The ICD notes cover PRN 1 to 63. PRN 64 to 210 need ICD section 6.3.1 (two-register overlay). | Implement 1 to 63 first. Mark the PRN 64 to 210 checks as expected to fail, with the reason, until the tables are available. Do not weaken a test. | L1 |
+| OQ-17 | L1C early-late rule: use the B1C rule (code loop plus subcarrier loop) for L1CD and the L1CP BOC(1,1) part? | Yes, as B1C. Needs the user's B1C real-data fixes (see `L1C_E5A_ICD_COMPARISON.md` section 3). | L2, T |
 
 ---
 
