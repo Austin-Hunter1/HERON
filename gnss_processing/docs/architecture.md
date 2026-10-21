@@ -20,9 +20,8 @@ Three notebooks are the application layer. All logic is in `utils/`.
 | `02-navigation` | Decode the message, form pseudoranges, solve the position | tracking `.h5` file | figures, fix |
 
 Signals that run end to end: GPS L1 C/A, L2C, L5, BeiDou B2a, BeiDou B1C.
-GPS L1C acquires and tracks, but notebook 02 stops at its message (the LDPC
-decoder is missing in `nav/cnav2.py`), and the `gnss-tools` checkout here
-cannot build it (`GpsL1C` is `None`, a known baseline failure).
+GPS L1C acquires and tracks (codes in `utils/gps_l1c.py`, PRN 1 to 63), but notebook 02 stops at its
+message (the LDPC decoder is missing in `nav/cnav2.py`).
 
 ## 2. Layout
 
@@ -49,6 +48,7 @@ failures that are not BeiDou work (`docs/BDS_BASELINE_TESTS.md`).
 | --- | --- |
 | `code_components.py` | Describes a signal as code components: sequence, branch (I or Q), overlay, subcarrier, power weight. No GPS constants. |
 | `signal_interfaces.py` | One `Signal` class for each signal (`GpsL1CA`, `GpsL2C`, `GpsL5`, `GpsL1C`, `BdsB2a`, `BdsB1C`). `ACQUISITION_POLICIES` and `TRACKING_POLICIES` choose how each is acquired and tracked. Add a signal here. |
+| `gps_l1c.py` | GPS L1C codes, overlay and constants (PRN 1 to 63), numbers in `docs/icd/l1c_code_tables.json`. |
 | `bds_b2a.py`, `bds_b1c.py` | BeiDou code generators and constants. No dependency on `gnss-tools`, so upstream can take them (D-048). B1C reads its `(w, p)` pairs from `docs/icd/bds_b1c_code_tables.json`. |
 | `secondary_code.py` | Overlay (secondary code) search and wipe-off. |
 | `ambiguity_resolution.py` | Resolves what acquisition leaves open (L2C CL). |

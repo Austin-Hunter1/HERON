@@ -19,12 +19,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-import gnss_tools.signals.gps_l1c as gps_l1c
 import gnss_tools.signals.gps_l1ca as gps_l1ca
 import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
-from utils import bds_b1c, bds_b2a
+from utils import bds_b1c, bds_b2a, gps_l1c
 
 
 @dataclass(frozen=True)

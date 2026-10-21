@@ -6,9 +6,9 @@ kept here (rather than as a submodule pointing at upstream) because this project
 GitHub account does not have write access to push changes there. It carries edits
 made for HERON's UAS GNSS-R work that are not upstream:
 
-- `utils/signal_interfaces.py` -- guards `GpsL1C` registration against the
-  `submodules/gnss-tools` checkout here not yet defining the L1C constants it needs,
-  so `import utils` degrades gracefully (with a warning) instead of crashing.
+- `utils/gps_l1c.py` (new) -- GPS L1C ranging codes (L1CD, L1CP), overlay codes (L1CO), TMBOC pattern
+  and constants, for PRN 1 to 63, from `docs/icd/l1c_code_tables.json`. The pinned `gnss-tools` checkout
+  has only a part of L1C, so `GpsL1C` in `utils/signal_interfaces.py` uses this module (D-070).
 - `utils/nav/symbols.py` -- `_usable_regions` (replacing `_usable_slice`) correctly
   extracts navigation symbols from a tracking run stitched from several segments,
   rather than assuming one uninterrupted run.

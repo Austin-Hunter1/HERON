@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import gnss_tools.signals.gps_l1c as gps_l1c
+from utils import gps_l1c
 
 from utils import bpsk_acquisition, sample_streaming, secondary_code, tracking_channel
 from utils.bpsk_correlation import correlate__multicomponent
