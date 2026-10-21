@@ -35,6 +35,49 @@ def setup_default_plotting():
     })
 
 
+LEGEND_LOCATION_INSIDE = "lower left"
+"""Where a legend sits when it stays inside the axes (D-075)."""
+
+LEGEND_OUTSIDE_PAD_PX = 8.0
+"""Gap, in pixels, between an outside-left legend and the axis label next to it."""
+
+
+def place_legend(ax: Axes, handles=None, *, outside: bool = True, **kwargs):
+    """
+    Put the legend of `ax` on the left: outside the left edge, or in the lower left.
+
+    Every plot of notebook 01 draws its legend through this function (D-075), so the
+    place of legends is decided here and not in each plot.  On the right and the top
+    of an axes are the peak of an acquisition correlation, the end of a time series
+    and the labels of the early/late ends; the left is the quiet side.
+
+    `outside=True` puts the legend left of the axis label, so it never covers data.
+    How far left depends on the width of the tick labels and the label, and that is
+    measured here, so a plot with six-digit ticks gets the room it needs.  Use it
+    only for an axes in the first column of a figure; another column would put the
+    legend on its neighbour.  `outside=False` puts the legend in the lower left of the
+    axes, for a small legend in a panel that has no room on its left.
+
+    `handles` and any other keyword go to `Axes.legend`; a `loc` or `bbox_to_anchor`
+    in `kwargs` replaces the placement.  If the outside offset cannot be measured (a
+    canvas without a renderer) the legend falls back to the lower left.
+    """
+    options: dict = {"loc": LEGEND_LOCATION_INSIDE}
+    if outside:
+        try:
+            renderer = ax.figure.canvas.get_renderer()
+            axes_box = ax.get_window_extent(renderer)
+            axis_box = ax.yaxis.get_tightbbox(renderer)
+            reach = (axes_box.x0 - axis_box.x0 + LEGEND_OUTSIDE_PAD_PX) / axes_box.width
+            options = {"loc": "center right", "bbox_to_anchor": (-reach, 0.5)}
+        except (AttributeError, ValueError):
+            pass
+    options.update(kwargs)
+    if handles is not None:
+        return ax.legend(handles=handles, **options)
+    return ax.legend(**options)
+
+
 def plot_receiver_channel_bands(
         fig: Figure | SubFigure,
         metadata: ExperimentMetadata,
@@ -498,7 +541,7 @@ def plot_acquisition_dwell_layout(
         # can straddle is 5 ms long, and saying so is the whole point.
         handles.append(plt.Line2D([0], [0], color="none",
                                   label=f"symbol {symbol_period_ms:g} ms: none in this window"))
-    ax_time.legend(handles=handles, fontsize=7, loc="upper right")
+    place_legend(ax_time, handles, fontsize=7)
 
     # --- frequency ---
     # What the search actually steps, which is the FFT bin spacing divided by the
@@ -527,9 +570,12 @@ def plot_acquisition_dwell_layout(
     ax_freq.set_ylabel("Normalised correlation")
     ax_freq.set_title("Grid spacing vs response width")
     ax_freq.set_xlim(-span, span)
-    ax_freq.set_ylim(0, 1.1)
+    # Room under the zero line for the legend, which sits in the lower left (D-075)
+    # and would otherwise cover the grid ticks.  The ticks stay on 0 to 1.
+    ax_freq.set_ylim(-0.4, 1.1)
+    ax_freq.set_yticks(np.linspace(0.0, 1.0, 6))
     ax_freq.grid()
-    ax_freq.legend(fontsize=7, loc="upper right")
+    place_legend(ax_freq, outside=False, fontsize=7)
     return axes
 
 
@@ -706,7 +752,7 @@ def plot_acquisition_code_phase_slices(
         ax.text(x, 1.01, text, transform=ax.transAxes, ha=ha, va="bottom",
                 fontsize=7.5, color="0.35")
     ax.grid(True)
-    ax.legend(fontsize=8, ncol=1, loc="upper right", bbox_to_anchor=(1.0, 1.0))
+    place_legend(ax, fontsize=8, ncol=1)
     return ax
 
 
@@ -926,7 +972,7 @@ def plot_prompt_components(
         ax.set_ylabel(f"{name}\nPrompt")
         ax.grid(True)
     axes[0].set_title(title if title is not None else f"Prompt correlators: {sig_id}")
-    axes[0].legend(markerscale=8, loc="upper right", fontsize=8)
+    place_legend(axes[0], markerscale=8, fontsize=8)
     axes[-1].set_xlabel("Uptime [s]")
     fig.align_labels()
     return axes
@@ -1068,7 +1114,7 @@ def plot_code_delay_and_doppler(
             [0], [0], color="none",
             label=f"delay at t=0: {start_ms:.3f} ms  (mod {ambiguity_ms:g} ms)",
         ))
-    ax.legend(handles=handles, loc="best", fontsize=8)
+    place_legend(ax, handles, fontsize=8)
     return ax
 
 
@@ -1186,7 +1232,7 @@ def plot_prompt_circ_length(
             ax_cn0.set_ylim(centre - half_span, centre + half_span)
         handles.append(line)
 
-    ax.legend(handles=handles, markerscale=4, loc="lower right", fontsize=8)
+    place_legend(ax, handles, markerscale=4, fontsize=8)
     return ax
 
 

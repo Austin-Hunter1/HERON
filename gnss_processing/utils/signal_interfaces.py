@@ -164,7 +164,7 @@ class Signal(ABC):
     # PRNs `build_signals` makes when the caller names none.
     default_prns: ClassVar[tuple[int, ...]] = tuple(range(1, 33))
 
-    # BOC(6,1) toggle (D-071).  A signal that carries a BOC(6,1) part sets
+    # BOC(6,1) toggle (D-077).  A signal that carries a BOC(6,1) part sets
     # `supports_boc61`, and says in `default_boc61` whether its plain class models
     # that part.  `boc61_enabled` is what THIS class models; `with_options` makes
     # a subclass that changes it.
@@ -432,7 +432,7 @@ class BdsB1C(Signal):
     sat_id_prefix = "C"
     default_prns = tuple(range(bds_b1c.FIRST_PRN, bds_b1c.LAST_PRN + 1))
     # Narrow band by default (D-062).  `with_options(SignalOptions(boc61=True))`
-    # adds the BOC(6,1) part as a third component, `B1CP61` (D-071).
+    # adds the BOC(6,1) part as a third component, `B1CP61` (D-077).
     supports_boc61 = True
     default_boc61 = False
 
@@ -506,7 +506,7 @@ class GpsL1C(Signal):
     # `TrackingChannel._intervals_per_primary_period`.
     primary_period_ms = gps_l1c.PRIMARY_PERIOD_MS
     # Full TMBOC by default, as already written.  `boc61=False` models the pilot
-    # as BOC(1,1) on every chip (narrow band, D-071).
+    # as BOC(1,1) on every chip (narrow band, D-077).
     supports_boc61 = True
     default_boc61 = True
     boc61_enabled = True
@@ -812,7 +812,7 @@ TRACKING_POLICIES["BDS_B1C"] = TrackingPolicy(
     overlay_prompts_to_observe=200,
 )
 
-# Wide-band B1C (D-071): the BOC(6,1) component joins the delay loop.  The carrier
+# Wide-band B1C (D-077): the BOC(6,1) component joins the delay loop.  The carrier
 # stays on the BOC(1,1) pilot.  Whether the narrow BOC(6,1) peak needs a smaller
 # early-late spacing is tested in `tests/test_boc61_b1c.py`.
 TRACKING_POLICIES["BDS_B1C:wb"] = TrackingPolicy(

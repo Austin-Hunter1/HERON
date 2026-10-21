@@ -31,6 +31,7 @@ from utils.signal_interfaces import (
     GpsL1C,
     GpsL5,
     TRACKING_POLICIES,
+    policy_for,
     acquisition_code,
     acquisition_code_period_ms,
     acquisition_resolves_overlay_phase,
@@ -240,10 +241,13 @@ def test_a_very_strong_signal_raises_cross_correlation_peaks():
 
 def _track(duration_ms, *, prn=PRN, doppler_hz=800.0, code_phase_ms=2.15,
            nav_bits=True, noise_sigma=0.0, prompts_to_observe=None,
-           coherent_duration_ms=1, seed=0):
-    """Run a channel over synthetic L1C, seeded exactly, and return it."""
-    signal = build_signals(GpsL1C, prns=[prn])[f"G{prn:02d}"]
-    policy = TRACKING_POLICIES["GPS_L1C"]
+           coherent_duration_ms=1, seed=0, signal_type=GpsL1C):
+    """Run a channel over synthetic L1C, seeded exactly, and return it.
+
+    `signal_type` is `GpsL1C` or a BOC(6,1) variant of it (D-077).
+    """
+    signal = build_signals(signal_type, prns=[prn])[f"G{prn:02d}"]
+    policy = policy_for(TRACKING_POLICIES, signal_type)
     channel = tracking_channel.TrackingChannel(
         loop_params=tracking_channel.TrackingLoopParameters(
             DLL_bandwidth_hz=2.0, PLL_bandwidth_hz=20.0, FLL_bandwidth_hz=50.0,
@@ -263,7 +267,7 @@ def _track(duration_ms, *, prn=PRN, doppler_hz=800.0, code_phase_ms=2.15,
         output_capacity=duration_ms + 32,
         discriminator_policy=policy.discriminator_policy,
         synced_policy=policy.synced_discriminator_policy,
-        synced_coherent_duration_ms=coherent_duration_target_ms(GpsL1C, signal, 10),
+        synced_coherent_duration_ms=coherent_duration_target_ms(signal_type, signal, 10),
         overlay_search=policy.overlay_search,
         overlay_prompts_to_observe=prompts_to_observe or policy.overlay_prompts_to_observe,
     )

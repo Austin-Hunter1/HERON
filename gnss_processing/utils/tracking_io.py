@@ -216,7 +216,7 @@ def tracking_filename(
     """
     The name one tracking run is written under, e.g. `RX7_GPS_L1C_120-600s.h5`.
 
-    `variant` is "wb" or "nb" for a BOC(6,1) comparison run (D-071) and gives
+    `variant` is "wb" or "nb" for a BOC(6,1) comparison run (D-077) and gives
     `RX7_GPS_L1C_120-600s_nb.h5`.  It is "" for the default model, so default
     names do not change.
 
@@ -306,7 +306,7 @@ def save_tracking_results(
         f.attrs["signal_type_id"] = signal_type_id
         f.attrs["samp_rate"] = float(samp_rate)
         f.attrs["experiment_name"] = experiment_name
-        # "" for the default model; "wb" or "nb" for a BOC(6,1) comparison (D-071).
+        # "" for the default model; "wb" or "nb" for a BOC(6,1) comparison (D-077).
         f.attrs["variant"] = variant
         f.attrs["git_commit"] = _git_commit()
 

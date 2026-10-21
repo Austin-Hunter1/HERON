@@ -140,6 +140,64 @@ DATA_IN_QUADRATURE: dict[str, bool] = {
 }
 
 
+# Signals whose epoch-to-symbol pairing is read from the data, not from the code phase.
+#
+# Where an epoch is shorter than the symbol, `extract` has to say which epoch opens a
+# symbol.  For most signals the code phase answers it: the channel anchors its epochs on
+# multiples of the symbol period in code phase, and that lattice is tied to the data.
+# B1C is the case where it is not.  Measured on the real L1 recording (D-070): with 5 ms
+# epochs under a 10 ms symbol, every one of nine satellites has its symbol edge at code
+# phase 5 ms (mod 10), so the code-phase pairing sits half a symbol out and every symbol
+# is the sum of half of two neighbours -- no B-CNAV1 frame decodes.  The data itself is
+# unambiguous: inside a symbol the two epochs agree in sign, so the pairing with the
+# fewest sign changes inside its pairs is the right one.  The root cause of the 5 ms is
+# not found, which is why this is a per-signal switch and not the rule for everything.
+SYMBOL_PHASE_FROM_DATA: dict[str, bool] = {
+    "BDS_B1C": True,
+}
+
+# The pairing is only read from the data when it is clear.  On pure noise every pairing
+# has about half of its boundaries change sign; a real data axis separates them by a lot
+# (0.0-0.17 inside a symbol against 0.48 across, measured on B1C).
+_PHASE_MIN_EPOCHS = 40
+_PHASE_MIN_CONTRAST = 0.15
+
+
+def symbol_phase_from_data(
+    prompts: np.ndarray, epochs_per_symbol: int, *, in_quadrature: bool
+) -> int | None:
+    """
+    Which of the first `epochs_per_symbol` epochs opens a symbol, from the data alone.
+
+    A data symbol does not change sign inside itself, so across the boundary between two
+    epochs of one symbol the sign of the data axis rarely changes, and across the boundary
+    between two symbols it changes half the time (random data).  For each candidate phase
+    this counts the sign changes at the boundaries it puts INSIDE symbols, and returns the
+    phase with the fewest.  `None` when there are too few epochs, or when no phase stands
+    out from the others by `_PHASE_MIN_CONTRAST` (a noisy or unlocked stretch), so the
+    caller can fall back to the code phase instead of trusting noise.
+
+    The axis is the imaginary part when the data is in quadrature with the carrier
+    reference (B1C, L5, B2a), the real part otherwise.
+    """
+    eps = int(epochs_per_symbol)
+    if eps < 2 or len(prompts) < _PHASE_MIN_EPOCHS:
+        return None
+    axis = prompts.imag if in_quadrature else prompts.real
+    sign = np.sign(axis)
+    changed = sign[1:] != sign[:-1]
+    boundary = np.arange(len(changed))
+    rates = np.empty(eps)
+    for phase in range(eps):
+        # The boundary after epoch k lies between symbols when (k - phase) % eps == eps - 1.
+        inside = ((boundary - phase) % eps) != (eps - 1)
+        rates[phase] = changed[inside].mean()
+    best = int(np.argmin(rates))
+    if np.delete(rates, best).mean() - rates[best] < _PHASE_MIN_CONTRAST:
+        return None
+    return best
+
+
 @dataclass
 class SymbolStream:
     """Soft symbols with enough context to tie a decoded time back to tracking."""
@@ -435,6 +493,12 @@ def extract(
             # phase modulo the symbol period.
             offset_ms = code_phase[0] % symbol_period_ms
             phase = int(round((symbol_period_ms - offset_ms) % symbol_period_ms / epoch_ms))
+            if SYMBOL_PHASE_FROM_DATA.get(signal_type_id, False):
+                from_data = symbol_phase_from_data(
+                    prompts, eps, in_quadrature=DATA_IN_QUADRATURE[signal_type_id]
+                )
+                if from_data is not None:
+                    phase = from_data
 
         usable = (len(prompts) - phase) // eps
         if usable <= 0:

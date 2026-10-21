@@ -1,5 +1,5 @@
 """
-B1C with the BOC(6,1) part of the pilot modelled (wide band, D-071, Phase T2).
+B1C with the BOC(6,1) part of the pilot modelled (wide band, D-077, Phase T2).
 
 Why: narrow-band B1C (D-062) leaves 1/11 of the pilot power unused.  Wide-band
 mode adds it as a third component.  These tests show that the wide-band
@@ -116,3 +116,43 @@ def test_third_component_has_the_pilot_power_share_and_the_i_branch():
     assert component.name == "B1CP61"
     assert component.power_weight == pytest.approx(1.0 / 11.0)
     assert component.subcarrier.rate_hz == pytest.approx(6.138e6)
+
+
+def test_wide_band_cannot_use_the_double_estimator():
+    """
+    The double estimator has one subcarrier loop, so one ambiguity interval.  Wide-band
+    B1C has two subcarrier rates (BOC(1,1) and BOC(6,1)); the channel must refuse
+    this, loudly, and the notebook then runs one delay loop (Q-020).
+    """
+    signal_type = BdsB1C.with_options(SignalOptions(boc61=True))
+    signal = build_signals(signal_type, prns=[PRN])[SIGNAL_ID]
+    # The check runs when the first samples build the correlator.
+    channel = tracking_channel.TrackingChannel(
+        loop_params=tracking_channel.TrackingLoopParameters(
+            DLL_bandwidth_hz=0.5, PLL_bandwidth_hz=20.0, FLL_bandwidth_hz=50.0,
+            coherent_duration_ms=1, EPL_chip_spacing=0.5,
+            subcarrier_bandwidth_hz=2.0, subcarrier_chip_spacing=0.1,
+        ),
+        signal_params=tracking_channel.TrackingSignalParameters(
+            code_set=signal.code_set,
+            nominal_code_rate_chips_per_sec=signal_type.tracking_code_rate_chips_per_sec,
+            carrier_freq_hz=signal_type.carrier_freq_hz,
+            primary_period_ms=signal_type.primary_period_ms,
+        ),
+        initial_signal_state=tracking_channel.TrackingSignalState(
+            uptime_epoch_ms=0.0, code_phase_ms=0.0, code_rate_ms_per_sec=1e3,
+            carrier_phase_cycles=0.0, carrier_rate_cyc_per_sec=0.0,
+        ),
+        output_capacity=10,
+        discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+            carrier_component=1, code_components=(0, 1, 2), costas=True
+        ),
+    )
+    samples = synthetic.generate_b1c_samples(
+        prn=PRN, start_sec=0.0, duration_sec=0.01, samp_rate=RATE, doppler_hz=0.0,
+        code_phase_ms=0.0, include_boc61=True,
+    )
+    with pytest.raises(ValueError, match="one loop per rate"):
+        channel.process_sample_buffer(
+            sample_streaming.SampleBuffer(samples=samples, start_uptime_ms=0.0, samp_rate=RATE)
+        )

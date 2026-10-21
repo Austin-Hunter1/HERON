@@ -32,7 +32,7 @@ on where the receiver is -- Sagnac, troposphere, ionospheric mapping -- lives in
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -221,12 +221,42 @@ class Observables:
         return self.valid_mask().sum(axis=1)
 
 
+def refined_code_phase_ms(outputs, code_rate_chips_per_sec: float | None) -> np.ndarray:
+    """
+    The code phase of every epoch, with the subcarrier correction added when there is one.
+
+    A channel tracked with the double estimator (the BOC discriminator: a code loop on
+    the wide BPSK triangle plus a subcarrier loop on the steep, repeating peak) keeps
+    two delay estimates.  `code_phase_ms` is the code loop's, unambiguous but noisy;
+    `subcarrier_offset_chips` is how far the subcarrier loop sits from it, always within
+    half the ambiguity interval, so it is the fine correction to the same quantity.  The
+    delay the signal actually shows is their sum.  Leaving the offset out throws the
+    precision away: measured on B1C, the pseudorange scatter is 5-7 m without it and
+    1.6-2.1 m with it, and the offset with the other sign gives 9-19 m.
+
+    `code_rate_chips_per_sec` is the signal's nominal code rate, which turns chips into
+    milliseconds.  With None, or for a channel without a subcarrier loop, the code phase
+    is returned unchanged.
+
+    The time anchor still takes the code loop's value at its one epoch.  The offset there
+    is a few metres on B1C (the per-satellite means in notebook 02 section 9 show it), so
+    it is not corrected; correcting it would need the stream to carry the offset too.
+    """
+    code_phase = np.asarray(outputs.code_phase_ms, dtype=float)
+    layout = getattr(outputs, "tap_layout", None)
+    if code_rate_chips_per_sec is None or layout is None or not layout.tracks_subcarrier:
+        return code_phase
+    chips_per_ms = code_rate_chips_per_sec * 1e-3
+    return code_phase + np.asarray(outputs.subcarrier_offset_chips, dtype=float) / chips_per_ms
+
+
 def _interpolate_code_phase(
     outputs,
     epoch_uptime_ms: np.ndarray,
     *,
     max_gap_factor: float | None = None,
     guard_after_gap_ms: float = 0.0,
+    code_rate_chips_per_sec: float | None = None,
 ) -> np.ndarray:
     """
     Code phase at arbitrary receiver-clock instants.
@@ -253,10 +283,13 @@ def _interpolate_code_phase(
       the old behaviour (interpolate across everything).
     - `guard_after_gap_ms`: also return NaN for this long after the hole ends,
       while the freshly seeded loop settles.  0 disables it.
+
+    `code_rate_chips_per_sec` adds the subcarrier loop's correction when the channel
+    was tracked with the double estimator; see `refined_code_phase_ms`.
     """
     valid = outputs.valid
     uptime = outputs.uptime_epoch_ms[valid]
-    code_phase = outputs.code_phase_ms[valid]
+    code_phase = refined_code_phase_ms(outputs, code_rate_chips_per_sec)[valid]
     if len(uptime) < 2:
         return np.full(len(epoch_uptime_ms), np.nan)
     out = np.interp(epoch_uptime_ms, uptime, code_phase, left=np.nan, right=np.nan)
@@ -286,6 +319,8 @@ def form_observables(
     max_gap_factor: float | None = None,
     guard_after_gap_ms: float = 0.0,
     time_system: str | None = None,
+    code_rate_chips_per_sec: float | dict[str, float] | None = None,
+    max_uptime_ms: float | None = None,
 ) -> Observables:
     """
     Build pseudoranges for every anchored satellite on one common grid.
@@ -308,6 +343,15 @@ def form_observables(
     `max_gap_factor` and `guard_after_gap_ms` control what happens at a hole left
     by a lost-and-reacquired channel; see `_interpolate_code_phase`.  Both
     default to the old behaviour (interpolate across holes), so a caller opts in.
+
+    `code_rate_chips_per_sec` is the nominal code rate of the signal (one number, or one
+    per satellite id).  Given it, a channel tracked with the BOC discriminator (the
+    double estimator) has its subcarrier correction added to the code phase before the
+    pseudorange is formed.  Left at None, the code phase is used as logged.
+
+    `max_uptime_ms` ends the default grid at that receiver instant (exclusive), so an
+    analysis can use the first part of a run only -- for example to stop before a USB
+    overflow late in a recording.  It does nothing when the caller passes the grid.
     """
     sat_ids = sorted(set(tracking_outputs) & set(anchors))
     if not sat_ids:
@@ -331,10 +375,12 @@ def form_observables(
         # every satellite has data, and stepping outside that would silently drop
         # satellites mid-run.
         start, stop = max(starts), min(stops)
+        if max_uptime_ms is not None:
+            stop = min(stop, max_uptime_ms)
         if stop <= start:
             raise ValueError(
-                "the tracked channels do not overlap in time; no common measurement "
-                "epoch exists"
+                "the tracked channels do not overlap in time (inside `max_uptime_ms`); "
+                "no common measurement epoch exists"
             )
         epoch_uptime_ms = np.arange(start, stop, epoch_interval_ms)
     epoch_uptime_ms = np.asarray(epoch_uptime_ms, dtype=float)
@@ -351,6 +397,10 @@ def form_observables(
             epoch_uptime_ms,
             max_gap_factor=max_gap_factor,
             guard_after_gap_ms=guard_after_gap_ms,
+            code_rate_chips_per_sec=(
+                code_rate_chips_per_sec.get(sat_id)
+                if isinstance(code_rate_chips_per_sec, dict) else code_rate_chips_per_sec
+            ),
         )
         transmit[:, j] = time_systems.convert_time_of_week(
             anchors[sat_id].transmit_time_s(code_phase), anchors[sat_id].time_system, time_system
@@ -381,6 +431,7 @@ def form_observables(
 def common_epoch_grid(
     tracking_outputs: list[dict],
     epoch_interval_ms: float = 100.0,
+    max_uptime_ms: float | None = None,
 ) -> np.ndarray:
     """
     One receiver-instant grid for several tracking runs of one recording.
@@ -389,6 +440,7 @@ def common_epoch_grid(
     formed separately get different grids and cannot be combined
     (`combine_observables`).  This takes every channel of every run and returns the
     grid over the span all of them share, which both runs are then formed on.
+    `max_uptime_ms` ends the grid at that receiver instant (exclusive).
     """
     starts, stops = [], []
     for outputs_by_sat in tracking_outputs:
@@ -400,6 +452,8 @@ def common_epoch_grid(
     if not starts:
         raise ValueError("no channel has enough epochs to interpolate")
     start, stop = max(starts), min(stops)
+    if max_uptime_ms is not None:
+        stop = min(stop, max_uptime_ms)
     if stop <= start:
         raise ValueError("the tracked channels do not overlap in time; no common grid exists")
     return np.arange(start, stop, epoch_interval_ms)
@@ -410,6 +464,7 @@ def combine_observables(
     signal_type_ids: list[str],
     *,
     time_system: str = "GPST",
+    labels: list[str] | None = None,
 ) -> Observables:
     """
     Join observables of several tracking runs (for example GPS L5 and BeiDou B2a of
@@ -429,11 +484,25 @@ def combine_observables(
     the solver estimates (D-057).
 
     `signal_type_ids` names the signal each part was tracked on, in the same order.
+
+    `labels` (D-073) names the receiver stream of each part, for runs from radios that
+    do not share a clock.  When given, every column is renamed `<sat id>@<label>`, so
+    the same satellite on two signals ("G01@L1" and "G01@L5") is two columns, and the
+    solver gives each stream and constellation its own clock bias (see
+    `navigation.system_letter`).  Two parts with the same label share a clock; a label
+    must not repeat a signal that is already in that stream, because the bias absorbs
+    one signal's delays only.  Without labels the ids are kept and a repeated id is an
+    error.  The epoch grids still have to match: that is a grid of receiver sample
+    counts, and each stream has its own.  Streams started at different instants then
+    measure at different true times, which a fixed receiver does not mind and a
+    moving one would.
     """
     if not parts:
         raise ValueError("no observables to combine")
     if len(signal_type_ids) != len(parts):
         raise ValueError("give one signal type id for each part")
+    if labels is not None and len(labels) != len(parts):
+        raise ValueError("give one label for each part")
     reference = parts[0]
     for number, part in enumerate(parts[1:], start=1):
         if not np.array_equal(part.epoch_uptime_ms, reference.epoch_uptime_ms):
@@ -452,19 +521,30 @@ def combine_observables(
     transmit_columns, pseudorange_columns = [], []
     anchors: dict[str, TimeAnchor] = {}
     types: dict[str, str] = {}
-    for part, signal_type_id in zip(parts, signal_type_ids):
+    for number, (part, signal_type_id) in enumerate(zip(parts, signal_type_ids)):
         receive, transmit = to_scale(part)
+
+        def renamed(sat_id: str, number=number) -> str:
+            return sat_id if labels is None else f"{sat_id}@{labels[number]}"
+
         for column, sat_id in enumerate(part.sat_ids):
-            if sat_id in sat_ids:
-                raise ValueError(f"satellite {sat_id} appears in more than one part")
-            sat_ids.append(sat_id)
-            types[sat_id] = part.signal_type_ids.get(sat_id, signal_type_id)
+            column_id = renamed(sat_id)
+            if column_id in sat_ids:
+                raise ValueError(f"satellite {column_id} appears in more than one part")
+            sat_ids.append(column_id)
+            types[column_id] = part.signal_type_ids.get(sat_id, signal_type_id)
         transmit_columns.append(transmit)
         # Same range as before, measured against the common receive time.
         pseudorange_columns.append(
             part.pseudorange_m + SPEED_OF_LIGHT * (common_receive - receive)[:, None]
         )
-        anchors.update(part.anchors)
+        # An anchor names its satellite too; keep that name the same as the column's.
+        anchors.update(
+            {
+                renamed(sat_id): replace(anchor, sat_id=renamed(sat_id))
+                for sat_id, anchor in part.anchors.items()
+            }
+        )
     return Observables(
         epoch_uptime_ms=reference.epoch_uptime_ms,
         receive_time_s=common_receive,

@@ -201,7 +201,7 @@ class TrackingRunInfo:
     duration_ms: float
     signal_ids: list[str]
     variant: str = ""
-    """"nb" or "wb" for a BOC(6,1) comparison run (D-071); "" for the default model."""
+    """"nb" or "wb" for a BOC(6,1) comparison run (D-077); "" for the default model."""
 
 
 def list_tracking_runs(

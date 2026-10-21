@@ -1,5 +1,5 @@
 """
-Tests for the BOC(6,1) toggle plumbing (D-071, Phase T1).
+Tests for the BOC(6,1) toggle plumbing (D-077, Phase T1).
 
 Why: the default of every signal must stay as it was, and a variant must stay
 apart from the default in its name, its policy row and its file.

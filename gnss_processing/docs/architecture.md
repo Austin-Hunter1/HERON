@@ -20,6 +20,7 @@ Three notebooks are the application layer. All logic is in `utils/`.
 | `02-navigation` | Decode the message, form pseudoranges, solve the position | tracking `.h5` file | figures, fix |
 
 Signals that run end to end: GPS L1 C/A, L2C, L5, BeiDou B2a, BeiDou B1C.
+Galileo E5a acquires and tracks (`utils/gal_e5a.py`, PRN 1 to 50); its F/NAV decoder is not built yet.
 GPS L1C acquires and tracks (codes in `utils/gps_l1c.py`, PRN 1 to 63), but notebook 02 stops at its
 message (the LDPC decoder is missing in `nav/cnav2.py`).
 
@@ -49,6 +50,8 @@ failures that are not BeiDou work (`docs/BDS_BASELINE_TESTS.md`).
 | `code_components.py` | Describes a signal as code components: sequence, branch (I or Q), overlay, subcarrier, power weight. No GPS constants. |
 | `signal_interfaces.py` | One `Signal` class for each signal (`GpsL1CA`, `GpsL2C`, `GpsL5`, `GpsL1C`, `BdsB2a`, `BdsB1C`). `ACQUISITION_POLICIES` and `TRACKING_POLICIES` choose how each is acquired and tracked. Add a signal here. |
 | `gps_l1c.py` | GPS L1C codes, overlay and constants (PRN 1 to 63), numbers in `docs/icd/l1c_code_tables.json`. |
+| `gal_e5a.py` | Galileo E5a-I and E5a-Q codes and secondary codes, numbers in `docs/icd/e5a_code_tables.json`. |
+| `boc61_metrics.py` | Numbers that compare two tracking runs with and without BOC(6,1) (`scripts/compare_boc61.py`, `docs/BOC61_COMPARISON.md`). |
 | `bds_b2a.py`, `bds_b1c.py` | BeiDou code generators and constants. No dependency on `gnss-tools`, so upstream can take them (D-048). B1C reads its `(w, p)` pairs from `docs/icd/bds_b1c_code_tables.json`. |
 | `secondary_code.py` | Overlay (secondary code) search and wipe-off. |
 | `ambiguity_resolution.py` | Resolves what acquisition leaves open (L2C CL). |
@@ -140,6 +143,6 @@ the tests check this on purpose.
   acquires only modulo 1 ms, so without this the epochs sit up to 4 ms off the
   symbol edge (D-059). Tracking files made before that fix are not valid for B2a.
 - No ionosphere correction is applied to BeiDou (D-053).
-- B1C is tracked in narrow-band mode only (D-062).
+- B1C is tracked in narrow-band mode by default (D-062). `Signal.with_options(SignalOptions(boc61=True))` gives wide band; L1C takes `boc61=False` for narrow band (D-077). Wide-band B1C cannot use the double estimator (Q-020).
 - The BeiDou decoders are tested on synthetic signals and, for B2a, on one
   real recording (D-052). B1C has no real-data check yet (D-064, Q-019).

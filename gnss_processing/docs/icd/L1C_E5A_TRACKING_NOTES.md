@@ -163,8 +163,8 @@ Derived unless marked.
 1. **Pilot for the loops.** L1CP has 75 % of the power and no data. L1CD has 25 %. Both are in phase.
 2. **The pilot code period is 10 ms.** A coherent integration longer than 10 ms needs the overlay (1800 bits, 18 s). L1CD needs no overlay: its symbol is 10 ms.
 3. **TMBOC is not plain BOC(1,1).** The BOC(6,1) symbols give a sharper correlation peak. The tracker may use the whole TMBOC replica or the BOC(1,1) part only. The ICD does not choose.
-4. **BOC(1,1) has side peaks in its autocorrelation.** The repo met this on B1C. Early-late spacing of 0.5 chip on BOC(1,1) lost about 11 dB, and the double estimator (code loop plus subcarrier loop) fixed it (D-068). L1C data is BOC(1,1) at the same 1.023 Mcps, so the same rule applies to L1CD. The pilot is a mix.
-5. **Symbol pairing.** With 5 ms epochs under a 10 ms symbol, find which epoch starts the symbol from the data, not from the code phase (D-069). For L1C the epoch is 10 ms when the integration is one code period.
+4. **BOC(1,1) has side peaks in its autocorrelation.** The repo met this on B1C. Early-late spacing of 0.5 chip on BOC(1,1) lost about 11 dB, and the double estimator (code loop plus subcarrier loop) fixed it (D-071). L1C data is BOC(1,1) at the same 1.023 Mcps, so the same rule applies to L1CD. The pilot is a mix.
+5. **Symbol pairing.** With 5 ms epochs under a 10 ms symbol, find which epoch starts the symbol from the data, not from the code phase (D-072). For L1C the epoch is 10 ms when the integration is one code period.
 6. **Frame start.** Correlate the pilot prompt values with the 1800-bit overlay of that PRN at all 1800 offsets. The best offset is the frame start. (The B1C code does the same with its own 1800-chip secondary code.) Only then decode the data: BCH TOI, then LDPC subframe 2 and the CRC.
 7. **Time needed.** The overlay search needs some seconds of pilot. One full frame is 18 s. Subframe 2 holds the complete ephemeris and clock. One good frame after the overlay lock gives a position anchor. The ephemeris is not in the pilot.
 8. **Two ISC values.** Use ISC_L1CP when you range on the pilot and ISC_L1CD when you range on the data.
@@ -325,7 +325,7 @@ Reuse notes (derived): B1C and L1C share the Legendre/Weil construction, the 102
 
 1. **E5a-QP.** Is it in scope? How is it combined with E5a-I/Q on the carrier? (Not stated in the Galileo ICD.)
 2. **L1CP replica.** Use the full TMBOC replica, or the BOC(1,1) part only, in the tracking loops? The ICD does not choose.
-3. **L1C early-late rule.** Use the B1C rule (code loop + subcarrier loop, D-068) for L1CD and the L1CP BOC(1,1) part? Or another discriminator?
+3. **L1C early-late rule.** Use the B1C rule (code loop + subcarrier loop, D-071) for L1CD and the L1CP BOC(1,1) part? Or another discriminator?
 4. **L1C TOI and ITOW rule.** The note's reading of "TOI of frame k gives the start of frame k+1" is derived. Confirm it on a recording before the anchor code relies on it.
 5. **Galileo week number.** GST WN 0 starts on 22 Aug 1999. This is the same instant as the start of GPS week 1024 (derived from the epochs; the Galileo ICD gives no GPS week number). The anchor code needs this. Confirm.
 6. **Galileo satellites on the 2026-10-14 recording.** Which Galileo SVIDs were above the horizon, and do any carry E5a-QP? (Needs an almanac or a broadcast file. Not looked up.)
