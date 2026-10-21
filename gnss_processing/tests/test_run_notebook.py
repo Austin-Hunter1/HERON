@@ -60,7 +60,7 @@ def test_every_per_signal_table_of_the_notebook_has_the_signal(number, signal, r
     code = _code(_notebook(number))
     # Each `{...}[SIGNAL_ID]` or `{...}[SIGNAL_ID.signal_type_id]` block names the signal.
     blocks = []
-    for marker in ("}[SIGNAL_ID]", "}[SIGNAL_ID.signal_type_id]"):
+    for marker in ("}[SIGNAL_ID]", "}[BASE_SIGNAL]", "}[SIGNAL_ID.signal_type_id]"):
         start = 0
         while (end := code.find(marker, start)) != -1:
             begin = code.rfind("= {", 0, end)
@@ -84,9 +84,15 @@ def test_notebook_01_tracks_b1c_with_the_boc_discriminator():
 
     code = _code(_notebook("01"))
     start = code.index("DLL_SETTINGS = {")
-    block = code[start:code.index("}[SIGNAL_ID]", start)]
+    block = code[start:code.index("}[BASE_SIGNAL]", start)]
     entry = block[block.index("BdsB1C:"):]
-    arguments = entry.split("dict(", 1)[1].rsplit("),", 1)[0]
+    body = entry.split("dict(", 1)[1]
+    depth, end = 1, 0
+    for end, char in enumerate(body):
+        depth += (char == "(") - (char == ")")
+        if depth == 0:
+            break
+    arguments = body[:end]
     settings = eval("dict(" + arguments + ")")
     assert settings["subcarrier_bandwidth_hz"] > 0.0 and settings["subcarrier_chip_spacing"] > 0.0
     params = tracking_channel.TrackingLoopParameters(
