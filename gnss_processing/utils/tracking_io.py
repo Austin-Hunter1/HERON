@@ -90,6 +90,7 @@ class TrackingRun:
     experiment_name: str
     git_commit: str
     format_version: int
+    variant: str = ""
 
     def __getitem__(self, signal_id: str) -> TrackingResult:
         return self.results[signal_id]
@@ -210,9 +211,14 @@ def tracking_filename(
     duration_ms: float,
     *,
     experiment_collect_ids: Iterable[str] | None = None,
+    variant: str = "",
 ) -> str:
     """
     The name one tracking run is written under, e.g. `RX7_GPS_L1C_120-600s.h5`.
+
+    `variant` is "wb" or "nb" for a BOC(6,1) comparison run (D-071) and gives
+    `RX7_GPS_L1C_120-600s_nb.h5`.  It is "" for the default model, so default
+    names do not change.
 
     Notebook 01 writes the file and notebook 02 reads it, and the two meet
     through nothing but this name -- so it is built here rather than spelled out
@@ -234,7 +240,8 @@ def tracking_filename(
     label = collect_label(collect_id, experiment_collect_ids)
     start_s = round(start_offset_ms / 1e3)
     end_s = round((start_offset_ms + duration_ms) / 1e3)
-    return f"{label}_{signal_type_id}_{start_s}-{end_s}s.h5"
+    suffix = f"_{variant}" if variant else ""
+    return f"{label}_{signal_type_id}_{start_s}-{end_s}s{suffix}.h5"
 
 
 def tracking_path(
@@ -246,6 +253,7 @@ def tracking_path(
     duration_ms: float,
     *,
     experiment_collect_ids: Iterable[str] | None = None,
+    variant: str = "",
 ) -> Path:
     """
     Where one tracking run belongs: `<outputs>/tracking/<experiment>/<name>.h5`.
@@ -264,6 +272,7 @@ def tracking_path(
             start_offset_ms,
             duration_ms,
             experiment_collect_ids=experiment_collect_ids,
+            variant=variant,
         )
     )
 
@@ -277,6 +286,7 @@ def save_tracking_results(
     samp_rate: float,
     experiment_name: str = "",
     acquisition_results: dict | None = None,
+    variant: str = "",
 ) -> Path:
     """
     Write every channel's tracking history to one HDF5 file.
@@ -296,6 +306,8 @@ def save_tracking_results(
         f.attrs["signal_type_id"] = signal_type_id
         f.attrs["samp_rate"] = float(samp_rate)
         f.attrs["experiment_name"] = experiment_name
+        # "" for the default model; "wb" or "nb" for a BOC(6,1) comparison (D-071).
+        f.attrs["variant"] = variant
         f.attrs["git_commit"] = _git_commit()
 
         for signal_id, holder in channels.items():
@@ -425,6 +437,7 @@ def load_tracking_results(path: str | Path) -> TrackingRun:
             experiment_name=str(f.attrs.get("experiment_name", "")),
             git_commit=str(f.attrs.get("git_commit", "unknown")),
             format_version=version,
+            variant=str(f.attrs.get("variant", "")),
         )
 
 

@@ -23,7 +23,7 @@ import gnss_tools.signals.gps_l1ca as gps_l1ca
 import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
-from utils import bds_b1c, bds_b2a, gps_l1c
+from utils import bds_b1c, bds_b2a, gal_e5a, gps_l1c
 
 
 @dataclass(frozen=True)
@@ -495,5 +495,61 @@ def generate_b1c_samples(
             * code_p[chip_of_period] * subcarrier(12) * overlay_sign
         )
 
+    samples = (in_phase + 1j * quadrature) * np.exp(2j * np.pi * doppler_hz * t)
+    return _add_noise(samples.astype(np.complex64), noise_sigma, rng)
+
+
+def get_e5a_codes(prn: int) -> tuple[np.ndarray, np.ndarray]:
+    """+/-1 int8 (E5aI, E5aQ) primary codes, 10230 chips each."""
+    return gal_e5a.generate_data_code(prn), gal_e5a.generate_pilot_code(prn)
+
+
+def generate_e5a_samples(
+    *,
+    prn: int,
+    start_sec: float,
+    duration_sec: float,
+    samp_rate: float,
+    doppler_hz: float,
+    code_phase_ms: float,
+    noise_sigma: float = 0.0,
+    nav_bits: bool | np.ndarray = True,
+    overlay: bool = True,
+    rng: np.random.Generator | None = None,
+    symbol_phase_periods: int = 0,
+) -> np.ndarray:
+    """
+    Baseband Galileo E5a: data E5a-I on I, pilot E5a-Q on Q, both BPSK(10) at 10.23 Mcps.
+
+    The structure is that of `generate_b2a_samples`: equal amplitude, a secondary code that
+    advances once per 1 ms primary period (CS20_1 on the data, CS100_n on the pilot), and a
+    data symbol that lasts 20 primary periods (one CS20 pass).  `symbol_phase_periods` slides
+    the secondary codes and the data symbols that many primary periods against the code phase
+    lattice, which a receiver must not assume away (E5a acquires only modulo 1 ms).
+
+    The sample rate must be at least ~20 Msps (two samples per chip).
+    """
+    code_d, code_p = get_e5a_codes(prn)
+    sec_d = gal_e5a.data_secondary_code()
+    sec_p = gal_e5a.generate_pilot_secondary_code(prn)
+
+    n = int(round(samp_rate * duration_sec))
+    t = start_sec + np.arange(n) / samp_rate
+
+    code_rate = gal_e5a.CODE_RATE_CHIPS_PER_SEC * (1.0 + doppler_hz / gal_e5a.CARRIER_FREQ_HZ)
+    chips = code_phase_ms * 1e-3 * gal_e5a.CODE_RATE_CHIPS_PER_SEC + t * code_rate
+    chip_index = chips.astype(np.int64)
+
+    period_index = chip_index // gal_e5a.PRIMARY_CODE_LENGTH + symbol_phase_periods
+    overlay_d = sec_d[period_index % len(sec_d)] if overlay else 1
+    overlay_p = sec_p[period_index % len(sec_p)] if overlay else 1
+    data = (
+        _nav_bits(period_index, gal_e5a.DATA_SYMBOL_PERIOD_MS, _symbol_sequence(nav_bits))
+        if nav_bits is not False
+        else 1
+    )
+
+    in_phase = code_d[chip_index % len(code_d)] * overlay_d * data
+    quadrature = code_p[chip_index % len(code_p)] * overlay_p
     samples = (in_phase + 1j * quadrature) * np.exp(2j * np.pi * doppler_hz * t)
     return _add_noise(samples.astype(np.complex64), noise_sigma, rng)

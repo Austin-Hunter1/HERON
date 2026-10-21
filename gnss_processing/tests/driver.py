@@ -18,6 +18,7 @@ from utils import sample_streaming
 from utils import tracking_channel
 from utils.signal_interfaces import (
     TRACKING_POLICIES,
+    policy_for,
     BdsB2a,
     GpsL1C,
     GpsL1CA,
@@ -131,7 +132,7 @@ def _build_channel(scenario: TrackingScenario):
     loop_params = tracking_channel.TrackingLoopParameters(
         **{**LOOP_KWARGS, **FAMILY_LOOP_OVERRIDES.get(scenario.family, {})}
     )
-    policy = TRACKING_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(TRACKING_POLICIES, signal_type)
 
     signal = build_signals(signal_type, prns=[scenario.prn])[
         f"{signal_type.sat_id_prefix}{scenario.prn:02d}"

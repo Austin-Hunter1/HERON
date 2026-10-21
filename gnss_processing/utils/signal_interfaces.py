@@ -9,7 +9,7 @@ link's nominal frequency for a BOC sidelobe -- not the case for any signal
 built here yet, but `Signal.carrier_freq_hz` is independent of `Link` for when
 it is.
 
-A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a`, `BdsB1C` -- IS the class-based
+A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a`, `BdsB1C`, `GalE5a` -- IS the class-based
 definition of one signal: instantiating it for a PRN builds that satellite's
 spreading-code components (see `utils.code_components`) into a `CodeSet`.
 Acquisition and tracking are configured separately, in `ACQUISITION_POLICIES`
@@ -47,6 +47,7 @@ from . import bds_b1c
 from . import bds_b2a
 from . import gps_l1c
 from . import bpsk_acquisition
+from . import gal_e5a
 from . import sample_streaming
 from . import secondary_code
 from . import tracking_channel
@@ -121,6 +122,19 @@ def _tiered_code(primary: np.ndarray, overlay: np.ndarray) -> np.ndarray:
     return np.concatenate([primary * int(sign) for sign in overlay]).astype(np.int8)
 
 
+@dataclass(frozen=True)
+class SignalOptions:
+    """
+    Choices that change how a signal is modelled, not what it is.
+
+    `boc61`: model the BOC(6,1) part of the pilot (B1C QMBOC, L1C TMBOC).  `None`
+    keeps the default of the signal.  Kept as a record so that new switches can
+    join without a change to every caller.
+    """
+
+    boc61: bool | None = None
+
+
 class Signal(ABC):
     """
     A particular signal definition on a link, for one satellite.
@@ -150,6 +164,14 @@ class Signal(ABC):
     # PRNs `build_signals` makes when the caller names none.
     default_prns: ClassVar[tuple[int, ...]] = tuple(range(1, 33))
 
+    # BOC(6,1) toggle (D-071).  A signal that carries a BOC(6,1) part sets
+    # `supports_boc61`, and says in `default_boc61` whether its plain class models
+    # that part.  `boc61_enabled` is what THIS class models; `with_options` makes
+    # a subclass that changes it.
+    supports_boc61: ClassVar[bool] = False
+    default_boc61: ClassVar[bool] = False
+    boc61_enabled: ClassVar[bool] = False
+
     def __init__(self, prn: int) -> None:
         self.prn = prn
         self.signal_id = f"{self.sat_id_prefix}{prn:02d}"
@@ -157,6 +179,46 @@ class Signal(ABC):
             self._build_components(prn),
             chip_rate_hz=self.tracking_code_rate_chips_per_sec,
         )
+
+    @classmethod
+    def with_options(cls, options: "SignalOptions | None" = None) -> "type[Signal]":
+        """
+        The signal class that models `options`.
+
+        Why a subclass: every function here takes a signal TYPE, so a variant that
+        is a type needs no new argument anywhere.  The variant keeps
+        `signal_type_id`, so the message tables and decoders, which key on it, stay
+        valid.  When the options equal the default, `cls` itself comes back, so a
+        default run is the same object as before the toggle existed.
+        """
+        wanted = None if options is None else options.boc61
+        if wanted is None or wanted == cls.boc61_enabled:
+            return cls
+        if not cls.supports_boc61:
+            raise ValueError(
+                f"{cls.signal_type_id} has no BOC(6,1) part, so boc61={wanted} has no meaning"
+            )
+        return type(
+            f"{cls.__name__}{'Wb' if wanted else 'Nb'}", (cls,), {"boc61_enabled": wanted}
+        )
+
+    @classmethod
+    def variant_tag(cls) -> str:
+        """
+        "" for the default model; "wb" or "nb" (wide band, narrow band) otherwise.
+
+        The tracking file name carries it, so a comparison run never overwrites
+        the default file.
+        """
+        if cls.boc61_enabled == cls.default_boc61:
+            return ""
+        return "wb" if cls.boc61_enabled else "nb"
+
+    @classmethod
+    def policy_key(cls) -> str:
+        """Key into the policy tables: the type id, plus the variant when there is one."""
+        tag = cls.variant_tag()
+        return f"{cls.signal_type_id}:{tag}" if tag else cls.signal_type_id
 
     @staticmethod
     @abstractmethod
@@ -306,6 +368,45 @@ class BdsB2a(Signal):
         ]
 
 
+class GalE5a(Signal):
+    """
+    Galileo E5a, processed on its own as a QPSK signal (Galileo OS SIS ICD 2.3.1.2): a data
+    component E5a-I (F/NAV) on I and a dataless pilot E5a-Q on Q, both BPSK(10) at 10.23 Mcps
+    with equal power.  It is on the carrier of GPS L5 and BeiDou B2a.
+
+    Each component has a secondary code that advances one chip per 1 ms primary period.  The
+    data code CS20_1 (20 chips, the same for every satellite) lasts 20 ms, which is exactly one
+    F/NAV symbol, so the symbol edge is known once the pilot's 100-chip overlay (CS100_n, one
+    for each satellite) is locked.  E5a-QP is not part of this signal (D-067).
+    """
+
+    signal_type_id = "GAL_E5A"
+    link = LINKS[LinkId.L5]
+    carrier_freq_hz = gal_e5a.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = gal_e5a.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = gal_e5a.PRIMARY_PERIOD_MS
+    sat_id_prefix = "E"
+    # SVID 1 to 36 are assigned (ICD 3.6).  Codes exist up to 50; ask for them with `prns=`.
+    default_prns = tuple(range(gal_e5a.FIRST_PRN, gal_e5a.LAST_ASSIGNED_PRN + 1))
+
+    @staticmethod
+    def _build_components(prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        return [
+            CodeComponent(
+                name="E5aI", sequence=gal_e5a.generate_data_code(prn).copy(), branch=Branch.I,
+                overlay=gal_e5a.data_secondary_code().copy(),
+                symbol_period_ms=gal_e5a.DATA_SYMBOL_PERIOD_MS,
+            ),
+            # The pilot is dataless: no symbol period.  Its 100-chip overlay is the long code
+            # that the overlay search locks.
+            CodeComponent(
+                name="E5aQ", sequence=gal_e5a.generate_pilot_code(prn).copy(), branch=Branch.Q,
+                overlay=gal_e5a.generate_pilot_secondary_code(prn).copy(),
+            ),
+        ]
+
+
 class BdsB1C(Signal):
     """
     BeiDou B1C (open service), narrow-band model: a data component on I and
@@ -330,9 +431,13 @@ class BdsB1C(Signal):
     primary_period_ms = bds_b1c.PRIMARY_PERIOD_MS
     sat_id_prefix = "C"
     default_prns = tuple(range(bds_b1c.FIRST_PRN, bds_b1c.LAST_PRN + 1))
+    # Narrow band by default (D-062).  `with_options(SignalOptions(boc61=True))`
+    # adds the BOC(6,1) part as a third component, `B1CP61` (D-071).
+    supports_boc61 = True
+    default_boc61 = False
 
-    @staticmethod
-    def _build_components(prn: int) -> list[CodeComponent]:
+    @classmethod
+    def _build_components(cls, prn: int) -> list[CodeComponent]:
         # The cached codes are read-only; the component gets its own copy.
         code_d = bds_b1c.generate_data_code(prn).copy()
         code_p = bds_b1c.generate_pilot_code(prn).copy()
@@ -343,7 +448,7 @@ class BdsB1C(Signal):
         subcarrier = Subcarrier(
             kind=SubcarrierKind.BOC_SIN, rate_hz=bds_b1c.BOC11_SUBCARRIER_RATE_HZ
         )
-        return [
+        components = [
             CodeComponent(
                 name="B1CD", sequence=code_d, branch=Branch.I,
                 power_weight=bds_b1c.DATA_POWER_FRACTION,
@@ -359,6 +464,22 @@ class BdsB1C(Signal):
                 subcarrier=subcarrier,
             ),
         ]
+        if cls.boc61_enabled:
+            # QMBOC: the BOC(6,1) part uses the pilot code and overlay, and is in
+            # quadrature with the BOC(1,1) part -- so it lies on the I branch,
+            # with the data (ICD Table 4-2).  Wide band only: it needs a sample
+            # rate far above the 4 Msps that BOC(1,1) needs.
+            components.append(
+                CodeComponent(
+                    name="B1CP61", sequence=code_p, branch=Branch.I, overlay=overlay_p,
+                    power_weight=bds_b1c.PILOT_BOC61_POWER_FRACTION,
+                    subcarrier=Subcarrier(
+                        kind=SubcarrierKind.BOC_SIN,
+                        rate_hz=bds_b1c.BOC61_SUBCARRIER_RATE_HZ,
+                    ),
+                )
+            )
+        return components
 
 
 class GpsL1C(Signal):
@@ -384,9 +505,14 @@ class GpsL1C(Signal):
     # longer than one correlation interval while also carrying an overlay -- see
     # `TrackingChannel._intervals_per_primary_period`.
     primary_period_ms = gps_l1c.PRIMARY_PERIOD_MS
+    # Full TMBOC by default, as already written.  `boc61=False` models the pilot
+    # as BOC(1,1) on every chip (narrow band, D-071).
+    supports_boc61 = True
+    default_boc61 = True
+    boc61_enabled = True
 
-    @staticmethod
-    def _build_components(prn: int) -> list[CodeComponent]:
+    @classmethod
+    def _build_components(cls, prn: int) -> list[CodeComponent]:
         code_d = (1 - 2 * gps_l1c.get_GPS_L1CD_code_sequence(prn)).astype(np.int8)
         code_p = (1 - 2 * gps_l1c.get_GPS_L1CP_code_sequence(prn)).astype(np.int8)
         overlay_p = (1 - 2 * gps_l1c.get_GPS_L1CO_overlay_sequence(prn)).astype(np.int8)
@@ -409,11 +535,17 @@ class GpsL1C(Signal):
             CodeComponent(
                 name="L1CP", sequence=code_p, branch=Branch.I, overlay=overlay_p,
                 power_weight=gps_l1c.L1CP_POWER_FRACTION,
-                subcarrier=Subcarrier(
-                    kind=SubcarrierKind.TMBOC,
-                    rate_hz=gps_l1c.BOC_SUBCARRIER_RATE,
-                    pattern=gps_l1c.TMBOC_PATTERN,
-                    pattern_rate_hz=gps_l1c.TMBOC_SUBCARRIER_RATE,
+                subcarrier=(
+                    Subcarrier(
+                        kind=SubcarrierKind.TMBOC,
+                        rate_hz=gps_l1c.BOC_SUBCARRIER_RATE,
+                        pattern=gps_l1c.TMBOC_PATTERN,
+                        pattern_rate_hz=gps_l1c.TMBOC_SUBCARRIER_RATE,
+                    )
+                    if cls.boc61_enabled
+                    else Subcarrier(
+                        kind=SubcarrierKind.BOC_SIN, rate_hz=gps_l1c.BOC_SUBCARRIER_RATE
+                    )
                 ),
             ),
         ]
@@ -425,6 +557,7 @@ SIGNALS: dict[str, type[Signal]] = {
     GpsL5.signal_type_id: GpsL5,
     BdsB2a.signal_type_id: BdsB2a,
     BdsB1C.signal_type_id: BdsB1C,
+    GalE5a.signal_type_id: GalE5a,
 }
 SIGNALS[GpsL1C.signal_type_id] = GpsL1C
 
@@ -508,6 +641,12 @@ ACQUISITION_POLICIES["GPS_L1C"] = AcquisitionPolicy(component_name="L1CP")
 # Nothing is left ambiguous in the `ambiguous_component` sense: data and pilot
 # are both 10230 chips, so locating one locates the other.
 ACQUISITION_POLICIES["BDS_B2A"] = AcquisitionPolicy(component_name="B2aP")
+
+# E5a: as B2a.  The pilot E5aQ is dataless, and its 100 ms overlay is not folded into the replica
+# (a 100 ms replica would make a 10 Hz Doppler bin and 100 times the search grid).  Acquisition
+# pins the code phase modulo one 1 ms primary period; the overlay phase comes from the post-lock
+# search.
+ACQUISITION_POLICIES["GAL_E5A"] = AcquisitionPolicy(component_name="E5aQ")
 
 # B1C: acquire on the pilot's BOC(1,1) part.  It has 29/44 of the power against
 # 1/4 for the data, and it is dataless inside one 10 ms period.  The 1800-chip
@@ -641,6 +780,19 @@ TRACKING_POLICIES["BDS_B2A"] = TrackingPolicy(
     ),
 )
 
+# E5a follows the B2a recipe: two equal-power BPSK(10) components in carrier quadrature, a 1 ms
+# primary period, a secondary code on each, data on I only.  Carrier on the pilot (component 1)
+# from the start; Costas until the 100-chip pilot overlay is stripped; both components in the
+# delay loop.  The coherent ceiling is read off the code set: E5aI's 20 ms symbol sets it.
+TRACKING_POLICIES["GAL_E5A"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+)
+
 
 # B1C: pilot carrier, as B2a, because the pilot is in quadrature with the data
 # (ICD Table 4-2) and a later switch would need a quarter-cycle re-pull.  The
@@ -655,6 +807,20 @@ TRACKING_POLICIES["BDS_B1C"] = TrackingPolicy(
     ),
     synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
         carrier_component=1, code_components=(0, 1), costas=False
+    ),
+    overlay_search=secondary_code.fft_search,
+    overlay_prompts_to_observe=200,
+)
+
+# Wide-band B1C (D-071): the BOC(6,1) component joins the delay loop.  The carrier
+# stays on the BOC(1,1) pilot.  Whether the narrow BOC(6,1) peak needs a smaller
+# early-late spacing is tested in `tests/test_boc61_b1c.py`.
+TRACKING_POLICIES["BDS_B1C:wb"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1, 2), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1, 2), costas=False
     ),
     overlay_search=secondary_code.fft_search,
     overlay_prompts_to_observe=200,
@@ -700,6 +866,16 @@ TRACKING_POLICIES["GPS_L1C"] = TrackingPolicy(
 # --------------------------------------------------------------------------
 
 
+def policy_for(table: dict, signal_type: type[Signal]):
+    """
+    The row of a policy table for `signal_type`.
+
+    A variant (see `Signal.with_options`) looks first for its own row, then falls
+    back to the row of its type.  So a variant needs a row only when it must differ.
+    """
+    return table.get(signal_type.policy_key(), table[signal_type.signal_type_id])
+
+
 @dataclass(frozen=True)
 class AmbiguitySearchPlan:
     """
@@ -720,13 +896,13 @@ class AmbiguitySearchPlan:
 
 
 def _acquisition_component(signal_type: type[Signal], signal: Signal) -> CodeComponent:
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     return signal.code_set.components[signal.code_set.index_of(policy.component_name)]
 
 
 def acquisition_code(signal_type: type[Signal], signal: Signal) -> np.ndarray:
     """The replica sequence acquisition correlates against, on its own chip clock."""
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     component = _acquisition_component(signal_type, signal)
 
     sequence = component.sequence
@@ -773,7 +949,7 @@ def build_ambiguity_search(
     combined clock -- a partial view of the signal, which is what
     `allow_partial_coverage` is for.
     """
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     if policy.ambiguous_component is None:
         return None
 
@@ -1014,7 +1190,7 @@ def create_tracking_channels(
     cn0_params: tracking_channel.CN0EstimatorParameters | None = None,
     code_phase_ms_overrides: dict[str, float] | None = None,
 ) -> dict[str, TrackingChannelAdapter]:
-    tracking_policy = TRACKING_POLICIES[signal_type.signal_type_id]
+    tracking_policy = policy_for(TRACKING_POLICIES, signal_type)
 
     # EVERY signal starts at one correlation interval and extends afterwards.  The
     # requested duration is therefore the duration to extend TO, never the one the

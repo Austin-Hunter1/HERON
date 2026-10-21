@@ -56,6 +56,7 @@ DATA_COMPONENT: dict[str, int] = {
     "GPS_L1C": 0,  # L1CD
     "BDS_B2A": 0,  # B2aD
     "BDS_B1C": 0,  # B1CD
+    "GAL_E5A": 0,  # E5aI
 }
 
 SYMBOL_PERIOD_MS: dict[str, int] = {
@@ -65,6 +66,7 @@ SYMBOL_PERIOD_MS: dict[str, int] = {
     "GPS_L1C": 10,
     "BDS_B2A": 5,
     "BDS_B1C": 10,
+    "GAL_E5A": 20,
 }
 
 # Whether the signal's symbol boundary is established by an overlay code.  L1 C/A
@@ -80,6 +82,8 @@ NEEDS_BIT_SYNC: dict[str, bool] = {
     # The 10 ms symbol is one primary period, and the pilot overlay chip is
     # one primary period too, so the overlay sync gives the boundary.
     "BDS_B1C": False,
+    # The 20 ms symbol is one pass of CS20_1, and the pilot overlay (100 ms) is 5 symbols.
+    "GAL_E5A": False,
 }
 
 # Whether the channel had a tiered (overlay) code to synchronise, and therefore
@@ -104,6 +108,7 @@ HAS_OVERLAY: dict[str, bool] = {
     "GPS_L1C": True,     # L1CO, 1800 bits at one per 10 ms code period
     "BDS_B2A": True,     # 100-chip pilot overlay and the 5-chip data overlay
     "BDS_B1C": True,     # 1800-chip pilot overlay
+    "GAL_E5A": True,     # CS20 on the data and a 100-chip pilot overlay
 }
 
 # Whether the data component sits 90 degrees from the carrier loop's reference.
@@ -130,6 +135,8 @@ DATA_IN_QUADRATURE: dict[str, bool] = {
     "BDS_B2A": True,
     # Data (I) and pilot (Q) are in quadrature, and the carrier runs on the pilot.
     "BDS_B1C": True,
+    # Like L5 and B2a: the carrier loop runs on the pilot (Q); the data (I) is 90 degrees away.
+    "GAL_E5A": True,
 }
 
 

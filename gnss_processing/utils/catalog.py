@@ -33,7 +33,7 @@ from .sample_streaming import SampleParameters
 # Both the label and the signal type contain underscores, so the span at the end
 # is what anchors the match.
 _TRACKING_FILENAME = re.compile(
-    r"^(?P<label>.+)_(?P<signal>[A-Z]+_[A-Z0-9]+)_(?P<start>\d+)-(?P<end>\d+)s\.h5$"
+    r"^(?P<label>.+)_(?P<signal>[A-Z]+_[A-Z0-9]+)_(?P<start>\d+)-(?P<end>\d+)s(?:_(?P<variant>nb|wb))?\.h5$"
 )
 
 
@@ -200,6 +200,8 @@ class TrackingRunInfo:
     start_offset_ms: float
     duration_ms: float
     signal_ids: list[str]
+    variant: str = ""
+    """"nb" or "wb" for a BOC(6,1) comparison run (D-071); "" for the default model."""
 
 
 def list_tracking_runs(
@@ -256,6 +258,7 @@ def list_tracking_runs(
                 start_offset_ms=start_s * 1e3,
                 duration_ms=(end_s - start_s) * 1e3,
                 signal_ids=signal_ids,
+                variant=match["variant"] or "",
             )
         )
     return runs

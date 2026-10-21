@@ -91,6 +91,20 @@ def saved(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("variant", ["", "nb", "wb"])
+def test_variant_round_trips(tmp_path, variant):
+    """The BOC(6,1) variant (D-071) is stored in the file; a default file reads back as ''."""
+    path = tracking_io.save_tracking_results(
+        tmp_path / "t.h5",
+        {"G01": FakeChannel(make_outputs(seed=1))},
+        collect_id="RX7",
+        signal_type_id="GPS_L1C",
+        samp_rate=25e6,
+        variant=variant,
+    )
+    assert tracking_io.load_tracking_results(path).variant == variant
+
+
 def test_save_creates_parent_directories(saved):
     path, _ = saved
     assert path.exists()
