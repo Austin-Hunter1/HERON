@@ -2,7 +2,7 @@
 Preparing BeiDou B2a and B1C tracking for navigation, next to GPS.
 
 `decode_gps_run` does the same for the GPS signals (L1 C/A and L5), so the combined
-flow can take any of the four runs through one call each (D-070).
+flow can take any of the four runs through one call each (D-073).
 
 Notebook 02 decodes a tracking run in four steps: turn the tracked epochs into symbols,
 find the message in them, anchor the satellite's code phase to a time of week, and

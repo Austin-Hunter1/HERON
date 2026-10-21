@@ -1,5 +1,5 @@
 """
-Legends of notebook 01 plots sit on the left of the axes (D-072).
+Legends of notebook 01 plots sit on the left of the axes (D-075).
 
 `place_legend` decides where, and the plot functions of notebook 01 must go through it.
 The second part is a guard for future plots: a plot that calls `ax.legend(` itself would

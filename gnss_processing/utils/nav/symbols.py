@@ -138,7 +138,7 @@ DATA_IN_QUADRATURE: dict[str, bool] = {
 # Where an epoch is shorter than the symbol, `extract` has to say which epoch opens a
 # symbol.  For most signals the code phase answers it: the channel anchors its epochs on
 # multiples of the symbol period in code phase, and that lattice is tied to the data.
-# B1C is the case where it is not.  Measured on the real L1 recording (D-067): with 5 ms
+# B1C is the case where it is not.  Measured on the real L1 recording (D-070): with 5 ms
 # epochs under a 10 ms symbol, every one of nine satellites has its symbol edge at code
 # phase 5 ms (mod 10), so the code-phase pairing sits half a symbol out and every symbol
 # is the sum of half of two neighbours -- no B-CNAV1 frame decodes.  The data itself is

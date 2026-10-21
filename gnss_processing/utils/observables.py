@@ -484,7 +484,7 @@ def combine_observables(
 
     `signal_type_ids` names the signal each part was tracked on, in the same order.
 
-    `labels` (D-070) names the receiver stream of each part, for runs from radios that
+    `labels` (D-073) names the receiver stream of each part, for runs from radios that
     do not share a clock.  When given, every column is renamed `<sat id>@<label>`, so
     the same satellite on two signals ("G01@L1" and "G01@L5") is two columns, and the
     solver gives each stream and constellation its own clock bias (see

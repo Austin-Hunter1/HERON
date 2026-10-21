@@ -1,7 +1,7 @@
 """
 B1C: which 5 ms epoch opens a 10 ms symbol is read from the data, not from the code phase.
 
-On the real L1 recording (D-067) the B1C channels run 5 ms epochs under a 10 ms symbol, and
+On the real L1 recording (D-070) the B1C channels run 5 ms epochs under a 10 ms symbol, and
 every satellite has its symbol edge at code phase 5 ms (mod 10).  The code-phase pairing in
 `symbols.extract` then sits half a symbol out: each "symbol" is half of two neighbours, so
 about a third of them cancel and no B-CNAV1 frame decodes.  The synthetic B1C tests did not

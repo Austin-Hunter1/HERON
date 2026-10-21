@@ -36,7 +36,7 @@ def setup_default_plotting():
 
 
 LEGEND_LOCATION_INSIDE = "lower left"
-"""Where a legend sits when it stays inside the axes (D-072)."""
+"""Where a legend sits when it stays inside the axes (D-075)."""
 
 LEGEND_OUTSIDE_PAD_PX = 8.0
 """Gap, in pixels, between an outside-left legend and the axis label next to it."""
@@ -46,7 +46,7 @@ def place_legend(ax: Axes, handles=None, *, outside: bool = True, **kwargs):
     """
     Put the legend of `ax` on the left: outside the left edge, or in the lower left.
 
-    Every plot of notebook 01 draws its legend through this function (D-072), so the
+    Every plot of notebook 01 draws its legend through this function (D-075), so the
     place of legends is decided here and not in each plot.  On the right and the top
     of an axes are the peak of an acquisition correlation, the end of a time series
     and the labels of the early/late ends; the left is the quiet side.
@@ -570,7 +570,7 @@ def plot_acquisition_dwell_layout(
     ax_freq.set_ylabel("Normalised correlation")
     ax_freq.set_title("Grid spacing vs response width")
     ax_freq.set_xlim(-span, span)
-    # Room under the zero line for the legend, which sits in the lower left (D-072)
+    # Room under the zero line for the legend, which sits in the lower left (D-075)
     # and would otherwise cover the grid ticks.  The ticks stay on 0 to 1.
     ax_freq.set_ylim(-0.4, 1.1)
     ax_freq.set_yticks(np.linspace(0.0, 1.0, 6))

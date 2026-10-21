@@ -1,5 +1,5 @@
 """
-One fix from two radios that do not share a clock (D-070).
+One fix from two radios that do not share a clock (D-073).
 
 The 2026-10-14 recording has an L1 radio and an L5 radio, started 3.57 s apart and free
 running.  Each has its own receiver clock, and the same GPS satellite is tracked twice

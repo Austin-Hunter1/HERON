@@ -74,7 +74,7 @@ def test_every_per_signal_table_of_the_notebook_has_the_signal(number, signal):
 def test_notebook_01_tracks_b1c_with_the_boc_discriminator():
     """
     A single delay loop with 0.5 chip taps sits off the peak of a BOC(1,1) and loses about
-    11 dB (D-067), so the B1C entry must enable the double estimator: both subcarrier values
+    11 dB (D-070), so the B1C entry must enable the double estimator: both subcarrier values
     positive, and accepted by the loop parameters.
     """
     from utils import tracking_channel

@@ -118,7 +118,7 @@ def system_letter(sat_id: str) -> str:
 
     One receiver clock serves every satellite of one stream, and one inter-system bias
     serves every satellite of one constellation in that stream.  Two radios that were
-    never locked together (D-070) have two clocks, so the same constellation seen by
+    never locked together (D-073) have two clocks, so the same constellation seen by
     both is two groups: "G@L1" and "G@L5".  An id without a label, "G05", is in group
     "G", which is the single-stream behaviour of D-057, unchanged.
     """
