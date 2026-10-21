@@ -107,9 +107,38 @@ class WeightMap:
         return np.where(np.isfinite(cn0), weights, self.low_weight)
 
 
+GROUP_SEPARATOR = "@"
+"""Joins a satellite id to the label of the receiver stream it was measured on."""
+
+
 def system_letter(sat_id: str) -> str:
-    """The constellation of a satellite id: its first letter ("G", "C", ...)."""
-    return sat_id[0]
+    """
+    The bias group of a satellite id: its constellation letter ("G", "C", ...), plus
+    the stream label when the id has one.
+
+    One receiver clock serves every satellite of one stream, and one inter-system bias
+    serves every satellite of one constellation in that stream.  Two radios that were
+    never locked together (D-070) have two clocks, so the same constellation seen by
+    both is two groups: "G@L1" and "G@L5".  An id without a label, "G05", is in group
+    "G", which is the single-stream behaviour of D-057, unchanged.
+    """
+    letter = sat_id[0]
+    if GROUP_SEPARATOR in sat_id:
+        return letter + GROUP_SEPARATOR + sat_id.split(GROUP_SEPARATOR, 1)[1]
+    return letter
+
+
+def default_reference_system(groups: list[str]) -> str:
+    """
+    The group whose clock is the reference: the first GPS group, else the first group.
+
+    Every other group is solved as a bias relative to it.  The choice changes no
+    position -- only which group the biases are quoted against.
+    """
+    for group in groups:
+        if group[0] == "G":
+            return group
+    return groups[0]
 
 
 @dataclass
@@ -612,7 +641,7 @@ def solve_epoch(
     letters = [system_letter(sid) for sid in used_ids]
     present = list(dict.fromkeys(letters))
     if reference_system is None:
-        reference_system = "G" if "G" in present else present[0]
+        reference_system = default_reference_system(present)
     ordered = [reference_system] + [x for x in present if x != reference_system]
     if reference_system not in present:
         ordered = present

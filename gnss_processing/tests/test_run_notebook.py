@@ -69,3 +69,24 @@ def test_every_per_signal_table_of_the_notebook_has_the_signal(number, signal):
     ].signal_type_id}
     for block in blocks:
         assert any(name in block for name in names), block[:80]
+
+
+def test_notebook_01_tracks_b1c_with_the_boc_discriminator():
+    """
+    A single delay loop with 0.5 chip taps sits off the peak of a BOC(1,1) and loses about
+    11 dB (D-067), so the B1C entry must enable the double estimator: both subcarrier values
+    positive, and accepted by the loop parameters.
+    """
+    from utils import tracking_channel
+
+    code = _code(_notebook("01"))
+    start = code.index("DLL_SETTINGS = {")
+    block = code[start:code.index("}[SIGNAL_ID]", start)]
+    entry = block[block.index("BdsB1C:"):]
+    arguments = entry.split("dict(", 1)[1].rsplit("),", 1)[0]
+    settings = eval("dict(" + arguments + ")")
+    assert settings["subcarrier_bandwidth_hz"] > 0.0 and settings["subcarrier_chip_spacing"] > 0.0
+    params = tracking_channel.TrackingLoopParameters(
+        PLL_bandwidth_hz=20.0, FLL_bandwidth_hz=50.0, coherent_duration_ms=5, **settings
+    )
+    assert params.tracks_subcarrier

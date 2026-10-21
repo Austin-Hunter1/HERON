@@ -275,7 +275,7 @@ def _loop_params(coherent_duration_ms=10):
     )
 
 
-def _acquire_and_track(noise_sigma=3.0, buffers=40, buffer_ms=100, seed=4, nav_bits=True):
+def _acquire_and_track(noise_sigma=3.0, buffers=40, buffer_ms=100, seed=4, nav_bits=True, loop_params=None):
     """Acquire, seed a channel from the result, and track `buffers` buffers."""
     definitions = build_signals(BdsB1C, prns=[PRN])
     config = _acquisition_config(bpsk_acquisition.FineSearchParameters())
@@ -299,7 +299,7 @@ def _acquire_and_track(noise_sigma=3.0, buffers=40, buffer_ms=100, seed=4, nav_b
         warnings.simplefilter("ignore", RuntimeWarning)
         adapter = create_tracking_channels(
             BdsB1C, signals=definitions, acquisition_results={SIGNAL_ID: acq},
-            tracking_signal_ids=[SIGNAL_ID], loop_params=_loop_params(),
+            tracking_signal_ids=[SIGNAL_ID], loop_params=loop_params or _loop_params(),
             output_capacity=6000,
         )[SIGNAL_ID]
     for i in range(buffers):
@@ -347,6 +347,40 @@ def test_the_code_phase_estimate_is_unbiased_in_a_clean_channel():
     tail = slice(count - 15, count)
     ratio = np.abs(outputs.prompt_corr[tail, 0]).mean() / np.abs(outputs.prompt_corr[tail, 1]).mean()
     assert ratio == pytest.approx(np.sqrt((1 / 4) / (29 / 44)), rel=0.03)
+
+
+def _double_estimator_loop_params(subcarrier_chip_spacing):
+    """The loops of notebook 01 for B1C: a code loop plus a subcarrier loop (the BOC discriminator)."""
+    return tracking_channel.TrackingLoopParameters(
+        DLL_bandwidth_hz=0.5, PLL_bandwidth_hz=20.0, FLL_bandwidth_hz=50.0,
+        coherent_duration_ms=10, EPL_chip_spacing=0.5,
+        subcarrier_bandwidth_hz=2.0, subcarrier_chip_spacing=subcarrier_chip_spacing,
+    )
+
+
+@pytest.mark.parametrize("subcarrier_chip_spacing", [0.1, 0.2])
+def test_the_boc_discriminator_tracks_b1c_on_the_main_peak(subcarrier_chip_spacing):
+    """
+    With the double estimator (a code loop and a subcarrier loop, as for GPS L1C) the
+    BOC(1,1) channel locks, finds the overlay, and sits on the main peak.  The code
+    taps stay 0.5 chip apart and only the subcarrier taps are tight.
+    """
+    adapter = _acquire_and_track(
+        noise_sigma=0.0, buffers=14, loop_params=_double_estimator_loop_params(subcarrier_chip_spacing)
+    )
+    assert adapter.channel.signal_params.subcarrier_ambiguity_chips == 0.5
+    outputs = adapter.outputs
+    count = outputs.output_index
+    layout = outputs.tap_layout
+    assert layout.tracks_subcarrier
+    assert max(abs(o) for o in layout.code_offsets_chips) == pytest.approx(0.5)
+    assert max(abs(o) for o in layout.subcarrier_offsets_chips) == pytest.approx(subcarrier_chip_spacing)
+    code_phase = np.asarray(outputs.code_phase_ms[:count])
+    uptime = np.asarray(outputs.uptime_epoch_ms[:count])
+    truth = SEED_CODE_PHASE_MS + uptime * (1.0 + SEED_DOPPLER_HZ / bds_b1c.CARRIER_FREQ_HZ)
+    assert np.abs((code_phase[-20:] - truth[-20:]) * 1.023).max() < 0.02
+    assert np.abs(np.asarray(outputs.subcarrier_offset_chips[count - 20:count])).max() < 0.02
+    assert adapter.channel.loop_state.mode is tracking_channel.TrackingLoopMode.PLL
 
 
 def test_the_prompt_values_carry_the_data_bits():
