@@ -6,3 +6,4 @@ Specular_Planner/.venv/
 Specular_Planner/output/*.waypoints
 Specular_Planner/output/*.txt
 Specular_Planner/output/*.json
+Specular_Planner/data/launch_checks_*.json
