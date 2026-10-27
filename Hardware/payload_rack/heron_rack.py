@@ -468,8 +468,11 @@ def clk_outline():
     return x0, x0 + CLK_W, CLK_TOP_Z - CLK_H, CLK_TOP_Z
 
 def clk_holes():
+    """Clock board mounting holes: 4 corners, and the middle of the top and bottom
+    long edges (rev D H5, H6, D-043: they carry the push of the direct-mate jacks)."""
     x0, x1, z0, z1 = clk_outline()
-    return [(x0 + 4, z1 - 4), (x1 - 4, z1 - 4), (x0 + 4, z0 + 4), (x1 - 4, z0 + 4)]
+    xm = (x0 + x1) / 2
+    return [(x0 + 4, z1 - 4), (x1 - 4, z1 - 4), (x0 + 4, z0 + 4), (x1 - 4, z0 + 4), (xm, z1 - 4), (xm, z0 + 4)]
 
 def clk_to_world(kx, ky):
     """KiCad board coords (component side, origin top-left) -> world (X, Z)."""

@@ -160,6 +160,11 @@ class Gen:
         SWIG pointer in KiCad 10, so search the pad list.)"""
         return next(p for p in self.fps[ref].Pads() if p.GetNumber() == str(num))
 
+    @staticmethod
+    def pad_xy(p):
+        """Board-local centre of a pad object."""
+        return L(p.GetPosition())
+
     def pad(self, ref, num):
         """Board-local centre of a pad."""
         return L(self.pad_obj(ref, num).GetPosition())

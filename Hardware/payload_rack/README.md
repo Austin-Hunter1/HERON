@@ -177,4 +177,4 @@ The board is in `../clock_board_revD/` (118 × 60 mm, KiCad 10, D-042). Rev D pu
 positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
 All 8 SDR jacks are coaxial with the SDR reference SMAs (error 0.000 mm).
 The board mounts on the rear plate with four M3 × 20 mm standoffs (`CLK_STANDOFF`). Its holes are at world (X, Z) =
-(50, 86), (160, 86), (50, 34) and (160, 34). The rear plate has a 20 × 22 mm opening (PROPOSED, `REAR_USB_W`, `REAR_USB_H`) behind each USB hole, so the USB cables leave through the back of the rack.
+(50, 86), (160, 86), (50, 34) and (160, 34), plus (105, 86) and (105, 34) at the middle of the long edges (D-043). The rear plate has a 20 × 22 mm opening (PROPOSED, `REAR_USB_W`, `REAR_USB_H`) behind each USB hole, so the USB cables leave through the back of the rack.

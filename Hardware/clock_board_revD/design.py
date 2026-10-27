@@ -9,7 +9,7 @@ Signal flow
   that rail, which is above the LP5907 10 uF limit).
 - SiT5155 10 MHz LVCMOS -> 22 R -> LMK1C1104 1:4 buffer (50 R output).
 - Each 10 MHz output: 0 R -> 100 nF DC block -> 5th-order 0.1 dB Chebyshev
-  low-pass (fc ~13 MHz, 50 R) -> 3 dB pi pad -> ESD -> SMP jack.
+  low-pass (fc ~13 MHz, 50 R) -> 3 dB pi pad -> bidirectional ESD -> SMP jack.
   Level at a 50 R load: ~ +7 dBm (1.4 Vpp); ~2.9 Vpp into high-Z.
 - PPS in (SMA) -> optional 50 R term (DNP) -> ESD -> 100 R -> SN74LVC1G17
   (Schmitt, 5 V tolerant) -> SN74LVC125A quad buffer -> 22 R -> ESD -> SMP x4.
@@ -88,11 +88,23 @@ def Csh(ref, val, fp, key=None, diel=None):
     return dict(kind="P", lib="Device:C", ref=ref, value=val, fp=fp, step=10.16, fields=fl)
 
 
-def ESD(ref):
-    # Device:D_TVS pin 1 = I/O, pin 2 = GND. The TI DYA (SOD-523) package has
-    # the same pinout (datasheet Table 4-1).
-    return dict(kind="P", lib="Device:D_TVS", rot=270, ref=ref, value="TPD1E05U06",
-                fp=ESD_FP, step=12.7, fields=(("Manufacturer", "Texas Instruments"), ("MPN", "TPD1E05U06DYAR")))
+# ESD diodes by signal type: value -> MPN. Both are TI parts in the DYA (SOD-523)
+# package (the same package drawing, DYA0002A), so they share ESD_FP.
+# - TPD1E05U06: unidirectional, 0.5 pF. For the DC-coupled 0-3.3 V PPS lines.
+# - TPD1E10B06: bidirectional (+-5.5 V working, 12 pF). For the 10 MHz outputs
+#   (D-045). Why: after the DC block the 10 MHz swings about 0 V, up to
+#   +-1.45 V with no SDR on the jack. A unidirectional diode conducts at about
+#   -0.6 V and clips each negative half-cycle, which makes harmonics after the
+#   low-pass filter. 12 pF changes the 10 MHz level by less than 0.1 dB
+#   (sim/lpf.py).
+ESD_MPN = {"TPD1E05U06": "TPD1E05U06DYAR", "TPD1E10B06": "TPD1E10B06DYAR"}
+
+
+def ESD(ref, value="TPD1E05U06"):
+    # Device:D_TVS pin 1 = I/O, pin 2 = GND. Both DYA parts have this pinout
+    # (TPD1E05U06 and TPD1E10B06 datasheets, Table 4-1).
+    return dict(kind="P", lib="Device:D_TVS", rot=270, ref=ref, value=value,
+                fp=ESD_FP, step=12.7, fields=(("Manufacturer", "Texas Instruments"), ("MPN", ESD_MPN[value])))
 
 
 def SMA(ref, val):
@@ -245,7 +257,7 @@ def build():
             Rsh(ref("R"), "294R"),
             R(ref("R"), "17.4R"),
             Rsh(ref("R"), "294R"),
-            ESD(ref("D")),
+            ESD(ref("D"), "TPD1E10B06"),      # bidirectional: the 10 MHz is AC (D-045)
             dict(kind="GAP", len=7.62),
             SMP(f"J{3+k}", f"REF_{names[k]}"),
         ])
@@ -303,8 +315,8 @@ def build():
     s.text((20.32, 223.52), "TEST POINTS / MECHANICAL", 2.0)
     for i, net in enumerate(["VIN_5V", "+3V3_OSC", "+3V3_CLK", "CLK10_IN", "OSC_OE", "PPS_BUF", "GND"]):
         tp(25.4 + 16.51 * i, 236.22, net)
-    for i in range(4):
-        pins = s.symbol("Mechanical:MountingHole_Pad", ref("H"), "M3", (25.4 + 12.7 * i, 256.54),
+    for i in range(6):     # H5, H6 (rev D, D-043): mid-edge standoffs, second row
+        pins = s.symbol("Mechanical:MountingHole_Pad", ref("H"), "M3", (25.4 + 12.7 * (i % 4), 256.54 + 12.7 * (i // 4)),
                         fp="MountingHole:MountingHole_3.2mm_M3_Pad_Via", in_bom=False,
                         ref_off=(2.54, -1.27, "left"), val_off=(2.54, 1.27, "left"))
         s.gnd(pins["1"][:2])

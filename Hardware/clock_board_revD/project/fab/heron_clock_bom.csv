@@ -8,7 +8,8 @@ Qty,References,Value,Footprint,Manufacturer,MPN,Digi-Key PN,Dielectric,Tolerance
 1,D1,SMF5.0A,D_SOD-123F,Littelfuse,SMF5.0A,F5748CT-ND,,,Fit,65978,0.53,
 1,D2,SS1030HEWS,D_SOD-323HE_Panjit,Panjit,SS1030HEWS_R1_00001,3757-SS1030HEWS_R1_00001CT-ND,,,Fit,6757,0.26,Replaces Nexperia PMEG3020EJ (no stock until 2027-02-16); 30 V 1 A; VERIFY land pattern
 1,D3,GRN PWR,LED_0603_1608Metric,Wurth,150060GS75000,732-4971-1-ND,,,Fit,294904,0.15,
-9,D4 D5 D6 D7 D8 D10 D11 D12 D13,TPD1E05U06,D_SOD-523,Texas Instruments,TPD1E05U06DYAR,296-TPD1E05U06DYARCT-ND,,,Fit,,,"Rev C (D-028): SOD-523 (DYA), was TPD1E05U06DPYR. Digi-Key PN, stock and price not checked yet Digi-Key PN from the team order (2026-10-20)."
+4,D4 D5 D6 D7,TPD1E10B06,D_SOD-523,Texas Instruments,TPD1E10B06DYAR,296-TPD1E10B06DYARCT-ND,,,Fit,199147 (2026-10-24),0.55,D-045: bidirectional ESD on the 10 MHz outputs D4-D7 (replaces TPD1E05U06DYAR there). Same DYA (SOD-523) package. Stock and price checked on Digi-Key 2026-10-24.
+5,D8 D10 D11 D12 D13,TPD1E05U06,D_SOD-523,Texas Instruments,TPD1E05U06DYAR,296-TPD1E05U06DYARCT-ND,,,Fit,,,"Rev C (D-028): SOD-523 (DYA), was TPD1E05U06DPYR. Digi-Key PN, stock and price not checked yet Digi-Key PN from the team order (2026-10-20)."
 1,D9,YEL PPS,LED_0603_1608Metric,Wurth,150060YS75000,732-4981-1-ND,,,Fit,110706,0.15,
 1,F1,500mA,Fuse_1206_3216Metric,Bourns,MF-NSMF050-2,MF-NSMF050-2CT-ND,,,Fit,29689,0.40,
 1,FB1,BLM18PG221,L_0603_1608Metric,Murata,BLM18PG221SN1D,490-5221-1-ND,,,Fit,273730,0.14,

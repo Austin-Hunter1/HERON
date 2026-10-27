@@ -71,9 +71,13 @@ def usb_keepout(k):
 
 
 # ---------------------------------------------------------------- mounting holes
-HOLE_INSET = 4.0              # M3 holes, 4 mm in from each corner (the rack model uses the same)
+HOLE_INSET = 4.0              # M3 holes, 4 mm in from each edge (the rack model uses the same)
+# H1-H4 at the corners. H5, H6 (D-043) at the middle of the top and bottom long
+# edges, in line with the corner holes: they carry the push of the direct-mate
+# jacks. At x = BW / 2 the rear plate is solid between the solder windows.
 MOUNT = [(HOLE_INSET, HOLE_INSET), (BW - HOLE_INSET, HOLE_INSET),
-         (HOLE_INSET, BH - HOLE_INSET), (BW - HOLE_INSET, BH - HOLE_INSET)]
+         (HOLE_INSET, BH - HOLE_INSET), (BW - HOLE_INSET, BH - HOLE_INSET),
+         (BW / 2, HOLE_INSET), (BW / 2, BH - HOLE_INSET)]
 
 
 def to_world(x, y):

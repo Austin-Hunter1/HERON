@@ -8,7 +8,8 @@ wrong SMAs (see Q-015 b): the SDR rear edge order is **GPS ANT, 10 MHz, USB-B, P
 **Status: proposed. Not ordered. Not built.**
 
 The circuit, the schematic and the parts are the rev C ones, including the JST XH power
-connector J1 (D-040) and the Panjit SOD-323HE land for D2 (D-041).
+connector J1 (D-040) and the Panjit SOD-323HE land for D2 (D-041). One part change (D-045): the 10 MHz ESD diodes D4–D7 are the bidirectional TPD1E10B06DYAR
+(same SOD-523 package), because the AC-coupled 10 MHz swings below GND.
 
 ![Rev D top](project/fab/heron_clock_revD_top.png)
 
@@ -47,7 +48,10 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 - **Board edges:** the top edge (rack z 90) is 8.4 mm below the SDR DC jack axis (z 98.4); the
   bottom edge (z 30) is 6.8 mm above the GPS ANT axis (z 23.2). A plug up to about 13 mm in
   diameter fits on each (VERIFY with the real plugs).
-- **Mounting holes:** M3, 4 mm from each corner: rack (X, Z) = (50, 86), (160, 86), (50, 34), (160, 34).
+- **Mounting holes:** 6 × M3, all 4 mm in from the long edges. H1–H4 at the corners: rack (X, Z) = (50, 86), (160, 86),
+  (50, 34), (160, 34). H5, H6 (D-043) at the middle of the top and bottom edges, in line with the corner holes:
+  (105, 86) and (105, 34). They carry the push of the direct-mate jacks when the SDR trays slide in. At X 105
+  the rear plate is solid (between the B210_2 and B200_1 solder windows), so each standoff seats on full material.
 - **J1** (JST XH): mouth on the top edge between the B210_1 and B210_2 DC plugs.
 - **J2** (PPS IN, SMA): in the gap between the B200_1 and B200_2 blades, so a cable on J2 has open
   space in front of the board, as in rev C.
@@ -65,6 +69,8 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 - **U3 rules (SiT5155 layout guide):** supply via → C8 pin 1 → U3 pin 9 on F.Cu; C8 pin 1 is 1.9 mm
   from pin 9 (rev C: 1.79 mm); C9 pin 1 is 2.8 mm straight under pin 9 (rev C: C9 5.5 mm from U3). A track keep-out on In2 and B.Cu stops other nets
   under U3 (checked: no other-net track under the U3 body).
+- **SMP leg keep-outs:** a 4 × 4 mm no-track, no-via box round each SMP leg pad on F.Cu, In2 and B.Cu, so the
+  autorouter cannot starve a leg's thermal relief.
 - **Routing:** hand routes for the filter columns, the PPS chains and the U3 supply and clock. Every
   SMD GND pad gets a stub and a via. Freerouting 1.9.0 routes the other nets (the long 10 MHz feeds
   run mostly on In2, between the In1 GND plane and the B.Cu pour). Then GND pours on all four layers
@@ -75,10 +81,11 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 
 | Check | Result |
 | --- | --- |
-| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-20) | 0 violations, 0 unconnected pads, 0 footprint errors, 0 parity issues |
+| KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-21, with H5, H6) | 0 violations, 0 unconnected pads, 0 footprint errors, 0 parity issues |
 | ERC | 0 errors, 0 warnings |
-| Netlist (`check_net.py`) | 110 parts, 51 nets. Single-node nets only on the intentional NC pins U1.4, U2.4, U5.1 |
-| Rack fit (`../payload_rack/check_fit.py`, 2026-10-20) | 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error (J3–J6 on the SDR 10 MHz SMA, J7–J10 on the PPS SMA). Stop screw access: clear |
+| D4–D7 to TPD1E10B06 (D-045, 2026-10-24) | Fields only: tracks and footprints unchanged. DRC 0, unconnected 0, parity 0; ERC 0 |
+| Netlist (`check_net.py`) | 112 parts (with H5, H6), 51 nets. Single-node nets only on the intentional NC pins U1.4, U2.4, U5.1 |
+| Rack fit (`../payload_rack/check_fit.py`, 2026-10-21, 6 standoffs) | 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error (J3–J6 on the SDR 10 MHz SMA, J7–J10 on the PPS SMA). Stop screw access: clear |
 | Hardware test | Not done |
 
 ## Assembly
@@ -119,10 +126,13 @@ PATH=/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH PYTHON=/Applications/KiC
 | `gen_pcb.py` | Rev D placement table, hand routes, labels and silkscreen art; runs Freerouting |
 | `pcbgen.py` | Board-building helpers (footprints from the netlist, tracks, vias, zones, keep-outs, GND vias, stitching, Freerouting round trip) |
 | `silk_refs.py` | Reference labels (rev C script; the USB holes are keep-outs) |
-| `extract_logo.py`, `logo_polys.json` | The HERON logo outlines, taken from the rev C board (the source SVG is not in every checkout) |
+| `add_center_holes.py` | Adds H5, H6 to the schematic (copies of H4 with its GND symbol; run once, idempotent) |
+| `extract_logo.py`, `logo_polys.json` | The HERON logo outlines, made from `HERON/Templates and Logos/HERON_pixel_20mm.svg` (pixel rects only). Run `extract_logo.py` after each logo change |
+| `update_logo.py` | Replaces only the logo polygons on the board as it is (no new route), then run `EXPORT_ONLY=1 make_fab.sh`. Last run 2026-10-24 (logo SVG with one stray pixel removed): copper, parts and texts unchanged; DRC 0, ERC 0 |
 | `design.py`, `gen_sch.py`, `gen_lib.py` | Parts list as Python, schematic generator, project library (rev C, unchanged) |
 | `check_net.py`, `make_bom.py`, `bom_sources.csv`, `make_fab.sh` | Netlist check, BOM, purchase data, rebuild and fab outputs |
 | `sim/lpf.py` | Filter and output level model (unchanged) |
+| `mockup_dxf.py`, `mockup/` | 1:1 mm DXF files for a laser-cut fit mockup: `revD_mockup_cut.dxf` (outline + pad holes), `revD_mockup_all.dxf` (layers CUT, VIAS, F_CU, B_CU), raw copper plots. Zones and loose GND stitching vias (no track) are left out so traces show. Origin = board lower-left corner, Y up, seen from the front. No kerf compensation. **Laser-ready:** `revD_laser.svg` / `.dxf` (CUT = red hairline: outline, USB holes, 6 mounting drills; ENGRAVE = solid blue fill: joined front copper, other holes are gaps; one line per edge), `revD_laser_back.*` (back copper fill). Run `python3 mockup_dxf.py` |
 
 ## Open items
 

@@ -7408,7 +7408,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "TPD1E05U06"
+		(property "Value" "TPD1E10B06"
 			(at 309.88 96.52 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7462,7 +7462,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPD1E05U06DYAR"
+		(property "MPN" "TPD1E10B06DYAR"
 			(at 307.34 95.25 90)
 			(hide yes)
 			(show_name no)
@@ -17636,7 +17636,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "TPD1E05U06"
+		(property "Value" "TPD1E10B06"
 			(at 309.88 68.58 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -17690,7 +17690,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPD1E05U06DYAR"
+		(property "MPN" "TPD1E10B06DYAR"
 			(at 307.34 67.31 90)
 			(hide yes)
 			(show_name no)
@@ -19065,7 +19065,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "TPD1E05U06"
+		(property "Value" "TPD1E10B06"
 			(at 309.88 40.64 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -19119,7 +19119,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPD1E05U06DYAR"
+		(property "MPN" "TPD1E10B06DYAR"
 			(at 307.34 39.37 90)
 			(hide yes)
 			(show_name no)
@@ -20064,6 +20064,318 @@
 		)
 	)
 	(symbol
+		(lib_id "Mechanical:MountingHole_Pad")
+		(at 25.4 269.24 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "f42ecbb2-cfd3-576f-b155-f5a2a6a69f19")
+		(property "Reference" "H5"
+			(at 27.94 267.97 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "M3"
+			(at 27.94 270.51 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3_Pad_Via"
+			(at 25.4 269.24 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 25.4 269.24 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 25.4 269.24 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b6a5b08a-6bfc-5446-a0da-cfff62bedafb")
+		)
+		(instances
+			(project "heron_clock"
+				(path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
+					(reference "H5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 25.4 271.78 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "0b15ba20-6c30-5827-bd92-6fd729b0e4e9")
+		(property "Reference" "#PWR072"
+			(at 27.94 270.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "GND"
+			(at 27.94 273.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 25.4 271.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 25.4 271.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 25.4 271.78 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5998461d-e51b-50b6-9b74-d6b965cff6a0")
+		)
+		(instances
+			(project "heron_clock"
+				(path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
+					(reference "#PWR072")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Mechanical:MountingHole_Pad")
+		(at 38.1 269.24 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "917ce415-0e4c-58ac-b245-cb270d80e445")
+		(property "Reference" "H6"
+			(at 40.64 267.97 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "M3"
+			(at 40.64 270.51 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3_Pad_Via"
+			(at 38.1 269.24 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 269.24 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 269.24 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a90eb2e9-46dc-5321-baa2-c7824c5c56a6")
+		)
+		(instances
+			(project "heron_clock"
+				(path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
+					(reference "H6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 38.1 271.78 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "9dfe4f89-4912-5018-ac44-de2d398a7f7f")
+		(property "Reference" "#PWR073"
+			(at 40.64 270.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "GND"
+			(at 40.64 273.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 271.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 271.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 271.78 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e82bd562-9983-5f86-a990-7b488cbbab69")
+		)
+		(instances
+			(project "heron_clock"
+				(path "/f79c7d17-cfa5-5b78-8af8-63d53d90b651"
+					(reference "#PWR073")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 280.67 190.5 90)
 		(unit 1)
@@ -20591,7 +20903,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "TPD1E05U06"
+		(property "Value" "TPD1E10B06"
 			(at 309.88 124.46 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -20645,7 +20957,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPD1E05U06DYAR"
+		(property "MPN" "TPD1E10B06DYAR"
 			(at 307.34 123.19 90)
 			(hide yes)
 			(show_name no)

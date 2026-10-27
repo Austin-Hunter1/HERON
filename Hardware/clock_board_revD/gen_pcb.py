@@ -94,10 +94,10 @@ PARTS = {
     "TP2": (33.25, 26.78, 0), "TP3": (36.05, 34.37, 0),
     # TCXO + LMK1C1104 (under the B210_2 hole)
     "U4": (55.0, 43.2, 180), "C10": (49.6, 43.0, 90), "C11": (49.6, 46.6, 90),
-    "R4": (61.0, 43.4, 90), "U3": (56.5, 49.6, 180), "TP4": (49.6, 50.6, 0),
-    "TP5": (60.6, 54.6, 0),
+    "R4": (61.0, 43.4, 90), "U3": (56.5, 49.3, 180), "TP4": (49.6, 50.6, 0),
+    "TP5": (61.8, 47.6, 0),      # beside R2: H6 takes the strip under U3 (D-043)
     # PPS buffer (right of J8)
-    "U6": (60.0, 9.0, 0), "C29": (65.6, 7.6, 90),
+    "U6": (60.0, 11.0, 0), "C29": (65.6, 7.6, 90),   # U6 under H5 (D-043)
     # PPS input (rev C block moved by (+3.89, -15.1), between the B200 blades)
     "J2": (94.0, 22.5, 0), "D8": (90.68, 16.1, 90), "R23": (92.25, 16.1, 90),
     "R22": (94.6, 16.1, 0), "R21": (96.95, 16.1, 90), "U5": (94.0, 11.9, 0),
@@ -112,7 +112,7 @@ LDO_REFS = ("U1", "U2", "C3", "C5", "C4", "C6", "C7", "D3", "R1", "TP2", "TP3")
 DIR_PARTS = {
     "R3": (52.7, 47.6, "D"),     # pin 1 (U3 CLK) down toward U3 pin 6, pin 2 (CLK10_IN) up
     "C8": (53.6, 51.6, "U"),     # pin 1 (+3V3_OSC) up, 1.9 mm from U3 pin 9
-    "C9": (56.275, 54.4, "L"),   # pin 1 straight under U3 pin 9 (clear of pin 10)
+    "C9": (52.4, 54.2, "R"),     # left of C8, pin 1 3 mm from U3 pin 9 (H6 takes the space under U3)
     "R2": (60.4, 50.8, "U"),     # pin 2 (OSC_OE) down, level with U3 pin 1
 }
 SHOW_REF = {"J1", "J2", "U1", "U2", "U3", "U4", "U5", "U6", "TP1", "TP2", "TP3", "TP4", "TP5", "TP6", "TP7"}
@@ -181,13 +181,33 @@ def route_tcxo(g):
     c8 = g.pad("C8", "1")
     v = g.via(osc, (c8[0], c8[1] - 1.3))
     g.track(osc, [v, ("C8", "1"), ("U3", "9")], 0.4)
-    g.track(osc, [("C9", "1"), ("U3", "9")], 0.4)
+    c9, p9 = g.pad("C9", "1"), g.pad("U3", "9")
+    g.track(osc, [c9, (p9[0], c9[1]), p9], 0.4)        # along under C8, then straight up to pin 9
     oe = g.N("OSC_OE")
     p1, r2 = g.pad("U3", "1"), g.pad("R2", "2")
     g.track(oe, [p1, (r2[0], p1[1]), ("R2", "2")], W_SIG)
-    g.track(oe, [("R2", "2"), ("TP5", "1")], W_SIG)
+    tp5 = g.pad("TP5", "1")
+    g.track(oe, [r2, (tp5[0], r2[1]), tp5], W_SIG)
     p6, r3 = g.pad("U3", "6"), g.pad("R3", "1")
     g.track("Net-(U3-CLK)", [p6, (r3[0] + 0.9, p6[1]), r3], W_SIG)
+
+
+LEG_KEEP = 2.0                 # half size of the no-track box round each SMP leg pad
+
+
+def jack_leg_keepouts(g):
+    """No tracks or vias in a small box round each SMP leg pad (all layers but the
+    In1 plane), so the GND pour always reaches the pad with full thermal spokes.
+    Why: the autorouter can pass close to a leg and starve its thermal relief
+    (the rev C D-039 items). The jack tab track runs between the boxes."""
+    for k in range(4):
+        for ref in (f"J{3 + k}", f"J{7 + k}"):
+            for p in g.fps[ref].Pads():
+                if p.GetNumber() != "2":
+                    continue
+                x, y = g.pad_xy(p)
+                g.rule_area((x - LEG_KEEP, y - LEG_KEEP, x + LEG_KEEP, y + LEG_KEEP), (F, IN2, B),
+                            tracks=True, vias=True, pads=False, fills=False, footprints=False)
 
 
 def u3_keepout(g, margin=0.3):
@@ -235,21 +255,25 @@ def labels(g):
 # J5; the back logo under the LDO block, where the back has no through-hole pads.
 FRONT_LOGO = (85.4, 55.2, 8.37)
 BACK_LOGO = (27.5, 50.5, 16.0)
-FRONT_TEXT = [("HERON Clock Distribution Board", (58.2, 2.2), 0.9),
-              ("10 MHz + PPS to 4 SDRs - Rev D", (58.2, 3.7), 0.8)]
-BACK_TEXT = [("HERON Clock Distribution Board", (70.0, 52.2), 1.1),
-             ("10 MHz + PPS to 4 SDRs", (70.0, 53.9), 0.9),
-             ("Rev D - 10/2026", (70.0, 55.4), 0.9),
-             ("Designed by Nathan Cohen for CU Boulder", (70.0, 56.9), 0.9),
-             ("U3 SiT5155: water-soluble flux only", (70.0, 58.4), 0.9)]
-LABELS = {"J1": (27.4, 5.5), "U3": (59.4, 47.0)}      # labels placed by hand (silk_refs.py keeps J1, J2)
+FRONT_TEXT = [("HERON Clock Distribution Board", (40.5, 56.6), 0.8),     # bottom strip (H5 takes the top middle)
+              ("10 MHz + PPS to 4 SDRs - Rev D", (40.5, 58.1), 0.8)]
+BACK_TEXT = [("HERON Clock Distribution Board", (78.0, 52.2), 1.1),
+             ("10 MHz + PPS to 4 SDRs", (78.0, 53.9), 0.9),
+             ("Rev D - 10/2026", (78.0, 55.4), 0.9),
+             ("Designed by Nathan Cohen for CU Boulder", (78.0, 56.9), 0.9),
+             ("U3 SiT5155: water-soluble flux only", (78.0, 58.4), 0.9)]
+LABELS = {"J1": (27.4, 5.5), "U3": (59.4, 47.0), "U6": (54.8, 13.0)}      # labels placed by hand (silk_refs.py keeps J1, J2)
 
 
-def silk_art(g):
-    """Logos, board name and title lines, in one group (HERON_SILK_ART)."""
+def logo_shapes(board):
+    """Add the front and back logos to the board. Return the new shapes.
+
+    Why a separate function: update_logo.py calls it to change only the
+    logo on the board as it is, without a new route (see the README)."""
     import json
     from pcbgen import P
-    data = json.load(open(os.path.join(HERE, "logo_polys.json")))
+    with open(os.path.join(HERE, "logo_polys.json")) as fh:
+        data = json.load(fh)
     items = []
     for side, (cx, cy, size), layer in (("front", FRONT_LOGO, pcbnew.F_SilkS), ("back", BACK_LOGO, pcbnew.B_SilkS)):
         k = size / data[side]["size"]
@@ -257,9 +281,15 @@ def silk_art(g):
             sp = pcbnew.SHAPE_POLY_SET(); sp.NewOutline()
             for x, y in pts:
                 sp.Append(P(cx + k * x, cy + k * y))
-            s = pcbnew.PCB_SHAPE(g.board, pcbnew.SHAPE_T_POLY)
+            s = pcbnew.PCB_SHAPE(board, pcbnew.SHAPE_T_POLY)
             s.SetPolyShape(sp); s.SetFilled(True); s.SetWidth(0); s.SetLayer(layer)
-            g.board.Add(s); items.append(s)
+            board.Add(s); items.append(s)
+    return items
+
+
+def silk_art(g):
+    """Logos, board name and title lines, in one group (HERON_SILK_ART)."""
+    items = logo_shapes(g.board)
     for text, (x, y), h in FRONT_TEXT:
         items.append(g.text(text, x, y, h))
     for text, (x, y), h in BACK_TEXT:
@@ -288,6 +318,7 @@ def build():
     place_rest(g)
     route_tcxo(g)
     u3_keepout(g)
+    jack_leg_keepouts(g)
     added, failed = g.gnd_pad_vias()
     print("gnd pad vias:", added, "failed:", failed)
     labels(g)
@@ -322,5 +353,5 @@ def finish():
 if __name__ == "__main__":
     build()
     if "--no-route" not in sys.argv:
-        print("autoroute (segments, vias):", autoroute(PCB, FREEROUTING))
+        print("autoroute (segments, vias):", autoroute(PCB, FREEROUTING, passes=100))
     finish()

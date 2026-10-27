@@ -2,7 +2,7 @@
 	(version "E")
 	(design
 		(source "/Users/nathan/Documents/GitHub/HERON/Hardware/clock_board_revD/project/heron_clock.kicad_sch")
-		(date "2026-10-20T16:34:11")
+		(date "2026-10-24T23:48:38")
 		(tool "Eeschema 10.0.6")
 		(sheet
 			(number "1")
@@ -2240,13 +2240,13 @@
 		)
 		(comp
 			(ref "D4")
-			(value "TPD1E05U06")
+			(value "TPD1E10B06")
 			(footprint "Diode_SMD:D_SOD-523")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPD1E05U06DYAR")
+					(name "MPN") "TPD1E10B06DYAR")
 				(field
 					(name "Footprint") "Diode_SMD:D_SOD-523")
 				(field
@@ -2267,7 +2267,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPD1E05U06DYAR")
+				(value "TPD1E10B06DYAR")
 			)
 			(property
 				(name "Sheetname")
@@ -2306,13 +2306,13 @@
 		)
 		(comp
 			(ref "D5")
-			(value "TPD1E05U06")
+			(value "TPD1E10B06")
 			(footprint "Diode_SMD:D_SOD-523")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPD1E05U06DYAR")
+					(name "MPN") "TPD1E10B06DYAR")
 				(field
 					(name "Footprint") "Diode_SMD:D_SOD-523")
 				(field
@@ -2333,7 +2333,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPD1E05U06DYAR")
+				(value "TPD1E10B06DYAR")
 			)
 			(property
 				(name "Sheetname")
@@ -2372,13 +2372,13 @@
 		)
 		(comp
 			(ref "D6")
-			(value "TPD1E05U06")
+			(value "TPD1E10B06")
 			(footprint "Diode_SMD:D_SOD-523")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPD1E05U06DYAR")
+					(name "MPN") "TPD1E10B06DYAR")
 				(field
 					(name "Footprint") "Diode_SMD:D_SOD-523")
 				(field
@@ -2399,7 +2399,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPD1E05U06DYAR")
+				(value "TPD1E10B06DYAR")
 			)
 			(property
 				(name "Sheetname")
@@ -2438,13 +2438,13 @@
 		)
 		(comp
 			(ref "D7")
-			(value "TPD1E05U06")
+			(value "TPD1E10B06")
 			(footprint "Diode_SMD:D_SOD-523")
 			(fields
 				(field
 					(name "Manufacturer") "Texas Instruments")
 				(field
-					(name "MPN") "TPD1E05U06DYAR")
+					(name "MPN") "TPD1E10B06DYAR")
 				(field
 					(name "Footprint") "Diode_SMD:D_SOD-523")
 				(field
@@ -2465,7 +2465,7 @@
 			)
 			(property
 				(name "MPN")
-				(value "TPD1E05U06DYAR")
+				(value "TPD1E10B06DYAR")
 			)
 			(property
 				(name "Sheetname")
@@ -3385,6 +3385,114 @@
 				(tstamps "/")
 			)
 			(tstamps "cfe42a46-a294-5347-8c70-d2abf088ccd6")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "H5")
+			(value "M3")
+			(footprint "MountingHole:MountingHole_3.2mm_M3_Pad_Via")
+			(fields
+				(field
+					(name "Footprint") "MountingHole:MountingHole_3.2mm_M3_Pad_Via")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "Mechanical")
+				(part "MountingHole_Pad")
+				(description "Mounting Hole with connection")
+			)
+			(property
+				(name "Sheetname")
+				(value "heron_clock")
+			)
+			(property
+				(name "Sheetfile")
+				(value "heron_clock.kicad_sch")
+			)
+			(property
+				(name "exclude_from_bom")
+			)
+			(property
+				(name "ki_keywords")
+				(value "mounting hole")
+			)
+			(property
+				(name "ki_fp_filters")
+				(value "MountingHole*Pad*")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "f42ecbb2-cfd3-576f-b155-f5a2a6a69f19")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "H6")
+			(value "M3")
+			(footprint "MountingHole:MountingHole_3.2mm_M3_Pad_Via")
+			(fields
+				(field
+					(name "Footprint") "MountingHole:MountingHole_3.2mm_M3_Pad_Via")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "Mechanical")
+				(part "MountingHole_Pad")
+				(description "Mounting Hole with connection")
+			)
+			(property
+				(name "Sheetname")
+				(value "heron_clock")
+			)
+			(property
+				(name "Sheetfile")
+				(value "heron_clock.kicad_sch")
+			)
+			(property
+				(name "exclude_from_bom")
+			)
+			(property
+				(name "ki_keywords")
+				(value "mounting hole")
+			)
+			(property
+				(name "ki_fp_filters")
+				(value "MountingHole*Pad*")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "917ce415-0e4c-58ac-b245-cb270d80e445")
 			(units
 				(unit
 					(name "A")
@@ -8945,6 +9053,18 @@
 			)
 			(node
 				(ref "H4")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "input")
+			)
+			(node
+				(ref "H5")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "input")
+			)
+			(node
+				(ref "H6")
 				(pin "1")
 				(pinfunction "1_1")
 				(pintype "input")
