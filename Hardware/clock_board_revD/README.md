@@ -5,7 +5,8 @@ wrong SMAs (see Q-015 b): the SDR rear edge order is **GPS ANT, 10 MHz, USB-B, P
 (silkscreen on a B210 and a B200, photos 2026-10-20). The USB-B connector sits between the
 10 MHz and PPS SMAs, so the board is taller and has a hole for each USB plug.
 
-**Status: proposed. Not ordered. Not built.**
+**Status: ready to order (D-049). Not ordered. Not built.** The SDR connector positions, the
+USB hole size and the plug clearances are checked on the real parts (user, 2026-10-27).
 
 The circuit, the schematic and the parts are the rev C ones, including the JST XH power
 connector J1 (D-040) and the Panjit SOD-323HE land for D2 (D-041). One part change (D-045): the 10 MHz ESD diodes D4–D7 are the bidirectional TPD1E10B06DYAR
@@ -42,12 +43,12 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 
 - **USB holes:** 16 mm (x) × 18 mm (y), 1 mm corner radius, centred 5.89 mm right of the jack axis
   (the USB-B axis is 5.89 mm from the SMA axis, toward the SDR component side). Sized for a generic
-  straight USB 3.0 B overmold of 16 × 14 mm with 1 mm clearance (VERIFY with the real cable).
+  straight USB 3.0 B overmold of 16 × 14 mm with 1 mm clearance. Checked with the real cable (D-049).
 - **Keep-out ring:** 2 mm round each hole, on all four copper layers: no tracks, vias, pads,
   pours or parts. A hole can grow to about 20 × 22 mm by an Edge.Cuts change only.
 - **Board edges:** the top edge (rack z 90) is 8.4 mm below the SDR DC jack axis (z 98.4); the
   bottom edge (z 30) is 6.8 mm above the GPS ANT axis (z 23.2). A plug up to about 13 mm in
-  diameter fits on each (VERIFY with the real plugs).
+  diameter fits on each. Checked with the real plugs (D-049).
 - **Mounting holes:** 6 × M3, all 4 mm in from the long edges. H1–H4 at the corners: rack (X, Z) = (50, 86), (160, 86),
   (50, 34), (160, 34). H5, H6 (D-043) at the middle of the top and bottom edges, in line with the corner holes:
   (105, 86) and (105, 34). They carry the push of the direct-mate jacks when the SDR trays slide in. At X 105
@@ -86,6 +87,9 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 | D4–D7 to TPD1E10B06 (D-045, 2026-10-24) | Fields only: tracks and footprints unchanged. DRC 0, unconnected 0, parity 0; ERC 0 |
 | Netlist (`check_net.py`) | 112 parts (with H5, H6), 51 nets. Single-node nets only on the intentional NC pins U1.4, U2.4, U5.1 |
 | Rack fit (`../payload_rack/check_fit.py`, 2026-10-21, 6 standoffs) | 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error (J3–J6 on the SDR 10 MHz SMA, J7–J10 on the PPS SMA). Stop screw access: clear |
+| Rack fit, run again 2026-10-27 (after the rack changes) | 0 clashes, all 8 jacks mate, stop screw access clear |
+| Gerbers compared to the board (2026-10-27) | All 16 files the same, except the date lines |
+| SDR data on the real parts (user, 2026-10-27, B210 and B200) | 10 MHz SMA at 34.16, USB-B at 51.69, PPS SMA at 70.89 along the SDR edge; SMA axis 1.96 mm above the SDR board bottom face; USB hole size and GPS ANT and DC plug clearances: all correct |
 | Hardware test | Not done |
 
 ## Assembly
@@ -136,12 +140,8 @@ PATH=/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH PYTHON=/Applications/KiC
 
 ## Open items
 
-- **USB hole size (VERIFY):** measure the plug overmold of the cable you use. Up to about 20 × 22 mm
-  needs only an Edge.Cuts change (keep-out ring).
 - **Rear plate:** each SDR column now has a solder window and a 20 × 22 mm USB opening (PROPOSED,
   `REAR_USB_W`, `REAR_USB_H` in `heron_rack.py`). The USB cables leave through the back of the rack.
   Check the plate strength and the cable route to the NUC.
-- **GPS ANT and DC plug clearance (VERIFY):** the board edges leave about 6.8 mm (GPS ANT) and 8.4 mm
-  (DC) from each plug axis. Check with the real plugs.
-- Q-015 (a) `ADAPTER_REACH` and (d) the preload and stop design are still open.
+- Q-015 (a) `ADAPTER_REACH` and (d) the preload and stop design are still open. They change the rack only, not the board.
 - The PPS source (GNSS receiver model) is still open.

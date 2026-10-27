@@ -13,7 +13,8 @@ Sources (also in ../payload_rack/heron_rack.py):
 - Rear-edge connector positions along the SDR board edge (bx, from the
   GPS ANT side), from the Ettus STEP models. Silkscreen order checked on a
   B210 and a B200 (photos, 2026-10-20): GPS ANT 14.22, 10 MHz 34.16,
-  USB-B 51.69, PPS 70.89, DC jack 89.43.
+  USB-B 51.69, PPS 70.89, DC jack 89.43. Positions and SMA_BZ checked on
+  a real B210 and B200 (user, 2026-10-27, D-049).
 - SMA_BZ = 1.96: SMA axis above the SDR board bottom face. The USB-B
   receptacle spans from the board top face (PCB_T = 1.575) to SDR_TOP =
   14.125, so its axis is (1.575 + 14.125) / 2 = 7.85 above the board
@@ -43,8 +44,8 @@ Y_USB = round(TOP_Z - (Z_BOARD + BX_USB), 3)  # 29.31: USB hole centre row
 
 # ---------------------------------------------------------------- USB-B holes
 # Sized for a generic straight USB 3.0 B overmold, 16 mm along the SDR edge
-# by 14 mm across it, with 1 mm clearance each side (user, 2026-10-20). VERIFY
-# with the real cable. USB_KEEP is a copper and part keep-out ring around each
+# by 14 mm across it, with 1 mm clearance each side (user, 2026-10-20). Checked
+# with the real cable (user, 2026-10-27, D-049). USB_KEEP is a copper and part keep-out ring around each
 # hole, so the hole can grow by up to 2 x USB_KEEP later without new layout.
 USB_W, USB_H = 16.0, 18.0     # hole size along x (across the SDR) and y (along its edge)
 USB_R = 1.0                   # hole corner radius
