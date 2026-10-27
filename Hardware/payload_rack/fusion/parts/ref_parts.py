@@ -1,12 +1,17 @@
-"""Reference envelopes (ref) for the adapters, the NUC and the SSD.
+"""Reference envelopes (ref) for the adapters, the SDRs, the NUC and the SSD.
 
 These are NOT parts to make. They show where real parts go, so fit and
 interference checks can use them. They get no material and a translucent
-colour (`fl.apply_ref_look`). Mirrors of `mate_refs`, `nuc_ref` and `ssd_ref`
-in heron_rack.py.
+colour (`fl.apply_ref_look`). Mirrors of `mate_refs`, the `sdr_ref` fallback
+box, `nuc_ref` and `ssd_ref` in heron_rack.py.
 
   REF_smp_adapter   one cylinder, ADAPTER_D x ADAPTER_REACH. Local axis = local z.
                     The occurrence label names the SDR and the jack: REF_adapter_<slot>_<ref_a|ref_b>.
+  REF_SDR_envelope  one Ettus B200/B210 board envelope: SDR_W x SDR_L x SDR_TOP
+                    (board bottom to the tallest part). The STEP models are
+                    missing, so this is the same box as the heron_rack.py fallback.
+                    One component for all 4 SDRs (B210 and B200 have the same
+                    outline). Local frame and origin like REF_NUC_envelope.
   REF_NUC_envelope  NUC board and cooler envelope. Local frame: x = world Y,
                     y = world Z, z = world X (like a tray). Origin on the board
                     rear face plane X = TRAY_X_NUC + T_/2 + STANDOFF, Y = 0, Z = RACK_Z0.
@@ -16,6 +21,7 @@ import fusion_lib as fl
 
 CATEGORY = "ref"
 ADAPTER = "REF_smp_adapter"
+SDR = "REF_SDR_envelope"
 NUC = "REF_NUC_envelope"
 SSD = "REF_SSD"
 
@@ -33,6 +39,20 @@ def build_adapter(ctx):
     sk = fl.plane_sketch(comp, "body")
     fl.sk_circle(ctx, sk, "0 mm", "0 mm", "ADAPTER_D")
     fl.extrude(comp, sk, "ADAPTER_REACH", op="new", name="adapter_body")
+    fl.apply_ref_look(ctx, comp)
+    return comp
+
+
+def build_sdr(ctx):
+    """Build the SDR envelope: one box from the board bottom face to the tallest part.
+
+    Why one box: the Ettus STEP models are missing, and heron_rack.py uses the
+    same box as its fallback, so the two models stay equal.
+    """
+    comp = fl.new_component(ctx, SDR, CATEGORY)
+    sk = fl.plane_sketch(comp, "board")
+    fl.sk_rect(ctx, sk, "Y_BOARD", "Z_BOARD", "Y_BOARD + SDR_L", "Z_BOARD + SDR_W")
+    fl.extrude(comp, sk, "SDR_TOP", op="new", name="sdr_envelope")
     fl.apply_ref_look(ctx, comp)
     return comp
 

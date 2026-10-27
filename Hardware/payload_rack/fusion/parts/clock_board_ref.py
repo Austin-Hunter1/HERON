@@ -14,7 +14,7 @@ Jack positions come from the `CLK_J<n>_X` and `CLK_J<n>_Z` parameters. So
 SMP or SMA is read from the KiCad file at build time (`kicad_clock.jack_kind`).
 This is static: a new jack kind needs a rebuild of this part.
 
-Order of features: 1. PCB  2. holes (cut)  3. J1 (JST XH)  4. SMP bodies,
+Order of features: 1. PCB  2. holes and USB holes (cut)  3. J1 (JST XH)  4. SMP bodies,
 SMP flanges, SMP shrouds  5. SMA bodies and barrels. The jacks are joined
 to the PCB. The shroud end is the mating face, `SMP_JACK_H` from the front face.
 """
@@ -27,10 +27,11 @@ JST_REF = "J1"   # the JST XH power connector (clock_board_ref: ref == "J1")
 
 
 def _holes():
-    """Return the 4 mounting hole centres as (x, z) expressions. Same as `clk_holes` in heron_rack.py."""
+    """Return the 6 mounting hole centres as (x, z) expressions. Same as `clk_holes` in heron_rack.py."""
     xl, xr = "CLK_X0 + CLK_HOLE_INSET", "CLK_X0 + CLK_W - CLK_HOLE_INSET"
     zt, zb = "CLK_TOP_Z - CLK_HOLE_INSET", "CLK_Z0 + CLK_HOLE_INSET"
-    return [(xl, zt), (xr, zt), (xl, zb), (xr, zb)]
+    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-043): middle of the long edges
+    return [(xl, zt), (xr, zt), (xl, zb), (xr, zb), (xm, zt), (xm, zb)]
 
 
 def _layer(comp, name: str, depth_expr: str):
@@ -83,6 +84,15 @@ def build(ctx):
     for hx, hz in _holes():
         fl.sk_circle(ctx, sk, hx, hz, "CLKREF_HOLE_D")
     fl.extrude(comp, sk, None, op="cut", through=True, name="pcb_holes")
+    # 2b. USB holes (rev D, D-042): one on each SDR USB-B axis; the last one runs off the board edge (notch)
+    sk = fl.plane_sketch(comp, "usb_holes")
+    for slot in ctx.slots:
+        if slot["kind"] not in ("b210", "b200"):
+            continue
+        xc = f"(TRAY_X_{slot['name']} + T_ / 2 + STANDOFF + SMA_BZ + USB_DX)"
+        fl.sk_rect(ctx, sk, f"{xc} - CLK_USB_W / 2", "Z_BOARD + SDR_USB_BX - CLK_USB_H / 2",
+                   f"{xc} + CLK_USB_W / 2", "Z_BOARD + SDR_USB_BX + CLK_USB_H / 2")
+    fl.extrude(comp, sk, None, op="cut", through=True, name="usb_holes")
     # 3. J1 (JST XH): a plain box from the front face, offset from pin 1 to the body centre
     _boxes(ctx, comp, "jst_body", jst, "CLKREF_JST_W", "CLKREF_JST_D", "CLK_PCB_T", "CLKREF_JST_H",
            dx="CLKREF_JST_DX", dz="CLKREF_JST_DZ")

@@ -23,10 +23,11 @@ CATEGORY = "laser"
 
 
 def _clock_holes():
-    """Return the 4 clock board mounting hole centres as (x, z) expressions."""
+    """Return the 6 clock board mounting hole centres as (x, z) expressions."""
     xl, xr = "CLK_X0 + CLK_HOLE_INSET", "CLK_X0 + CLK_W - CLK_HOLE_INSET"
     zt, zb = "CLK_TOP_Z - CLK_HOLE_INSET", "CLK_Z0 + CLK_HOLE_INSET"
-    return [(xl, zt), (xr, zt), (xl, zb), (xr, zb)]
+    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-043): middle of the long edges
+    return [(xl, zt), (xr, zt), (xl, zb), (xr, zb), (xm, zt), (xm, zb)]
 
 
 def _sdr_slots(ctx):
@@ -63,6 +64,30 @@ def _solder_windows(ctx, comp) -> None:
     fl.extrude(comp, discs, "T_", op="join", name="hole_keepout_discs")
 
 
+def usb_openings(ctx, comp):
+    """Cut one opening on each SDR USB-B axis: the SDR USB cable passes through
+    the clock board and this plate (clock board rev D, D-042).
+
+    Why a separate function: update_revd.py adds this feature to a rear plate
+    that is already built (Fusion is master, so the plate is not rebuilt)."""
+    usb = fl.plane_sketch(comp, "usb_openings")
+    for slot in _sdr_slots(ctx):
+        xc = f"(TRAY_X_{slot['name']} + T_ / 2 + STANDOFF + SMA_BZ + USB_DX)"
+        fl.sk_rounded_rect(ctx, usb, f"{xc} - REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX - REAR_USB_H / 2",
+                           f"{xc} + REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX + REAR_USB_H / 2", "SOLDER_WIN_R")
+    return fl.extrude(comp, usb, None, op="cut", through=True, name="usb_openings")
+
+
+def center_holes(ctx, comp):
+    """Cut the 2 mid-edge clock board holes (H5, H6, D-043) in a rear plate that is
+    already built with 4 holes. A new build cuts all 6 in `slots_and_holes`.
+    No keep-out disc is needed: at x = CLK_X0 + CLK_W / 2 the plate is solid."""
+    sk = fl.plane_sketch(comp, "clock_center_holes")
+    for hx, hz in _clock_holes()[4:]:
+        fl.sk_circle(ctx, sk, hx, hz, "CLK_HOLE_D")
+    return fl.extrude(comp, sk, None, op="cut", through=True, name="clock_center_holes")
+
+
 def build(ctx):
     """Build the rear plate component in its local frame and return it."""
     comp = fl.new_component(ctx, NAME, CATEGORY)
@@ -81,13 +106,7 @@ def build(ctx):
         fl.sk_rect(ctx, tabs, "W_", f"{tz} - REAR_SIDE_TAB_L / 2", "W_ + T_", f"{tz} + REAR_SIDE_TAB_L / 2")
     fl.extrude(comp, tabs, "T_", op="join", name="rear_tabs")
     _solder_windows(ctx, comp)
-    # USB openings: the SDR USB cable passes through the clock board and this plate (D-042)
-    usb = fl.plane_sketch(comp, "usb_openings")
-    for slot in _sdr_slots(ctx):
-        xc = f"(TRAY_X_{slot['name']} + T_ / 2 + STANDOFF + SMA_BZ + USB_DX)"
-        fl.sk_rounded_rect(ctx, usb, f"{xc} - REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX - REAR_USB_H / 2",
-                           f"{xc} + REAR_USB_W / 2", "Z_BOARD + SDR_USB_BX + REAR_USB_H / 2", "SOLDER_WIN_R")
-    fl.extrude(comp, usb, None, op="cut", through=True, name="usb_openings")
+    usb_openings(ctx, comp)
     # T-slots, clock board holes, stop access holes
     cuts = fl.plane_sketch(comp, "slots_and_holes")
     sk_tslot(ctx, cuts, "REAR_SCREW_X1", "0 mm", +1, "y")

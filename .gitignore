@@ -6,3 +6,6 @@ Specular_Planner/.venv/
 Specular_Planner/output/*.waypoints
 Specular_Planner/output/*.txt
 Specular_Planner/output/*.json
+
+# KiCad local history (per-user backups)
+.history/

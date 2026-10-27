@@ -418,3 +418,7 @@ TRAY_WIN_Z_TOP_GAP = { value = 26.0, unit = "mm", comment = "tray_local (NUC): w
 TRAY_WIN_NX = { value = 2, unit = "none", comment = "Count in X" }
 TRAY_WIN_NY = { value = 2, unit = "none", comment = "Count in Y" }
 TRAY_WIN_RIB = { value = 7.0, unit = "mm", comment = "Rib width" }
+
+# ---- fabrication layouts (fab_plan.py, fab_layout.py)
+FAB_GAP = { value = 10.0, unit = "mm", comment = "PROPOSED: space between parts and between rows in the laser and print layouts" }
+FAB_SPACE = { value = 100.0, unit = "mm", comment = "PROPOSED: space between the rack and the layouts, and between the two layouts" }

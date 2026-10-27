@@ -45,6 +45,7 @@ PART_BUILDERS = {
     # Reference envelopes (phase 5). Category "ref": no material, translucent look.
     clock_board_ref.NAME: clock_board_ref.build,
     ref_parts.ADAPTER: ref_parts.build_adapter,
+    ref_parts.SDR: ref_parts.build_sdr,
     ref_parts.NUC: ref_parts.build_nuc,
     ref_parts.SSD: ref_parts.build_ssd,
     # A blade needs its tray and rail components first: keep these two last.
@@ -147,18 +148,21 @@ def ref_rows(slots: Iterable[dict]) -> List[dict]:
 
     All are rigid joints at the ROOT (D-035 open question: a NUC envelope in
     BLADE_nuc, or the SSD on the sled, is not decided). The SDR board stand-ins
-    (REF_B210_1 ...) are skipped: the Ettus STEP files are missing and the user
-    chose no boards.
+    REF_B210_1 ... REF_B200_2 are boxes (D-048), because the Ettus STEP files
+    are missing.
       clock board  local frame = the rear plate frame; origin on the board REAR face
                    (CLK_Y0 + CLK_PCB_T), so the board lies toward -Y from it.
       adapter      origin on the SDR SMA axis at the SMA tip plane; the cylinder runs toward +Y.
-      NUC          origin at the NUC board plane X, local frame like a tray.
+      SDR, NUC     origin at the board bottom face X, local frame like a tray.
       SSD          world axes.
     """
     rows = [dict(label=clock_board_ref.NAME, part=clock_board_ref.NAME, joint="rigid",
                  offset=("0 mm", "CLK_Y0 + CLK_PCB_T", "RACK_Z0"), frame=((1, 0, 0), (0, 0, 1), (0, -1, 0)))]
     for slot in slots:
         if slot["kind"] in ("b210", "b200"):
+            rows.append(dict(label=f"REF_{slot['name']}", part=ref_parts.SDR, joint="rigid",
+                             offset=(f"TRAY_X_{slot['name']} + T_ / 2 + STANDOFF", "0 mm", "RACK_Z0"),
+                             frame=ref_parts.NUC_FRAME))
             for key, param in ref_parts.ADAPTER_KEYS.items():
                 rows.append(dict(label=f"REF_adapter_{slot['name']}_{key}", part=ref_parts.ADAPTER, joint="rigid",
                                  offset=(f"TRAY_X_{slot['name']} + T_ / 2 + STANDOFF + SMA_BZ", "SDR_SMA_TIP_Y",
