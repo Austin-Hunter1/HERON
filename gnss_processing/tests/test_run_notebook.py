@@ -90,3 +90,22 @@ def test_notebook_01_tracks_b1c_with_the_boc_discriminator():
         PLL_bandwidth_hz=20.0, FLL_bandwidth_hz=50.0, coherent_duration_ms=5, **settings
     )
     assert params.tracks_subcarrier
+
+
+@pytest.mark.parametrize(
+    ("platform", "kernel", "python_tail"),
+    [
+        ("linux", "gnss_tracking_linux", ".venv-linux/bin/python3"),
+        ("win32", "gnss-processing", ".venv/Scripts/python.exe"),
+    ],
+)
+def test_runner_defaults_follow_the_operating_system(platform, kernel, python_tail):
+    """One command line must work in the Linux boot and in the Windows boot."""
+    python, name = runner.platform_defaults(platform)
+    assert name == kernel
+    assert Path(python).as_posix().endswith(python_tail)
+
+
+def test_runner_refuses_an_unknown_operating_system():
+    with pytest.raises(SystemExit):
+        runner.platform_defaults("plan9")

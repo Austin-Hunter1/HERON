@@ -162,13 +162,23 @@ To compare decoded BeiDou orbits with precise orbits (needs CDDIS access):
 
 ## Windows
 
-`run_notebook.py` defaults are Linux ones: the kernel `gnss_tracking_linux` and
-the interpreter `gps-tracking-example/.venv-linux/bin/python3`. On another
-system pass `--python <interpreter>` and `--kernel <kernelspec name>`.
-`.env` may hold one path for each platform (`COLLECTS_PATH_WINDOWS` and so
-on; see `utils/environment_variables.py`). The exact Windows recipe (which
-environment, which kernel) is **not confirmed by the user yet**; ask before
-writing it down here.
+`run_notebook.py` picks the interpreter and the kernel from the running OS
+(`PLATFORM_DEFAULTS` in the script), so the same command works in both boots:
+
+| OS      | interpreter                                      | kernel                |
+|---------|--------------------------------------------------|-----------------------|
+| Linux   | `gps-tracking-example/.venv-linux/bin/python3`   | `gnss_tracking_linux` |
+| Windows | `gps-tracking-example/.venv/Scripts/python.exe`  | `gnss-processing`     |
+
+It calls `python -m nbconvert` (not `python -m jupyter ...`), because the
+Windows Application Control policy on this machine blocks the `jupyter*.exe`
+launchers and `gnss_processing/.venv/Scripts/python.exe`. The
+`gps-tracking-example` venv does run. Use `--python` and `--kernel` to override.
+
+`gnss_processing/.env` holds `COLLECTS_PATH_WINDOWS` / `OUTPUTS_PATH_WINDOWS` /
+`RESOURCES_PATH_WINDOWS` (`D:/01_Data/...`) next to the Linux values; the key for
+the running OS wins (see `utils/environment_variables.py`). Run the script from
+Git Bash or PowerShell with `python scripts/run_notebook.py ...`.
 
 ## If a run fails
 

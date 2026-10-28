@@ -34,14 +34,15 @@ assignment `KEY = ...` found in any code cell (VALUE is inserted as raw Python
 source, so pass GpsL5 not "GpsL5", and 1 not "1"). A trailing inline comment on
 that line is preserved.
 
-On Windows or with another environment, give the interpreter and the kernel yourself:
+The interpreter and the kernel default to the ones for the OS that is running
+(see PLATFORM_DEFAULTS): the same command works in the Linux boot and in the
+Windows boot.  For another environment, give them yourself:
     python scripts/run_notebook.py 01 --python <path to python.exe> --kernel <kernel name> ...
-The defaults (`--python` and `--kernel`) are the Linux ones named below.
 
-Requires the `gnss_tracking_linux` Jupyter kernel (see the `run-gnss-notebooks`
-skill for how it's set up) and must run with this repo's root as the working
-directory, so `import utils` resolves to this repo's own utils/ package rather
-than gps-tracking-example's upstream copy.
+Requires the Jupyter kernel named in PLATFORM_DEFAULTS for this OS (see the
+`run-gnss-notebooks` skill for how it is set up) and must run with this repo's
+root as the working directory, so `import utils` resolves to this repo's own
+utils/ package rather than gps-tracking-example's upstream copy.
 """
 from __future__ import annotations
 
@@ -58,7 +59,39 @@ NOTEBOOKS = {
     "01": "01-acquisition-and-tracking.ipynb",
     "02": "02-navigation.ipynb",
 }
-DEFAULT_KERNEL = "gnss_tracking_linux"
+# Interpreter (relative to the repo that holds gps-tracking-example) and Jupyter
+# kernel name for each OS.  One entry per OS keeps the Linux boot and the Windows
+# boot on the same command line.  Change an entry here when an environment moves.
+PLATFORM_DEFAULTS = {
+    "linux": {
+        "python": Path(".venv-linux") / "bin" / "python3",
+        "kernel": "gnss_tracking_linux",
+    },
+    "win32": {
+        "python": Path(".venv") / "Scripts" / "python.exe",
+        "kernel": "gnss-processing",
+    },
+}
+
+
+def platform_defaults(platform: str | None = None) -> tuple[str, str]:
+    """
+    Return `(python path, kernel name)` for the OS that is running.
+
+    Why: the two boots of this machine have different virtual environments and
+    kernel names.  Choosing here means nobody edits the command per OS.  An OS
+    that has no entry is a clear error, not a silent guess.
+    """
+    platform = sys.platform if platform is None else platform
+    for prefix, entry in PLATFORM_DEFAULTS.items():
+        if platform.startswith(prefix):
+            python = REPO_ROOT.parent / "gps-tracking-example" / entry["python"]
+            return str(python), entry["kernel"]
+    raise SystemExit(
+        f"No default interpreter for platform {platform!r}. Pass --python and --kernel."
+    )
+
+
 RUNS_DIR = REPO_ROOT / "local-data" / "notebook_runs"
 
 
@@ -123,11 +156,11 @@ def main() -> int:
         help="Override a top-level variable in the notebook's config cell. Repeatable.",
     )
     parser.add_argument("--timeout", type=int, default=1800, help="Per-cell execution timeout, seconds")
-    parser.add_argument("--kernel", default=DEFAULT_KERNEL, help=f"Jupyter kernel name (default: {DEFAULT_KERNEL})")
+    default_python, default_kernel = platform_defaults()
+    parser.add_argument("--kernel", default=default_kernel, help=f"Jupyter kernel name (default: {default_kernel})")
     parser.add_argument(
-        "--python", default=None,
-        help="Path to the python executable whose -m jupyter to invoke "
-             "(default: the venv-linux interpreter next to gps-tracking-example)",
+        "--python", default=default_python,
+        help=f"Path to the python executable that runs nbconvert (default: {default_python})",
     )
     parser.add_argument("--out", default=None, help="Output .ipynb path (default: local-data/notebook_runs/<name>_<notebook>.ipynb)")
     args = parser.parse_args()
@@ -156,12 +189,12 @@ def main() -> int:
     patched_path = RUNS_DIR / f"{out_path.stem}.patched.ipynb"
     patched_path.write_text(json.dumps(nb, indent=1), encoding="utf-8")
 
-    python = args.python or str(
-        REPO_ROOT.parent / "gps-tracking-example" / ".venv-linux" / "bin" / "python3"
-    )
+    python = args.python
 
+    # `-m nbconvert`, not `-m jupyter nbconvert`: the `jupyter` command starts a
+    # separate launcher program, which some Windows policies block.
     cmd = [
-        python, "-m", "jupyter", "nbconvert", "--to", "notebook", "--execute", "--allow-errors",
+        python, "-m", "nbconvert", "--to", "notebook", "--execute", "--allow-errors",
         f"--ExecutePreprocessor.timeout={args.timeout}",
         f"--ExecutePreprocessor.kernel_name={args.kernel}",
         "--output", str(out_path.resolve()),
