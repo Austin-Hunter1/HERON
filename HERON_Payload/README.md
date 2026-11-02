@@ -48,8 +48,16 @@ slices) and downloads single files.
 (actual UHD settings), `channel_N_000000.sc8` … (interleaved I,Q int8, 30 s per file by default) and
 `samples.jsonl` (sample offsets, device time, UHD error codes for gap detection).
 
-8-bit conversion: `round(sc16 × 127 / (32767 × peak))`, clamped. `peak` = 0.25 by default, the same scaling
-SURGE used with UHD's sc8 (`<peak>0.25</peak>`). The Signal check reports clipping and suggests a gain.
+Recording method (HERON D-078): the collect wizard's `rx_samples_to_file`. The file format is also the USB
+format, so for 8-bit files UHD sends sc8 over USB and scales it (`peak` × full scale maps to ±127; `peak` = 1.0 by
+default, the wizard value). SURGE's `<peak>0.25</peak>` had no effect: its custom `sc8_0` converter ignores the
+scale. **Write method** `direct` (default) receives one buffer of **Samples per buffer** (`spb`, 10000) and writes
+it before the next receive; `threaded` queues buffers for a writer thread (up to 512 MB). **File buffer** sets the
+buffer in front of each file (0 = library default). **USB buffers** passes UHD device args such as
+`num_recv_frames=256,recv_frame_size=16000`. Change these on the bench, record a test clip, and watch overflows
+to find the values the NUC needs. Each radio's **Profile** list has the wizard's radio profiles
+(L5 / L1 15 MS/s 15 MHz, L1CA 5 MS/s 5 MHz); **Bandwidth** is the analog filter and takes any typed value.
+The Signal check reports clipping and suggests a gain.
 
 ## Testing without hardware
 

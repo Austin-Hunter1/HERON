@@ -51,9 +51,14 @@
           <label><span>Sample format</span>
             <select data-k="file_format"><option value="sc8">8-bit (half the disk)</option><option value="sc16">16-bit</option></select></label>
           <label data-show="sc8"><span>8-bit full scale</span>
-            <select data-k="sc8_peak"><option value="0.125">1/8 of 16-bit range</option><option value="0.25">1/4 of 16-bit range (SURGE)</option><option value="0.5">1/2 of 16-bit range</option><option value="1">Full 16-bit range</option></select></label>
+            <select data-k="sc8_peak"><option value="0.125">1/8 of 16-bit range (+18 dB)</option><option value="0.25">1/4 of 16-bit range (+12 dB)</option><option value="0.5">1/2 of 16-bit range (+6 dB)</option><option value="1">Full 16-bit range (collect wizard)</option></select></label>
           <label><span>Reference clock</span>
             <select data-k="clock"><option value="internal">Internal (one radio)</option><option value="external">External 10 MHz + PPS</option></select></label>
+          <label><span>Write method</span>
+            <select data-k="write_mode"><option value="direct">Write each buffer at once (collect wizard)</option><option value="threaded">Writer thread with a memory queue</option></select></label>
+          <label><span>Samples per buffer</span><input data-k="spb" type="number" min="64" max="10000000" step="1" /></label>
+          <label><span>File buffer</span><span class="unit"><input data-k="file_buffer_bytes" type="number" min="0" step="1" /><i>bytes, 0 = default</i></span></label>
+          <label class="wide"><span>USB buffers (UHD device args)</span><input data-k="device_args" spellcheck="false" placeholder="num_recv_frames=256,recv_frame_size=16000" /></label>
           <label><span>File length</span><span class="unit"><input data-k="storage.segment_seconds" type="number" min="1" max="3600" /><i>s</i></span></label>
           <label><span>Keep free on disk</span><span class="unit"><input data-k="storage.reserve_gb" type="number" min="1" max="10000" /><i>GB</i></span></label>
           <label class="wide"><span>Save recordings in</span><input data-k="storage.path" spellcheck="false" /></label>
@@ -145,7 +150,8 @@
         <div class="bands" role="group" aria-label="GNSS band"></div>
         <label class="freq"><span>Centre</span><span class="unit"><input data-r="frequency_mhz" type="number" step="0.01" /><i>MHz</i></span></label>
         <label><span>Sample rate</span><span class="unit"><input data-r="sample_rate_msps" type="number" step="0.01" /><i>MS/s</i></span></label>
-        <label><span>Filter</span><span class="unit"><input data-r="bandwidth_mhz" type="number" step="0.001" /><i>MHz</i></span></label>
+        <label><span>Profile</span><select class="profile" aria-label="Collect wizard radio profile"></select></label>
+        <label><span>Bandwidth</span><span class="unit"><input data-r="bandwidth_mhz" type="number" step="0.001" /><i>MHz</i></span></label>
       </div>
       <div class="chans"></div>
     </article>
@@ -165,7 +171,7 @@
   </template>
   <datalist id="serials"></datalist>
 
-  <script src="/static/setup.js?v=7"></script>
+  <script src="/static/setup.js?v=8"></script>
   <script src="/static/recordings.js?v=1"></script>
 </body>
 </html>

@@ -327,7 +327,7 @@ connector unless you choose TX/RX in Payload Setup.
 2. **Find radios on USB.** It fills in serials by model (B210s into B210 rows, B200/B200mini into B200
    rows). Radios found but not in the setup → **Add them to this setup**. Rows with no radio: switch them
    off or remove them (✕). **Add B210 / Add B200** add rows by hand.
-3. Per radio: band **L1 / L2 / L5** (or Other + centre MHz), sample rate, filter. Both channels of a B210
+3. Per radio: band **L1 / L2 / L5** (or Other + centre MHz), or a collect-wizard **Profile**; sample rate, bandwidth. Both channels of a B210
    share its frequency and rate.
 4. Per channel: on/off, antenna name (what's written on the cable), RX2/TX‑RX, gain.
 5. **Reference clock:** *Internal* for radios recording independently; *External 10 MHz + PPS* only

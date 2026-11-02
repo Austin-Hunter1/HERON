@@ -58,6 +58,32 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "8-bit"):
             validate(c)
 
+    def test_collect_wizard_recording_method_is_the_default(self):
+        # D-078: sc8 on the USB link with peak 1.0, direct writes, user bandwidth (wizard 15 MHz option).
+        c = validate(presets()[0])
+        self.assertEqual((c["sc8_peak"], c["write_mode"], c["spb"], c["file_buffer_bytes"]), (1.0, "direct", 10000, 0))
+        self.assertEqual(c["radios"][0]["bandwidth_mhz"], 15.0)
+        self.assertEqual(estimate(c)["usb_mbps"], estimate(c)["disk_mbps"])
+
+    def test_old_setups_get_buffer_defaults(self):
+        c = copy.deepcopy(presets()[0])
+        for key in ("write_mode", "spb", "file_buffer_bytes", "device_args"):
+            del c[key]
+        c = validate(c)
+        self.assertEqual((c["write_mode"], c["spb"], c["device_args"]), ("direct", 10000, ""))
+
+    def test_buffer_settings_are_checked(self):
+        for key, value, message in (("write_mode", "fast", "write method"), ("spb", 10, "Samples per buffer"),
+                                    ("device_args", "num_recv_frames=256;rm", "USB buffer")):
+            c = copy.deepcopy(presets()[0])
+            c[key] = value
+            with self.assertRaisesRegex(ValueError, message):
+                validate(c)
+        c = copy.deepcopy(presets()[0])
+        c.update(write_mode="threaded", spb=50000, file_buffer_bytes=4194304,
+                 device_args="num_recv_frames=1024,recv_frame_size=16000")
+        self.assertEqual(validate(c)["device_args"], "num_recv_frames=1024,recv_frame_size=16000")
+
     def test_hardware_needs_serials(self):
         with self.assertRaisesRegex(ValueError, "serial"):
             validate(presets()[0], hardware=True)

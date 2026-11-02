@@ -28,7 +28,9 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
-def _radio(ident, name, model, mhz, channels, rate=22.0, bw=20.322):
+# Bandwidth default: the collect wizard's L5/L1 option (15 MHz), not SURGE's 20.322 MHz filter (D-078).
+# The operator sets each radio's bandwidth in Payload Setup.
+def _radio(ident, name, model, mhz, channels, rate=22.0, bw=15.0):
     return dict(id=ident, name=name, model=model, serial="", enabled=True, frequency_mhz=mhz,
                 sample_rate_msps=rate, bandwidth_mhz=bw,
                 channels=[dict(index=i, enabled=True, label=label, port="RX2", gain_db=45.0)
@@ -36,7 +38,10 @@ def _radio(ident, name, model, mhz, channels, rate=22.0, bw=20.322):
 
 
 def _setup(name, radios, clock="internal"):
-    return dict(schema=1, name=name, radios=radios, clock=clock, file_format="sc8", sc8_peak=0.25,
+    # Recording method of the collect wizard (D-078): UHD sc8 on the USB link with peak 1.0, and "direct"
+    # writing (receive one buffer of `spb` samples, write it, receive the next).
+    return dict(schema=1, name=name, radios=radios, clock=clock, file_format="sc8", sc8_peak=1.0,
+                write_mode="direct", spb=10000, file_buffer_bytes=0, device_args="",
                 storage=dict(path="/media/DataStore/heron", require_mount="/media/DataStore",
                              reserve_gb=20.0, segment_seconds=30),
                 behavior=dict(fallback=False, grace_seconds=120, stop_on_exit_auto=True,
@@ -84,7 +89,17 @@ def validate(raw, hardware=False):
         raise ValueError("Give this setup a name (1–60 characters).")
     if c.get("clock") not in ("internal", "external") or c.get("file_format") not in ("sc8", "sc16"):
         raise ValueError("Choose a clock and sample format.")
-    c["sc8_peak"] = number(c.get("sc8_peak", 0.25), 0.01, 1, "8-bit scaling peak")
+    c["sc8_peak"] = number(c.get("sc8_peak", 1.0), 0.01, 1, "8-bit scaling peak")
+    # Buffer settings (D-078). Older saved setups have none of these keys and get the wizard defaults.
+    c["write_mode"] = c.get("write_mode", "direct")
+    if c["write_mode"] not in ("direct", "threaded"):
+        raise ValueError("Choose the direct or threaded write method.")
+    c["spb"] = int(number(c.get("spb", 10000), 64, 10_000_000, "Samples per buffer"))
+    c["file_buffer_bytes"] = int(number(c.get("file_buffer_bytes", 0), 0, 1 << 30, "File buffer (bytes)"))
+    c["device_args"] = str(c.get("device_args", "")).strip()
+    if c["device_args"] and not re.fullmatch(r"[A-Za-z0-9_]+=[A-Za-z0-9_.+-]+(,[A-Za-z0-9_]+=[A-Za-z0-9_.+-]+)*",
+                                             c["device_args"]):
+        raise ValueError("USB buffer arguments look like num_recv_frames=256,recv_frame_size=16000.")
     radios = c.get("radios")
     if not isinstance(radios, list) or not 1 <= len(radios) <= 16:
         raise ValueError("A setup needs 1–16 radios.")
@@ -161,8 +176,9 @@ def estimate(c):
     enabled = [r for r in c["radios"] if r["enabled"]]
     samples = sum(r["sample_rate_msps"] * sum(ch["enabled"] for ch in r["channels"]) for r in enabled)
     mbps = samples * (2 if c["file_format"] == "sc8" else 4)
+    # The file format is also the USB format (D-078), so the USB load equals the disk rate.
     return dict(radios=len(enabled), channels=sum(sum(ch["enabled"] for ch in r["channels"]) for r in enabled),
-                disk_mbps=round(mbps, 3), usb_mbps=round(samples * 4, 3), gb_per_min=round(mbps * .06, 3))
+                disk_mbps=round(mbps, 3), usb_mbps=round(mbps, 3), gb_per_min=round(mbps * .06, 3))
 
 
 class ProfileStore:

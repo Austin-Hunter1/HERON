@@ -51,7 +51,7 @@ class FakeBackend:
         import random
         root.mkdir(parents=True, exist_ok=True)
         atomic_json(root / "session.json", dict(config=self.config, mission=plan, simulated=True))
-        peak = self.config.get("sc8_peak", 0.25)
+        peak = self.config.get("sc8_peak", 1.0)
         for r in self.config["radios"]:
             if not r["enabled"]:
                 continue
@@ -217,7 +217,10 @@ class UHDBackend:
                 if not r["enabled"]:
                     continue
                 settings = dict(r, clock=config["clock"], file_format=config["file_format"],
-                                sc8_peak=config.get("sc8_peak", 0.25), int_n=True,
+                                sc8_peak=config.get("sc8_peak", 1.0), int_n=True,
+                                write_mode=config.get("write_mode", "direct"), spb=config.get("spb", 10000),
+                                file_buffer_bytes=config.get("file_buffer_bytes", 0),
+                                device_args=config.get("device_args", ""),
                                 segment_seconds=config["storage"]["segment_seconds"])
                 p = self.runtime/(r["id"]+".json")
                 atomic_json(p, settings)

@@ -6,6 +6,13 @@
     { name: "L2", mhz: 1227.6 },
     { name: "L5", mhz: 1176.45 },
   ];
+  // Radio profiles of the collect wizard (collect_wizard.py radio_profiles). A profile sets the centre,
+  // sample rate and bandwidth; the operator can still type any value (D-078).
+  const PROFILES = [
+    { name: "L5 Band", mhz: 1176.45, msps: 15, bw: 15 },
+    { name: "L1 Band", mhz: 1575.42, msps: 15, bw: 15 },
+    { name: "L1CA", mhz: 1575.42, msps: 5, bw: 5 },
+  ];
   const STATE_TEXT = {
     IDLE: ["No setup loaded", "warn"], PREPARING: ["Loading setup…", "warn"], READY: ["Ready", "good"],
     AUTO_ARMED: ["Armed for auto-record", "warn"], RECORDING: ["Recording", "bad"],
@@ -95,6 +102,16 @@
       if (b.dataset.mhz === "custom") { el.querySelector('[data-r="frequency_mhz"]').focus(); return; }
       r.frequency_mhz = Number(b.dataset.mhz); changed(true);
     });
+    const profile = el.querySelector(".profile");
+    const same = (a, b) => Math.abs(a - b) < 0.0005;
+    const current = PROFILES.find((p) => same(p.mhz, r.frequency_mhz) && same(p.msps, r.sample_rate_msps) && same(p.bw, r.bandwidth_mhz));
+    profile.innerHTML = PROFILES.map((p, i) =>
+      `<option value="${i}"${p === current ? " selected" : ""}>${p.name} (${p.msps} MS/s, ${p.bw} MHz)</option>`
+    ).join("") + `<option value="custom"${current ? "" : " selected"}>Custom</option>`;
+    profile.addEventListener("change", () => {
+      const p = PROFILES[Number(profile.value)]; if (!p) return;
+      r.frequency_mhz = p.mhz; r.sample_rate_msps = p.msps; r.bandwidth_mhz = p.bw; changed(true);
+    });
     const chans = el.querySelector(".chans");
     r.channels.forEach((c) => chans.appendChild(chanEl(r, c)));
     return el;
@@ -158,6 +175,7 @@
     el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
       let v = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       if (el.dataset.k === "sc8_peak") v = Number(v);
+      if (el.dataset.k === "device_args") v = v.trim();
       set(draft, el.dataset.k, v);
       changed(el.dataset.k === "file_format");
     });
@@ -185,7 +203,7 @@
     const ch = (i, label) => ({ index: i, enabled: true, label, port: "RX2", gain_db: 45 });
     draft.radios.push({
       id: model + "_" + n + "_" + Date.now().toString(36).slice(-3), name: model.toUpperCase() + " " + n, model, serial: "",
-      enabled: true, frequency_mhz: 1176.45, sample_rate_msps: 22, bandwidth_mhz: 20.322,
+      enabled: true, frequency_mhz: 1176.45, sample_rate_msps: 22, bandwidth_mhz: 15,
       channels: model === "b210" ? [ch(0, `Radio ${n} RF A`), ch(1, `Radio ${n} RF B`)] : [ch(0, `Radio ${n} RF A`)],
     });
     changed(true);
