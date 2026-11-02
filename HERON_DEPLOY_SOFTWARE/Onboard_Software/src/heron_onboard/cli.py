@@ -9,6 +9,9 @@ Subcommands:
   ground link (TEST_BENCH_ROUTINE section 3).
 - ``check-config --config FILE``: validate the config and print the
   data-rate sizing.
+- ``buffer-test --config FILE [--dry-run]``: run the recorder on the
+  NUC with each buffer setting of ``[buffer_test]`` and write a CSV of
+  overflows, drops and write rate (D-078).
 - ``rebuild-metadata FLIGHT_DIR``: rebuild ``metadata.json`` totals and
   ``metadata.yml`` from the segment sidecars (after a power loss).
 """
@@ -128,6 +131,31 @@ def cmd_check_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_buffer_test(args: argparse.Namespace) -> int:
+    """Run the NUC buffer-size test, or list its trials with --dry-run."""
+    from heron_onboard.buffer_test import plan_trials, run_buffer_test, select_sdr, trial_command
+
+    cfg = _load(args.config)
+    setup_logging(cfg.general.log_level, cfg.general.log_dir, "heron-onboard")
+    trials = plan_trials(cfg.buffer_test)
+    if args.dry_run:
+        sdr = select_sdr(cfg)
+        per_trial = cfg.buffer_test.duration_s + cfg.buffer_test.settle_s
+        print(
+            f"{len(trials)} trial(s) on {sdr.id}, about {len(trials) * per_trial / 60:.0f} min "
+            "plus device setup time"
+        )
+        for t in trials:
+            argv = trial_command(cfg, sdr, t, cfg.buffer_test.outdir / f"trial_{t.index:03d}")
+            print(f"#{t.index:03d} " + " ".join(argv))
+        return 0
+    if not cfg.capture.recorder_binary.exists():
+        log.error("recorder binary not found: %s", cfg.capture.recorder_binary)
+        return 2
+    results = run_buffer_test(cfg)
+    return 0 if any(r.clean for r in results) else 1
+
+
 def cmd_rebuild_metadata(args: argparse.Namespace) -> int:
     from heron_onboard.capture.metadata_yaml import rebuild_flight_metadata
 
@@ -162,6 +190,11 @@ def main(argv: list[str] | None = None) -> int:
     p_chk = sub.add_parser("check-config", help="validate a config file")
     p_chk.add_argument("--config", type=Path, required=True)
     p_chk.set_defaults(func=cmd_check_config)
+
+    p_bt = sub.add_parser("buffer-test", help="sweep recorder buffer sizes on the NUC")
+    p_bt.add_argument("--config", type=Path, required=True)
+    p_bt.add_argument("--dry-run", action="store_true", help="list the trials; record nothing")
+    p_bt.set_defaults(func=cmd_buffer_test)
 
     p_rb = sub.add_parser("rebuild-metadata", help="rebuild metadata files from sidecars")
     p_rb.add_argument("flight_dir", type=Path)

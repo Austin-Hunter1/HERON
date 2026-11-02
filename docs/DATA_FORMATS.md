@@ -137,8 +137,10 @@ command line. Keep it with the data, as the team does with
 - `overflows`: UHD reported an overflow (samples lost between the
   device and the host, USB or device FIFO). Zero is the pass condition
   in `TEST_BENCH_ROUTINE.md`.
-- `host_drops`: the recorder's host ring buffer was full (the disk fell
-  behind) and a 10 ms chunk was discarded. Must be zero in flight.
+- `host_drops`: threaded write mode only. The recorder's chunk pool
+  was full (the disk fell behind) and one chunk of `spb` samples was
+  discarded. Must be zero in flight. In the direct write mode (the
+  default, D-078) a slow disk shows as `overflows` instead.
 
 ## 5. Logs
 

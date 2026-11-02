@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from heron_common.protocol import SdrStatus
 from heron_onboard.capture import CaptureManager, FakeCaptureBackend
 from heron_onboard.capture.metadata import METADATA_FILENAME, build_metadata, finalize_metadata
@@ -11,6 +12,8 @@ from heron_onboard.capture.recorder_process import (
     build_recorder_command,
     parse_status_line,
 )
+from heron_onboard.config import validate_onboard_dict
+from heron_onboard.testing import minimal_config_dict
 
 
 def test_build_recorder_command_has_every_setting(config):
@@ -107,3 +110,25 @@ def test_capture_manager_writes_metadata_and_runs_backend(config, tmp_path: Path
     meta = json.loads((flight_dir / METADATA_FILENAME).read_text())
     assert meta["stop_unix"] == 60.0 and meta["stop_reason"] == "test end"
     assert not mgr.active and backend.stop_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("clock_source", "time_source", "pps_aligned"),
+    [
+        ("internal", "none", False),  # internal clock
+        ("external", "none", False),  # external 10 MHz only
+        ("internal", "external", True),  # external PPS only
+        ("external", "external", True),  # external 10 MHz + PPS
+    ],
+)
+def test_each_reference_combination_reaches_the_recorder(
+    tmp_path, clock_source, time_source, pps_aligned
+):
+    """10 MHz and PPS are separate per-SDR choices; the recorder gets both flags."""
+    raw = minimal_config_dict(tmp_path)
+    raw["sdr"][0].update(clock_source=clock_source, time_source=time_source)
+    cfg = validate_onboard_dict(raw)
+    sdr = cfg.sdr[0]
+    assert sdr.pps_aligned is pps_aligned
+    argv = build_recorder_command(Path("rec"), sdr, cfg.capture, Path("out"), "p", 1000.0, 1003.0)
+    assert f"--clock-source {clock_source} --time-source {time_source}" in " ".join(argv)

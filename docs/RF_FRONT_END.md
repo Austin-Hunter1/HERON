@@ -83,7 +83,7 @@ Connection notes:
 | B210 RX gain range | 0 to 76 dB | [Ettus USRP B200/B210 manual](https://files.ettus.com/manual/page_usrp_b200.html) |
 | B210 RX noise figure | Less than 8 dB | Distributor listing of the Ettus specification (for example [Digilent](https://digilent.com/shop/ettus-usrp-b210-2x2-70mhz-6ghz-sdr-cognitive-radio/)). **Not checked against the Ettus knowledge base** (it returned an error). The value at low gain settings is not in the sources I read |
 | B210 maximum RF input | -15 dBm | Ettus manual (same page) |
-| Noise bandwidth | 20.322 MHz (L5), 20 MHz (L1) | `onboard.example.toml` (placeholder; Q-001 open) |
+| Noise bandwidth | 15 MHz (L5 and L1), the collect wizard option; operator input per channel (D-078) | `onboard.example.toml` (placeholder; Q-001 open). `Hardware/rf_chain/rf_chain.example.toml` still uses 20.322 MHz |
 | SDR gain settings used on 2026-10-01 | Patch 70 dB (RF A), Flight 50 dB (RF B) | D-031 |
 | Minimum received signal | L1 C/A -128.5 dBm; L5 I5 -127.9 dBm, at a 0 dBic antenna | Public GPS interface specifications (IS-GPS-200, IS-GPS-705). **Not from the HERON docs. Confirm.** |
 

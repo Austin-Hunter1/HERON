@@ -46,7 +46,7 @@ time_source = "none"
   band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
-  bandwidth_hz = 20.322e6
+  bandwidth_hz = 15e6
 
   [[sdr.channels]]
   id = "L5_reflected"
@@ -54,7 +54,7 @@ time_source = "none"
   band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
-  bandwidth_hz = 20.322e6
+  bandwidth_hz = 15e6
 
 [[sdr]]
 id = "b200_1"

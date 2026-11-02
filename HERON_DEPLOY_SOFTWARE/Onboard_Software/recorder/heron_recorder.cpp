@@ -13,12 +13,22 @@
 //   {"event":"stopped", ...}   clean stop after SIGTERM/SIGINT
 //
 // Design (adapted from the legacy SURGE rx_multi_to_file, which needed
-// headers we do not have):
+// headers we do not have, and from the collect wizard's
+// rx_samples_to_file, which records reliably on the bench, D-078):
 //
-// - A receive thread pulls samples from UHD into chunks from a pool
-//   (a ring buffer of --buffer-seconds). A writer thread writes chunks
-//   to disk. A slow disk cannot block the USB path; when the pool is
-//   empty the receive thread drops the chunk and counts a host_drop.
+// - Sample path: sc8 on the USB wire with UHD's `peak` scaling (the
+//   wizard method). sc16 on the wire is still an option.
+// - Write mode "direct" (default, the wizard method): one loop calls
+//   recv() for --spb samples, then writes them to the files, then calls
+//   recv() again. No queue. UHD's own USB frame buffers (device args
+//   num_recv_frames, recv_frame_size) absorb short disk stalls.
+// - Write mode "threaded": a receive thread fills chunks of --spb
+//   samples from a pool (a ring buffer of --buffer-seconds) and a writer
+//   thread writes them. When the pool is empty the receive thread drops
+//   the chunk and counts a host_drop. Keep it to compare on the NUC.
+// - --spb, --file-buffer-bytes, --write-mode and the UHD device args
+//   num_recv_frames / recv_frame_size are the knobs the NUC buffer test
+//   (`heron-onboard buffer-test`) sweeps.
 // - Files are cut every --segment-seconds worth of samples (O16), one
 //   file per channel:  <outdir>/<sdr-id>/<channel-id>/<prefix>_<seq>.<ext>
 //   Each file gets a JSON sidecar with the device time of its first
@@ -161,9 +171,15 @@ struct Options {
     double start_time = 0.0;
     double segment_seconds = 30.0;
     std::string cpu_format = "sc8";
-    std::string wire_format = "sc16";
-    double wire_peak = 0.25;
-    double buffer_seconds = 4.0;
+    std::string wire_format = "sc8";
+    double wire_peak = 1.0;
+    std::string write_mode = "direct";
+    size_t spb = 10000;              // Samples per recv() call (the wizard's --spb).
+    size_t file_buffer_bytes = 0;    // stdio buffer per file; 0 = C library default.
+    bool int_n = true;               // Integer-N tuning (the wizard's --int-n).
+    double duration = 0.0;           // Stop after this many seconds of streaming; 0 = until signal.
+    bool fsync_segments = true;      // fsync each closed segment (O16). The wizard never syncs.
+    double buffer_seconds = 4.0;     // Chunk pool length, threaded mode only.
     double status_interval = 1.0;
     double lock_timeout = 10.0;
     std::string outdir;
@@ -291,7 +307,9 @@ public:
     void close(bool complete) {
         if (fp_ == nullptr) return;
         std::fflush(fp_);
-        ::fsync(::fileno(fp_));  // Power loss loses at most this segment (O16).
+        // Power loss loses at most this segment (O16). In direct mode this
+        // call blocks the receive loop, so the option can turn it off.
+        if (opt_.fsync_segments) ::fsync(::fileno(fp_));
         std::fclose(fp_);
         fp_ = nullptr;
         write_sidecar(complete);
@@ -313,7 +331,8 @@ private:
         current_name_ = (dir_ / (opt_.file_prefix + "_" + num + "." + opt_.file_extension)).string();
         fp_ = std::fopen(current_name_.c_str(), "wb");
         if (fp_ == nullptr) throw std::runtime_error("cannot open " + current_name_ + ": " + std::strerror(errno));
-        std::setvbuf(fp_, nullptr, _IOFBF, 4 << 20);
+        // 0 keeps the C library buffer, like the wizard's std::ofstream.
+        if (opt_.file_buffer_bytes > 0) std::setvbuf(fp_, nullptr, _IOFBF, opt_.file_buffer_bytes);
         first_time_ = chunk.has_time ? chunk.time_spec + static_cast<double>(offset) / opt_.rate : -1.0;
         first_host_time_ = host_now();
         overflows_at_open_ = chunk.overflows_at;
@@ -401,9 +420,15 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         ("start-time", po::value<double>(&opt.start_time)->default_value(0.0), "UNIX time of the first sample (0 = now+1)")
         ("segment-seconds", po::value<double>(&opt.segment_seconds)->default_value(30.0), "segment file length")
         ("cpu-format", po::value<std::string>(&opt.cpu_format)->default_value("sc8"), "file sample format: sc8|sc16")
-        ("wire-format", po::value<std::string>(&opt.wire_format)->default_value("sc16"), "USB sample format: sc8|sc16")
-        ("wire-peak", po::value<double>(&opt.wire_peak)->default_value(0.25), "peak for sc8 wire format")
-        ("buffer-seconds", po::value<double>(&opt.buffer_seconds)->default_value(4.0), "host ring buffer length")
+        ("wire-format", po::value<std::string>(&opt.wire_format)->default_value("sc8"), "USB sample format: sc8|sc16")
+        ("wire-peak", po::value<double>(&opt.wire_peak)->default_value(1.0), "peak for sc8 wire format")
+        ("write-mode", po::value<std::string>(&opt.write_mode)->default_value("direct"), "direct (wizard) | threaded")
+        ("spb", po::value<size_t>(&opt.spb)->default_value(10000), "samples per recv() call")
+        ("file-buffer-bytes", po::value<size_t>(&opt.file_buffer_bytes)->default_value(0), "stdio buffer per file, 0 = default")
+        ("int-n", po::value<bool>(&opt.int_n)->default_value(true), "integer-N tuning: 1|0")
+        ("duration", po::value<double>(&opt.duration)->default_value(0.0), "stop after N s of streaming, 0 = until signal")
+        ("fsync", po::value<bool>(&opt.fsync_segments)->default_value(true), "fsync each closed segment: 1|0")
+        ("buffer-seconds", po::value<double>(&opt.buffer_seconds)->default_value(4.0), "chunk pool length (threaded mode)")
         ("status-interval", po::value<double>(&opt.status_interval)->default_value(1.0), "status line period, s")
         ("lock-timeout", po::value<double>(&opt.lock_timeout)->default_value(10.0), "wait for ref/LO lock, s")
         ("outdir", po::value<std::string>(&opt.outdir)->required(), "flight directory")
@@ -425,6 +450,10 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         if (opt.channels.empty()) throw std::runtime_error("at least one --channel is required");
         if (opt.rate <= 0 || opt.segment_seconds <= 0 || opt.buffer_seconds <= 0)
             throw std::runtime_error("rate, segment-seconds and buffer-seconds must be > 0");
+        if (opt.write_mode != "direct" && opt.write_mode != "threaded")
+            throw std::runtime_error("write-mode must be direct or threaded");
+        if (opt.spb == 0) throw std::runtime_error("spb must be > 0");
+        if (opt.duration < 0) throw std::runtime_error("duration must be >= 0");
     } catch (const std::exception& e) {
         emit_error(std::string("bad arguments: ") + e.what());
         return 1;
@@ -435,9 +464,13 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
 
     const size_t num_ch = opt.channels.size();
     const size_t bps = bytes_per_sample(opt.cpu_format);
-    // 10 ms of samples per chunk: small enough for low latency, large enough for USB efficiency.
-    const size_t chunk_samps = static_cast<size_t>(std::max(1.0, opt.rate / 100.0));
-    const size_t pool_count = static_cast<size_t>(std::max(4.0, std::ceil(opt.buffer_seconds * 100.0)));
+    // One recv() call asks for --spb samples. The NUC buffer test sweeps this value.
+    const size_t chunk_samps = opt.spb;
+    const bool threaded = opt.write_mode == "threaded";
+    // Threaded mode only: enough chunks to hold --buffer-seconds of samples.
+    const size_t pool_count = threaded
+        ? static_cast<size_t>(std::max(4.0, std::ceil(opt.buffer_seconds * opt.rate / static_cast<double>(chunk_samps))))
+        : 0;
     const uint64_t segment_samples = static_cast<uint64_t>(std::llround(opt.segment_seconds * opt.rate));
 
     uhd::usrp::multi_usrp::sptr usrp;
@@ -449,7 +482,10 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         usrp->set_rx_rate(opt.rate);
         for (const auto& ch : opt.channels) {
             if (!ch.subdev.empty()) usrp->set_rx_subdev_spec(uhd::usrp::subdev_spec_t(ch.subdev), 0);
-            usrp->set_rx_freq(uhd::tune_request_t(ch.freq), ch.index);
+            uhd::tune_request_t tune(ch.freq);
+            // Integer-N tuning, as the wizard does (--int-n), gives a cleaner LO.
+            if (opt.int_n) tune.args = uhd::device_addr_t("mode_n=integer");
+            usrp->set_rx_freq(tune, ch.index);
             usrp->set_rx_gain(ch.gain, ch.index);
             usrp->set_rx_bandwidth(ch.bw, ch.index);
             usrp->set_rx_antenna(ch.antenna, ch.index);
@@ -488,7 +524,9 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
             js << (i ? "," : "") << "{\"id\":\"" << json_escape(ch.id) << "\",\"actual_freq\":" << usrp->get_rx_freq(ch.index)
                << ",\"actual_gain\":" << usrp->get_rx_gain(ch.index) << "}";
         }
-        js << "],\"chunk_samples\":" << chunk_samps << ",\"pool_chunks\":" << pool_count << "}";
+        js << "],\"write_mode\":\"" << opt.write_mode << "\",\"wire_format\":\"" << opt.wire_format
+           << "\",\"wire_peak\":" << opt.wire_peak << ",\"spb\":" << chunk_samps
+           << ",\"file_buffer_bytes\":" << opt.file_buffer_bytes << ",\"pool_chunks\":" << pool_count << "}";
         emit(js.str());
     }
 
@@ -546,7 +584,8 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         return 1;
     }
 
-    // ---- Writer thread ----------------------------------------------------
+    // ---- Writers ----------------------------------------------------------
+    // The pool is empty in direct mode: the receive loop writes itself.
     ChunkPool pool(pool_count, num_ch, chunk_samps * bps);
     std::vector<std::unique_ptr<SegmentWriter>> writers;
     try {
@@ -558,21 +597,24 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
 
     std::atomic<bool> writer_failed{false};
     std::string writer_error;
-    std::thread writer([&] {
-        try {
-            while (true) {
-                long idx = pool.wait_ready();
-                if (idx < 0) break;
-                Chunk& c = pool.at(static_cast<size_t>(idx));
-                for (size_t i = 0; i < num_ch; ++i) writers[i]->write(c.data[i].data(), c.nsamps, c);
-                pool.give_back(static_cast<size_t>(idx));
+    std::thread writer;
+    if (threaded) {
+        writer = std::thread([&] {
+            try {
+                while (true) {
+                    long idx = pool.wait_ready();
+                    if (idx < 0) break;
+                    Chunk& c = pool.at(static_cast<size_t>(idx));
+                    for (size_t i = 0; i < num_ch; ++i) writers[i]->write(c.data[i].data(), c.nsamps, c);
+                    pool.give_back(static_cast<size_t>(idx));
+                }
+            } catch (const std::exception& e) {
+                writer_error = e.what();
+                writer_failed = true;
+                g_stop = true;
             }
-        } catch (const std::exception& e) {
-            writer_error = e.what();
-            writer_failed = true;
-            g_stop = true;
-        }
-    });
+        });
+    }
 
     // ---- Receive loop -----------------------------------------------------
     uhd::set_thread_priority_safe();
@@ -580,20 +622,24 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
     unsigned consecutive_timeouts = 0;
     bool started = false;
     int exit_code = 0;
+    double started_host = 0.0;
     double last_status = host_now();
     uint64_t bytes_at_last_status = 0;
+    // Direct mode receives into these buffers and writes them at once.
+    // Threaded mode uses them only when the pool is empty (a host drop).
     std::vector<std::vector<char>> scratch(num_ch, std::vector<char>(chunk_samps * bps));
+    Chunk direct_chunk;  // Time and counters of the buffer in direct mode.
     uhd::rx_metadata_t md;
 
     while (!g_stop) {
-        long idx = pool.take_free();
+        long idx = -1;
         std::vector<void*> ptrs(num_ch);
         Chunk* chunk = nullptr;
+        if (threaded) idx = pool.take_free();
         if (idx >= 0) {
             chunk = &pool.at(static_cast<size_t>(idx));
             for (size_t i = 0; i < num_ch; ++i) ptrs[i] = chunk->data[i].data();
         } else {
-            // Writer is behind: keep the USB moving into scratch and count a drop.
             for (size_t i = 0; i < num_ch; ++i) ptrs[i] = scratch[i].data();
         }
 
@@ -641,15 +687,30 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         if (n > 0) {
             if (!started) {
                 started = true;
+                started_host = host_now();
                 std::ostringstream js;
                 js.precision(6);
-                js << std::fixed << "{\"event\":\"started\",\"t\":" << host_now()
+                js << std::fixed << "{\"event\":\"started\",\"t\":" << started_host
                    << ",\"device_time\":" << (md.has_time_spec ? md.time_spec.get_real_secs() : -1.0)
                    << ",\"time_offset_s\":" << time_offset_s << "}";
                 emit(js.str());
             }
             samples += n;
-            if (chunk != nullptr) {
+            if (!threaded) {
+                // The wizard method: write this buffer now, then receive the next one.
+                direct_chunk.nsamps = n;
+                direct_chunk.has_time = md.has_time_spec;
+                direct_chunk.time_spec = md.has_time_spec ? md.time_spec.get_real_secs() : 0.0;
+                direct_chunk.overflows_at = overflows;
+                direct_chunk.host_drops_at = host_drops;
+                try {
+                    for (size_t i = 0; i < num_ch; ++i) writers[i]->write(scratch[i].data(), n, direct_chunk);
+                } catch (const std::exception& e) {
+                    writer_error = e.what();
+                    writer_failed = true;
+                    g_stop = true;
+                }
+            } else if (chunk != nullptr) {
                 chunk->nsamps = n;
                 chunk->has_time = md.has_time_spec;
                 chunk->time_spec = md.has_time_spec ? md.time_spec.get_real_secs() : 0.0;
@@ -664,6 +725,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         if (chunk != nullptr) pool.give_back(static_cast<size_t>(idx));  // Nothing received.
 
         double now = host_now();
+        if (opt.duration > 0.0 && started && now - started_host >= opt.duration) g_stop = true;
         if (now - last_status >= opt.status_interval) {
             uint64_t bytes = 0;
             for (auto& w : writers) bytes += w->total_bytes();
@@ -686,6 +748,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
             emit(js.str());
         }
     }
+    const double stop_host = host_now();
 
     // ---- Stop -------------------------------------------------------------
     try {
@@ -699,16 +762,30 @@ int UHD_SAFE_MAIN(int argc, char* argv[]) {
         }
     } catch (const std::exception&) {
     }
-    pool.finish();
-    writer.join();
-    for (auto& w : writers) w->close(false);
+    if (threaded) {
+        pool.finish();
+        writer.join();
+    }
+    uint64_t bytes = 0;
+    try {
+        for (auto& w : writers) w->close(false);
+        for (auto& w : writers) bytes += w->total_bytes();
+    } catch (const std::exception& e) {
+        if (!writer_failed) writer_error = e.what();
+        writer_failed = true;
+    }
     if (writer_failed) {
         emit_error("writer failed: " + writer_error);
         exit_code = 1;
     }
+    // The stopped line carries the whole run summary; the NUC buffer test reads it.
     std::ostringstream js;
-    js << "{\"event\":\"stopped\",\"samples\":" << samples << ",\"overflows\":" << overflows
-       << ",\"host_drops\":" << host_drops << ",\"exit_code\":" << exit_code << "}";
+    js.precision(3);
+    js << std::fixed << "{\"event\":\"stopped\",\"samples\":" << samples << ",\"overflows\":" << overflows
+       << ",\"host_drops\":" << host_drops << ",\"timeouts\":" << timeouts << ",\"bytes\":" << bytes
+       << ",\"elapsed_s\":" << (started ? stop_host - started_host : 0.0) << ",\"write_mode\":\"" << opt.write_mode
+       << "\",\"spb\":" << chunk_samps << ",\"file_buffer_bytes\":" << opt.file_buffer_bytes
+       << ",\"exit_code\":" << exit_code << "}";
     emit(js.str());
     return exit_code;
 }
