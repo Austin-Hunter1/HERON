@@ -127,6 +127,14 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
                                                  a.get("rows", 240, type=int), a.get("nfft", 512, type=int),
                                                  a.get("avg", 4, type=int)))
 
+    @app.get("/api/recordings/drops")
+    def recording_drops():
+        # Reads the whole samples.jsonl (hundreds of MB for a long flight), so not while recording.
+        busy_check("Finding drops")
+        a = request.args
+        session_dir = recordings.find_session(roots(), a.get("session"))
+        return jsonify(recordings.find_drops(session_dir, a.get("radio")))
+
     @app.get("/api/recordings/file")
     def recording_file():
         busy_check("Downloading")

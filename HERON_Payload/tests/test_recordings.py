@@ -203,3 +203,60 @@ class LongTestRecordingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _jsonl_session(root, rows, rate_msps=1.0):
+    """A finished session with one radio whose samples.jsonl holds `rows` (offset, count, time, error)."""
+    import json
+    radio = Path(root) / "HERON_20261102_120000" / "b210"
+    radio.mkdir(parents=True)
+    (radio / "settings.json").write_text(json.dumps(dict(sample_rate_msps=rate_msps, frequency_mhz=1176.45,
+                                                         actual_channels=[dict(label="A"), dict(label="B")])))
+    seg = int(rate_msps * 1e6 * 30)
+    lines = []
+    for offset, count, t, err in rows:
+        lines.append('{"sample_offset":%d,"count":%d,"device_time":%.17g,"segment":%d,"segment_offset":%d,"uhd_error":%d}'
+                     % (offset, count, t, offset // seg, offset % seg, err))
+    (radio / "samples.jsonl").write_text("\n".join(lines) + "\n")
+    for n in (0, 1):
+        (radio / f"channel_{n}_000000.sc8").write_bytes(b"\0" * 8)
+    return radio.parent
+
+
+class DropTests(unittest.TestCase):
+    def test_drops_are_located_in_file_and_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # 1 MS/s, blocks of 1000: a 500-sample gap before offset 2000, a UHD error flag at 3000.
+            d = _jsonl_session(tmp, [(0, 1000, 5.0, 0), (1000, 1000, 5.001, 0), (2000, 1000, 5.0025, 0),
+                                     (3000, 1000, 5.0035, 8), (4000, 1000, 5.0045, 0)])
+            r = recordings.find_drops(d, "b210")
+            self.assertEqual((r["total"], r["missing_samples"], r["rows"]), (2, 500, 5))
+            lost, flag = r["drops"]
+            self.assertEqual((lost["kind"], lost["missing"], lost["sample"], lost["segment"], lost["segment_offset"]),
+                             ("samples lost", 500, 2000, 0, 2000))
+            self.assertAlmostEqual(lost["at_s"], 0.002)
+            self.assertAlmostEqual(lost["device_s"], 0.0025)
+            self.assertAlmostEqual(lost["missing_ms"], 0.5)
+            self.assertEqual((flag["kind"], flag["uhd_error"], flag["missing"]), ("UHD error", 8, 0))
+            self.assertEqual(r["recorded_s"], 0.005)
+            self.assertEqual([c["n"] for c in r["channels"]], [0, 1])
+
+    def test_clean_recording_and_segment_numbers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # 30 s segments at 1 MS/s: offset 31e6 is segment 1, 1e6 samples into it.
+            rows = [(0, 1000, 0.0, 0), (1000, 1000, 0.001, 0)]
+            d = _jsonl_session(tmp, rows)
+            self.assertEqual(recordings.find_drops(d, "b210")["total"], 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _jsonl_session(tmp, [(30_999_000, 1000, 31.0, 0), (31_000_000, 1000, 31.5, 0)])
+            x = recordings.find_drops(d, "b210")["drops"][0]
+            self.assertEqual((x["segment"], x["segment_offset"], x["missing"]), (1, 1_000_000, 499_000))
+
+    def test_missing_jsonl_and_bad_radio_are_explained(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _jsonl_session(tmp, [(0, 10, 0.0, 0)])
+            (d / "b210" / "samples.jsonl").unlink()
+            with self.assertRaisesRegex(ValueError, "samples.jsonl"):
+                recordings.find_drops(d, "b210")
+            with self.assertRaisesRegex(ValueError, "Unknown radio"):
+                recordings.find_drops(d, "../etc")

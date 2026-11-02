@@ -1,12 +1,14 @@
 // Recordings section of the Payload Setup page: list sessions, draw a spectrogram + histogram of any
 // channel (the NUC sends ~1 MB of evenly spaced sample slices; the FFTs run here in the browser),
-// and download single files.
+// and download single files. "Find drops" reads a radio's samples.jsonl on the NUC and lists where samples
+// are missing; the spectrogram marks those places.
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const H = window.HERON;
   const esc = H.esc;
   let sessions = [], selected = null, view = null, loading = false, lastBusy = null;
+  const drops = {};                  // "session|radio" -> drop scan result, {busy}, or {error}
 
   const fmtLen = (s) => !s ? "0 s" : s < 90 ? s.toFixed(s < 10 ? 1 : 0) + " s" : Math.floor(s / 60) + " min " + String(Math.round(s % 60)).padStart(2, "0") + " s";
   const fmtWhen = (iso, name) => {
@@ -84,7 +86,9 @@
           <div class="rec-radio-head"><b>${esc(r.name)}</b>
             <span>${esc((r.model || "").toUpperCase())}${r.serial ? " · " + esc(r.serial) : ""} · ${mhz(r.freq_hz)} · ${r.rate_hz ? (r.rate_hz / 1e6).toFixed(2) + " MS/s" : "rate ?"} · ${esc(r.format || "")}</span>
             <span class="files">${r.files.map((f) => fileLink(s, r.id, f)).join(" ")}</span>
+            <button type="button" class="btn quiet" data-drops="${esc(r.id)}" ${busy ? "disabled" : ""}>Find drops</button>
           </div>
+          <div class="drops" data-drops-box="${esc(r.id)}">${dropsHtml(s, r)}</div>
           ${r.channels.map((c) => `
             <div class="rec-chan">
               <span class="lbl"><b>${esc(c.label)}</b><i>${c.gain_db != null ? c.gain_db + " dB gain" : ""}${c.port ? " · " + esc(c.port) : ""} · ${fmtLen(c.seconds)} · ${H.fmtGB(c.bytes)}</i></span>
@@ -101,6 +105,13 @@
       const [radio, n] = b.dataset.view.split("|");
       openViewer(s, radio, Number(n));
     }));
+    box.querySelectorAll("[data-drops]").forEach((b) => b.addEventListener("click", () => findDrops(s, b.dataset.drops)));
+    box.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
+      const [radio, at] = b.dataset.show.split("|");
+      const r = s.radios.find((x) => x.id === radio);
+      // One second around the drop, on the radio's first channel (every channel of a radio drops together).
+      openViewer(s, radio, r?.channels[0]?.n ?? 0, Math.max(0, Math.round((Number(at) - 0.5) * 1e4) / 1e4), 1);
+    }));
     box.querySelectorAll("[data-seg]").forEach((sel) => sel.addEventListener("change", () => {
       if (!sel.value) return;
       const [radio] = sel.dataset.seg.split("|");
@@ -112,11 +123,46 @@
     if (view && view.session === s.name) renderViewer();
   }
 
+  // ---------------- drops ----------------
+  async function findDrops(s, radio) {
+    if (busyNow()) return H.toast("Paused while the payload is recording or armed.", true);
+    const key = s.name + "|" + radio;
+    drops[key] = { busy: true };
+    renderDetail();
+    try {
+      drops[key] = await H.api("/api/recordings/drops?" + new URLSearchParams({ session: s.name, radio }));
+    } catch (e) { drops[key] = { error: e.message }; }
+    renderDetail();
+  }
+
+  function dropsHtml(s, r) {
+    const d = drops[s.name + "|" + r.id];
+    if (!d) return "";
+    if (d.busy) return `<p class="note">Reading samples.jsonl… a long recording takes up to a minute.</p>`;
+    if (d.error) return `<p class="warn">${esc(d.error)}</p>`;
+    if (!d.total) return `<p class="note good-note">No drops: every one of ${d.rows.toLocaleString()} blocks starts where the one before ended (${fmtLen(d.recorded_s)} checked).</p>`;
+    const seg = (n) => String(n).padStart(6, "0");
+    const files = (g) => d.channels.map((c) => `channel_${c.n}_${seg(g)}.${d.format || "sc8"}`).join(", ");
+    return `
+      <p class="warn">${d.total} drop(s), ${d.missing_samples.toLocaleString()} samples missing (${(d.missing_s * 1e3).toFixed(2)} ms) in ${fmtLen(d.recorded_s)}.
+        Every channel of this radio drops at the same places. The files have no padding: the samples after a drop follow straight on.
+        ${d.total > d.listed ? `The first ${d.listed} are listed.` : ""}</p>
+      <div class="drops-scroll"><table class="drops-table">
+        <thead><tr><th>#</th><th>In file (s)</th><th>Real time (s)</th><th>File</th><th>Before sample</th><th>Missing</th><th></th></tr></thead>
+        <tbody>${d.drops.map((x, i) => `<tr>
+          <td>${i + 1}</td><td>${x.at_s.toFixed(4)}</td><td>${x.device_s.toFixed(4)}</td>
+          <td><code>${esc(files(x.segment))}</code></td><td>${x.segment_offset.toLocaleString()}</td>
+          <td>${x.kind === "samples lost" ? `${x.missing.toLocaleString()} (${x.missing_ms} ms)` : esc(x.kind) + (x.uhd_error ? " " + x.uhd_error : "")}</td>
+          <td><button type="button" class="btn quiet" data-show="${esc(r.id)}|${x.at_s}">Show</button></td></tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">“In file” is the time on the spectrogram (recorded samples ÷ rate). “Real time” is the device clock from the first sample; it runs ahead of “In file” by the missing time.</p>`;
+  }
+
   // ---------------- viewer ----------------
-  function openViewer(s, radio, n) {
+  function openViewer(s, radio, n, start = 0, span = 0) {
     const r = s.radios.find((x) => x.id === radio);
     const c = r?.channels.find((x) => x.n === n);
-    view = { session: s.name, radio, n, label: c?.label || "channel " + n, total: c?.seconds || 0, start: 0, span: 0, data: null, error: null, busy: false };
+    view = { session: s.name, radio, n, label: c?.label || "channel " + n, total: c?.seconds || 0, start, span, data: null, error: null, busy: false };
     renderViewer();
     draw();
     $("viewer").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -274,6 +320,18 @@
     freqTicks(sg, P.l, P.l + pw, P.t + ph, halfMHz);
     sg.textAlign = "center"; sg.fillStyle = "#15292b";
     sg.fillText(`MHz from ${(d.freq_hz / 1e6).toFixed(2)} MHz`, P.l + pw / 2, 380 - 16);
+    // Drop markers: a red line at each drop inside the drawn time range (from "Find drops").
+    const known = drops[view.session + "|" + view.radio];
+    const t0 = d.times[0], t1 = d.times[d.rows - 1];
+    const shown = (known?.drops || []).filter((x) => x.at_s >= d.start_s && x.at_s <= d.start_s + d.span_s);
+    shown.forEach((x) => {
+      const f = t1 > t0 ? (x.at_s - t0) / (t1 - t0) : 0;
+      const y = P.t + (Math.min(Math.max(f, 0), 1) * (d.rows - 1) + 0.5) * ph / d.rows;
+      sg.fillStyle = "#e0301e"; sg.fillRect(P.l, y - 1, pw, 2);
+      sg.fillRect(P.l + pw, y - 1, 10, 2);
+    });
+    d.dropsShown = shown.length;
+    d.dropsKnown = !!known?.drops;
     sg.textAlign = "right"; sg.textBaseline = "middle"; sg.fillStyle = "#5d7071";
     for (let i = 0; i <= 4; i++) {
       const r = Math.round(i * (d.rows - 1) / 4), y = P.t + (r + 0.5) * ph / d.rows;
@@ -308,7 +366,8 @@
 
     body.innerHTML = `
       <div class="viewer-plots">
-        <figure class="spec"><figcaption>Spectrogram, ${d.rows} slices from ${d.start_s.toFixed(1)} s to ${(d.start_s + d.span_s).toFixed(1)} s</figcaption></figure>
+        <figure class="spec"><figcaption>Spectrogram, ${d.rows} slices from ${d.start_s.toFixed(1)} s to ${(d.start_s + d.span_s).toFixed(1)} s
+          ${d.dropsKnown ? `<span class="verdict ${d.dropsShown ? "bad" : "good"}">${d.dropsShown ? d.dropsShown + " drop(s) marked in red" : "no drops in this range"}</span>` : `<span class="note">Use “Find drops” to mark drops here.</span>`}</figcaption></figure>
         <figure class="histo"><figcaption>Histogram <span class="verdict ${d.verdict[1]}">${d.verdict[0]}</span></figcaption>
           <dl class="stats">
             <div><dt>RMS</dt><dd>${d.rms.toFixed(1)} <i>of 127</i></dd></div>

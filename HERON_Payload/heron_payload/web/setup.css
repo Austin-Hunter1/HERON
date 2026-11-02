@@ -247,6 +247,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .rec-radio-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: #f6f9f7; border-bottom: 1px solid var(--rule); }
 .rec-radio-head > span { color: var(--muted); font-size: .9rem; }
 .rec-radio-head .files { margin-left: auto; }
+.drops:empty { display: none; }
+.drops { padding: 4px 12px 10px; border-bottom: 1px solid var(--rule); }
+.drops .good-note { color: var(--muted); }
+.drops-scroll { max-height: 260px; overflow: auto; margin-top: 8px; }
+.drops-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.drops-table th { position: sticky; top: 0; background: #f6f9f7; text-align: left; font-weight: 600; }
+.drops-table th, .drops-table td { padding: 4px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.drops-table .btn { padding: 2px 8px; }
 .rec-chan { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(150px, 230px); gap: 10px; align-items: center; padding: 9px 12px; }
 .rec-chan + .rec-chan { border-top: 1px dashed var(--rule); }
 .rec-chan .lbl b { display: block; font-weight: 600; }

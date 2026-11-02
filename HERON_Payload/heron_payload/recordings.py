@@ -183,6 +183,74 @@ def sample_channel(session_dir, radio, channel, start_s=0.0, span_s=None, rows=2
                 data=base64.b64encode(b"".join(chunks)).decode())
 
 
+# One samples.jsonl row, as the recorder writes it (recorder/main.cpp, SegmentFiles::write). A regex is about
+# three times faster than json.loads, and a 30 min recording has millions of rows.
+ROW_RE = re.compile(rb'"sample_offset":(\d+),"count":(\d+),"device_time":([-0-9.eE+]+),'
+                    rb'"segment":(\d+),"segment_offset":(\d+),"uhd_error":(-?\d+)')
+MAX_DROPS_LISTED = 500
+_drop_cache = {}                     # (path, size, mtime_ns) -> result; a finished recording never changes
+
+
+def find_drops(session_dir, radio):
+    """Where samples are missing in one radio's recording, from its samples.jsonl.
+
+    Each row is one block the recorder wrote: its first sample's offset in the recording, its sample count and
+    the device time of its first sample. Without loss, each block starts exactly where the one before ended. A
+    later start is a drop: the device or USB lost (start - expected) x rate samples, and the recorder wrote the
+    next block straight after the last one, with no padding. So a drop sits just before `segment_offset` in the
+    file of `segment`, and `at_s` (recorded samples / rate) is its place on the spectrogram time axis.
+    A row with a UHD error code but no time jump is listed too, with 0 missing samples.
+    """
+    folder = _radio_dir(session_dir, radio)
+    path = folder / "samples.jsonl"
+    info = describe_radio(folder)
+    rate = info["rate_hz"]
+    if not rate:
+        raise ValueError("settings.json is missing the sample rate.")
+    if not path.is_file():
+        raise ValueError("This radio has no samples.jsonl, so drops cannot be located.")
+    st = path.stat()
+    key = (str(path), st.st_size, st.st_mtime_ns)
+    if key in _drop_cache:
+        return _drop_cache[key]
+    tolerance = 1.5 / rate           # the recorder's own gap test
+    drops, total, missing, rows, bad_rows = [], 0, 0, 0, 0
+    first_time = expected = None
+    end_offset = 0
+    with open(path, "rb") as f:
+        for line in f:
+            m = ROW_RE.search(line)
+            if not m:
+                bad_rows += 1
+                continue
+            offset, count, t, segment, seg_offset, error = (int(m[1]), int(m[2]), float(m[3]), int(m[4]),
+                                                            int(m[5]), int(m[6]))
+            rows += 1
+            if first_time is None:
+                first_time = t
+            lost = 0 if expected is None else int(round((t - expected) * rate))
+            jump = expected is not None and abs(t - expected) > tolerance
+            if jump or error:
+                total += 1
+                missing += max(lost, 0)
+                if len(drops) < MAX_DROPS_LISTED:
+                    drops.append(dict(at_s=round(offset / rate, 6), device_s=round(t - first_time, 6),
+                                      sample=offset, segment=segment, segment_offset=seg_offset,
+                                      missing=lost if jump else 0, missing_ms=round(lost / rate * 1e3, 3) if jump else 0,
+                                      uhd_error=error, kind="time went back" if jump and lost < 0 else
+                                      "samples lost" if jump else "UHD error"))
+            expected = t + count / rate
+            end_offset = offset + count
+    result = dict(radio=radio, rate_hz=rate, format=info["format"], rows=rows, unreadable_rows=bad_rows,
+                  drops=drops, total=total, listed=len(drops), missing_samples=missing,
+                  missing_s=round(missing / rate, 6), recorded_s=round(end_offset / rate, 3),
+                  channels=[dict(n=c["n"], label=c["label"]) for c in info["channels"]])
+    if len(_drop_cache) > 64:
+        _drop_cache.clear()
+    _drop_cache[key] = result
+    return result
+
+
 def file_path(session_dir, radio, name):
     session_dir = Path(session_dir)
     folder = _radio_dir(session_dir, radio) if radio else session_dir
