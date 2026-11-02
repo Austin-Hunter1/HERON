@@ -38,9 +38,11 @@ def _radio(ident, name, model, mhz, channels, rate=22.0, bw=15.0):
 
 
 def _setup(name, radios, clock="internal"):
+    # `clock` sets both references here; a setup can mix them: clock_source = the 10 MHz reference,
+    # time_source = the PPS. Each is "internal" or "external" (see sync_mode).
     # Recording method of the collect wizard (D-078): UHD sc8 on the USB link with peak 1.0, and "direct"
     # writing (receive one buffer of `spb` samples, write it, receive the next).
-    return dict(schema=1, name=name, radios=radios, clock=clock, file_format="sc8", sc8_peak=1.0,
+    return dict(schema=1, name=name, radios=radios, clock_source=clock, time_source=clock, file_format="sc8", sc8_peak=1.0,
                 write_mode="direct", spb=10000, file_buffer_bytes=0, device_args="",
                 storage=dict(path="/media/DataStore/heron", require_mount="/media/DataStore",
                              reserve_gb=20.0, segment_seconds=30),
@@ -67,6 +69,19 @@ def presets():
     return [l5, surge, single, full]
 
 
+SYNC_MODES = {
+    ("internal", "internal"): "Internal clock: each radio's own oscillator and time; radios are not aligned",
+    ("external", "internal"): "External 10 MHz: radios share the oscillator (coherent), times not aligned",
+    ("internal", "external"): "External PPS: radios set their time at the same PPS edge; own oscillators",
+    ("external", "external"): "External 10 MHz + PPS: shared oscillator and aligned time",
+}
+
+
+def sync_mode(c):
+    """A short description of the reference combination, for status lines and metadata."""
+    return SYNC_MODES[(c["clock_source"], c["time_source"])]
+
+
 def number(value, lo, hi, label):
     if isinstance(value, bool):
         raise ValueError(label + " must be a number.")
@@ -87,8 +102,14 @@ def validate(raw, hardware=False):
         raise ValueError("Unsupported payload configuration.")
     if not isinstance(c.get("name"), str) or not 1 <= len(c["name"].strip()) <= 60:
         raise ValueError("Give this setup a name (1–60 characters).")
-    if c.get("clock") not in ("internal", "external") or c.get("file_format") not in ("sc8", "sc16"):
-        raise ValueError("Choose a clock and sample format.")
+    # Setups saved before the split have one "clock" key for both the 10 MHz and the PPS.
+    old = c.pop("clock", None)
+    c.setdefault("clock_source", old)
+    c.setdefault("time_source", old)
+    if c.get("clock_source") not in ("internal", "external") or c.get("time_source") not in ("internal", "external"):
+        raise ValueError("Choose the 10 MHz reference and the PPS (time) source.")
+    if c.get("file_format") not in ("sc8", "sc16"):
+        raise ValueError("Choose a sample format.")
     c["sc8_peak"] = number(c.get("sc8_peak", 1.0), 0.01, 1, "8-bit scaling peak")
     # Buffer settings (D-078). Older saved setups have none of these keys and get the wizard defaults.
     c["write_mode"] = c.get("write_mode", "direct")

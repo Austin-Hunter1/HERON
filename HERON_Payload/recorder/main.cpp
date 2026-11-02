@@ -178,7 +178,12 @@ int main(int argc,char** argv){
     const double rate=cfg.get<double>("sample_rate_msps")*1e6;
     const double frequency=cfg.get<double>("frequency_mhz")*1e6;
     const double bandwidth=cfg.get<double>("bandwidth_mhz")*1e6;
-    const bool external=cfg.get<std::string>("clock")=="external",eight=cfg.get<std::string>("file_format")=="sc8";
+    // The 10 MHz reference and the PPS are separate choices: internal, external 10 MHz only, external PPS only,
+    // or both. Settings files written before the split have one "clock" key for both.
+    const std::string both=cfg.get<std::string>("clock","internal");
+    const bool ext_clock=cfg.get<std::string>("clock_source",both)=="external";
+    const bool ext_time=cfg.get<std::string>("time_source",both)=="external";
+    const bool eight=cfg.get<std::string>("file_format")=="sc8";
     const double peak=cfg.get<double>("sc8_peak",1.0);
     const bool threaded=cfg.get<std::string>("write_mode","direct")=="threaded";
     const size_t spb=cfg.get<size_t>("spb",10000);
@@ -192,8 +197,8 @@ int main(int argc,char** argv){
     const auto hardware_name=usrp->get_mboard_name();
     if(cfg.get<std::string>("model")=="b210"&&usrp->get_rx_num_channels()<2)throw std::runtime_error("Expected a two-channel B210");
     if(cfg.get<std::string>("model")=="b200"&&usrp->get_rx_num_channels()!=1)throw std::runtime_error("Radio model differs from the selected B200 profile");
-    usrp->set_clock_source(external?"external":"internal");
-    usrp->set_time_source(external?"external":"internal");
+    usrp->set_clock_source(ext_clock?"external":"internal");   // 10 MHz REF IN
+    usrp->set_time_source(ext_time?"external":"internal");     // PPS IN
     std::vector<size_t> channels;
     pt::ptree actual;
     for(auto& entry:cfg.get_child("channels")){
@@ -207,16 +212,17 @@ int main(int argc,char** argv){
     if(channels.empty())throw std::runtime_error("No enabled receive channels");
     auto sensor_names=usrp->get_mboard_sensor_names();
     bool has_ref=std::find(sensor_names.begin(),sensor_names.end(),"ref_locked")!=sensor_names.end();
-    if(external&&!has_ref)throw std::runtime_error("This UHD/device combination cannot verify the external reference lock");
+    if(ext_clock&&!has_ref)throw std::runtime_error("This UHD/device combination cannot verify the external reference lock");
     auto until=Clock::now()+std::chrono::seconds(10);
     bool locked=false;
     do {
-        locked=!external||usrp->get_mboard_sensor("ref_locked").to_bool();
+        locked=!ext_clock||usrp->get_mboard_sensor("ref_locked").to_bool();
         for(auto c:channels){auto sensors=usrp->get_rx_sensor_names(c);if(std::find(sensors.begin(),sensors.end(),"lo_locked")!=sensors.end())locked=locked&&usrp->get_rx_sensor("lo_locked",c).to_bool();}
         if(!locked)std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }while(!locked&&Clock::now()<until);
     if(!locked)throw std::runtime_error("Radio reference/LO did not lock");
-    if(!external)usrp->set_time_now(uhd::time_spec_t(0.0));
+    // Without a PPS each radio starts its own time at 0 now; with a PPS the SYNC command sets it at an edge.
+    if(!ext_time)usrp->set_time_now(uhd::time_spec_t(0.0));
     emit("{\"event\":\"configured\"}");
     // The collect wizard method: the file format is also the USB format, so UHD does the 8-bit scaling
     // (`peak` x full scale maps to +/-127) and the host only copies bytes to disk.
@@ -225,7 +231,9 @@ int main(int argc,char** argv){
     auto stream=usrp->get_rx_stream(stream_args);
     std::vector<std::vector<char>> buffers(channels.size(),std::vector<char>(spb*bps));
     std::vector<void*> pointers;for(auto& b:buffers)pointers.push_back(b.data());
-    bool streaming=false,recording=false,pending=false,quit=false,synced=!external;
+    bool streaming=false,recording=false,pending=false,quit=false,synced=!ext_time;
+    const char* reference=ext_clock&&ext_time?"10 MHz locked / PPS aligned":ext_clock?"10 MHz locked / time not aligned"
+        :ext_time?"own oscillator / PPS aligned":"internal / independent";
     std::unique_ptr<SegmentFiles> direct;   // "direct" mode
     std::unique_ptr<Writer> writer;         // "threaded" mode
     auto bytes_now=[&]()->uint64_t{return direct?direct->written.load():writer?writer->files.written.load():0;};
@@ -265,6 +273,7 @@ int main(int argc,char** argv){
                 fs::create_directories(pending_path);pt::ptree metadata=cfg;metadata.add_child("actual_channels",actual);metadata.put("device_model",hardware_name);
                 metadata.put("sc8_conversion","UHD sc8 on the USB link: peak x full-scale sc16 maps to +/-127 (collect wizard method); interleaved I,Q");
                 metadata.put("wire_format",eight?"sc8":"sc16");metadata.put("sc8_peak",peak);metadata.put("write_mode",threaded?"threaded":"direct");metadata.put("spb",spb);metadata.put("file_buffer_bytes",file_buffer);metadata.put("endianness","little");
+                metadata.put("clock_source",ext_clock?"external":"internal");metadata.put("time_source",ext_time?"external":"internal");metadata.put("reference",reference);
                 pt::write_json((fs::path(pending_path)/"settings.json").string(),metadata);
                 const int seconds=cfg.get<int>("segment_seconds");
                 if(threaded)writer=std::make_unique<Writer>(pending_path,eight,rate,seconds,channels.size(),spb,file_buffer);
@@ -302,9 +311,9 @@ int main(int argc,char** argv){
         if(writer&&writer->failed)throw std::runtime_error("Asynchronous disk write failed");
         auto now=Clock::now();double elapsed=std::chrono::duration<double>(now-last_status).count();
         if(elapsed>=1){
-            if(external&&!usrp->get_mboard_sensor("ref_locked").to_bool())throw std::runtime_error("External reference lock lost");
+            if(ext_clock&&!usrp->get_mboard_sensor("ref_locked").to_bool())throw std::runtime_error("External reference lock lost");
             uint64_t bytes=(direct||writer)?bytes_now():final_bytes;double mbps=bytes>=last_bytes?(bytes-last_bytes)/elapsed/1e6:0;last_bytes=bytes;last_status=now;
-            std::ostringstream s;s<<"{\"event\":\"status\",\"state\":"<<quote(recording?"RECORDING":pending?"STARTING":streaming?"READY":"PREPARING")<<",\"bytes_written\":"<<bytes<<",\"rate_mbps\":"<<(recording?mbps:0)<<",\"overflows\":"<<overflows<<",\"gaps\":"<<gaps<<",\"clipped\":"<<clipped_now()<<",\"reference\":"<<quote(external?"10 MHz locked / PPS aligned":"internal / independent")<<"}";emit(s.str());
+            std::ostringstream s;s<<"{\"event\":\"status\",\"state\":"<<quote(recording?"RECORDING":pending?"STARTING":streaming?"READY":"PREPARING")<<",\"bytes_written\":"<<bytes<<",\"rate_mbps\":"<<(recording?mbps:0)<<",\"overflows\":"<<overflows<<",\"gaps\":"<<gaps<<",\"clipped\":"<<clipped_now()<<",\"reference\":"<<quote(reference)<<"}";emit(s.str());
         }
     }
     if(direct)direct->finish();

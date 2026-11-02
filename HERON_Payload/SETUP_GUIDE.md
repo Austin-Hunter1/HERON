@@ -330,8 +330,13 @@ connector unless you choose TX/RX in Payload Setup.
 3. Per radio: band **L1 / L2 / L5** (or Other + centre MHz), or a collect-wizard **Profile**; sample rate, bandwidth. Both channels of a B210
    share its frequency and rate.
 4. Per channel: on/off, antenna name (what's written on the cable), RX2/TX‑RX, gain.
-5. **Reference clock:** *Internal* for radios recording independently; *External 10 MHz + PPS* only
-   with a clock board wired to every radio.
+5. **10 MHz reference** and **Time (PPS)** are two separate choices, so four combinations work:
+   * both *Internal*: each radio uses its own oscillator and time (radios are not aligned);
+   * *External 10 MHz* only: the radios share one oscillator (coherent), but their times are not aligned;
+   * *External PPS* only: the radios set their time at the same PPS edge, each on its own oscillator;
+   * both *External*: shared oscillator and aligned time (the clock board wired to every radio).
+   An external 10 MHz must lock within 10 s, or loading fails. An external PPS must reach every radio, or
+   loading fails with "No usable PPS edge".
 6. **Save recordings in:** `/media/DataStore/heron` (button **Use data drive**) or the NUC's own SSD
    (button **Use NUC SSD**, `~/heron_recordings`). If the setup points at the data drive but nothing is
    mounted at `/media/DataStore`, the payload records to the NUC SSD instead of refusing: the top bar says

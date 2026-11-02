@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from . import storage
-from .config import atomic_json, estimate
+from .config import atomic_json, estimate, sync_mode
 
 
 class FakeBackend:
@@ -100,7 +100,7 @@ class FakeBackend:
                 state="RECORDING" if self.recording else "READY", rate_mbps=rate if self.recording else 0,
                 bytes_written=int(self.bytes*rate/e["disk_mbps"]) if e["disk_mbps"] else 0,
                 overflows=self.overflows, gaps=0, clipped=0,
-                reference="simulated external" if self.config["clock"] == "external" else "internal",
+                reference="simulated: " + sync_mode(self.config),
                 labels=[c["label"] for c in r["channels"] if c["enabled"]]))
         return dict(radios=radios, disk_free_gb=round(self.free, 2), bytes_written=int(self.bytes),
                     rate_mbps=e["disk_mbps"] if self.recording else 0, backend_fault=self.fault,
@@ -216,7 +216,8 @@ class UHDBackend:
             for r in config["radios"]:
                 if not r["enabled"]:
                     continue
-                settings = dict(r, clock=config["clock"], file_format=config["file_format"],
+                settings = dict(r, clock_source=config["clock_source"], time_source=config["time_source"],
+                                file_format=config["file_format"],
                                 sc8_peak=config.get("sc8_peak", 1.0), int_n=True,
                                 write_mode=config.get("write_mode", "direct"), spb=config.get("spb", 10000),
                                 file_buffer_bytes=config.get("file_buffer_bytes", 0),
@@ -227,8 +228,8 @@ class UHDBackend:
                 self.workers[r["id"]] = Worker(self.binary, p)
             for w in self.workers.values():
                 w.wait("configured", 30)
-            if config["clock"] == "external":
-                # Observe a recent common PPS edge before issuing set_time_next_pps on every radio.
+            if config["time_source"] == "external":
+                # PPS in use: observe a recent common PPS edge before issuing set_time_next_pps on every radio.
                 first = next(iter(self.workers.values()))
                 until = time.monotonic()+5
                 while True:
@@ -261,14 +262,14 @@ class UHDBackend:
             w.send("TIME")
         for w in self.workers.values():
             times.append(w.wait("time", 3)["time"])
-        if self.config["clock"] == "external" and max(times)-min(times) > .1:
+        if self.config["time_source"] == "external" and max(times)-min(times) > .1:
             raise RuntimeError("Device clocks disagree; prepare synchronization again.")
         # Every worker receives the same timestamp after shared-PPS preparation.
         target = max(times)+.5
         for ident, w in self.workers.items():
             folder = root/ident
             folder.mkdir()
-            w.send("START " + json.dumps(dict(path=str(folder), time=target if self.config["clock"] == "external" else -1)))
+            w.send("START " + json.dumps(dict(path=str(folder), time=target if self.config["time_source"] == "external" else -1)))
         for w in self.workers.values():
             w.wait("recording", 8)
         self.recording = True

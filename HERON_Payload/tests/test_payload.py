@@ -65,6 +65,33 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(c["radios"][0]["bandwidth_mhz"], 15.0)
         self.assertEqual(estimate(c)["usb_mbps"], estimate(c)["disk_mbps"])
 
+    def test_four_reference_combinations(self):
+        # Internal clock, external 10 MHz only, external PPS only, or both.
+        from heron_payload.config import sync_mode
+        for clock, time_ in (("internal", "internal"), ("external", "internal"), ("internal", "external"),
+                             ("external", "external")):
+            c = copy.deepcopy(presets()[0])
+            c.update(clock_source=clock, time_source=time_)
+            v = validate(c)
+            self.assertEqual((v["clock_source"], v["time_source"]), (clock, time_))
+            self.assertIn("PPS" if time_ == "external" else "", sync_mode(v))
+        c = copy.deepcopy(presets()[0])
+        c["time_source"] = "gps"
+        with self.assertRaisesRegex(ValueError, "PPS"):
+            validate(c)
+
+    def test_old_single_clock_key_sets_both(self):
+        c = copy.deepcopy(presets()[0])
+        del c["clock_source"], c["time_source"]
+        c["clock"] = "external"
+        v = validate(c)
+        self.assertEqual((v["clock_source"], v["time_source"]), ("external", "external"))
+        self.assertNotIn("clock", v)
+
+    def test_full_payload_preset_uses_both_references(self):
+        full = validate(presets()[3])
+        self.assertEqual((full["clock_source"], full["time_source"]), ("external", "external"))
+
     def test_old_setups_get_buffer_defaults(self):
         c = copy.deepcopy(presets()[0])
         for key in ("write_mode", "spb", "file_buffer_bytes", "device_args"):

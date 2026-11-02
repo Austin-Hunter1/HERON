@@ -52,8 +52,10 @@
             <select data-k="file_format"><option value="sc8">8-bit (half the disk)</option><option value="sc16">16-bit</option></select></label>
           <label data-show="sc8"><span>8-bit full scale</span>
             <select data-k="sc8_peak"><option value="0.125">1/8 of 16-bit range (+18 dB)</option><option value="0.25">1/4 of 16-bit range (+12 dB)</option><option value="0.5">1/2 of 16-bit range (+6 dB)</option><option value="1">Full 16-bit range (collect wizard)</option></select></label>
-          <label><span>Reference clock</span>
-            <select data-k="clock"><option value="internal">Internal (one radio)</option><option value="external">External 10 MHz + PPS</option></select></label>
+          <label><span>10 MHz reference</span>
+            <select data-k="clock_source"><option value="internal">Internal oscillator</option><option value="external">External 10 MHz</option></select></label>
+          <label><span>Time (PPS)</span>
+            <select data-k="time_source"><option value="internal">Internal (radios not aligned)</option><option value="external">External PPS</option></select></label>
           <label><span>Write method</span>
             <select data-k="write_mode"><option value="direct">Write each buffer at once (collect wizard)</option><option value="threaded">Writer thread with a memory queue</option></select></label>
           <label><span>Samples per buffer</span><input data-k="spb" type="number" min="64" max="10000000" step="1" /></label>
@@ -211,7 +213,7 @@ num_recv_frames=1024</textarea></label>
   </template>
   <datalist id="serials"></datalist>
 
-  <script src="/static/setup.js?v=8"></script>
+  <script src="/static/setup.js?v=9"></script>
   <script src="/static/recordings.js?v=4"></script>
   <script src="/static/sweeps.js?v=1"></script>
 </body>
