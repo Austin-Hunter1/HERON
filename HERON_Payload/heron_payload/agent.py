@@ -18,6 +18,7 @@ from pathlib import Path
 from . import protocol as P
 from .backends import FakeBackend, UHDBackend
 from .config import atomic_json
+from .storage import SYSTEM_SSD
 
 
 class Agent:
@@ -51,7 +52,7 @@ class Agent:
         snap = self.controller.snapshot()
         for name, value in P.status_values(snap).items():
             self.send("named_value_float_send", self.boot_ms(), name.encode(), value)
-        setup = snap.get("setup")
+        setup = setup_label(snap)
         if setup != self.last_setup:
             self.last_setup = setup
             self.text(P.SETUP_PREFIX + (setup or "none"))
@@ -59,7 +60,7 @@ class Agent:
 
     def announce(self):
         snap = self.controller.snapshot()
-        self.text(P.SETUP_PREFIX + (snap.get("setup") or "none"))
+        self.text(P.SETUP_PREFIX + (setup_label(snap) or "none"))
         if snap["state"] == "FAULT" and snap.get("fault"):
             self.text("HERON fault: " + snap["fault"], 3)
 
@@ -161,6 +162,14 @@ class Agent:
             self.controller.backend.close()
 
 
+def setup_label(snap):
+    """Setup name for the planner strip, marked when recordings go to the NUC's own SSD."""
+    setup = snap.get("setup")
+    if setup and (snap.get("storage") or {}).get("drive") == SYSTEM_SSD:
+        return setup + " (NUC SSD)"
+    return setup
+
+
 def persist_active(controller, path):
     if controller.config:
         atomic_json(path, controller.config)
@@ -175,6 +184,9 @@ def main():
     parser.add_argument("--backend", choices=["uhd", "fake"], default="uhd")
     parser.add_argument("--state-dir", default="/var/lib/heron", help="Active setup and saved setups live here")
     parser.add_argument("--recorder", default="/opt/heron/bin/heron-recorder")
+    parser.add_argument("--ssd-dir", default=None,
+                        help="Recordings folder on the NUC's own SSD, used when the data drive is not mounted "
+                             "(default ~/heron_recordings)")
     parser.add_argument("--http", default="0.0.0.0:8080", help="Payload Setup web app address, or 'off'")
     args = parser.parse_args()
     if not 1 <= args.system_id <= 254:
@@ -186,7 +198,10 @@ def main():
     state = Path(args.state_dir)
     state.mkdir(parents=True, exist_ok=True)
     active = state / "active.json"
-    backend = FakeBackend(write_files=True, storage_root=state / "recordings") if args.backend == "fake" else UHDBackend(args.recorder, state / "runtime")
+    if args.backend == "fake":
+        backend = FakeBackend(write_files=True, storage_root=state / "recordings")
+    else:
+        backend = UHDBackend(args.recorder, state / "runtime", ssd_dir=args.ssd_dir)
     controller = Controller(backend)
     if active.exists():
         # Boot loads the last setup; it never resumes an old recording or an armed plan.
@@ -199,7 +214,8 @@ def main():
     if args.http != "off":
         from .setup_app import serve
         host, _, port = args.http.rpartition(":")
-        serve(controller, state, host or "0.0.0.0", int(port), lambda: persist_active(controller, active))
+        serve(controller, state, host or "0.0.0.0", int(port), lambda: persist_active(controller, active),
+              ssd_dir=args.ssd_dir)
 
     stopping = threading.Event()
 

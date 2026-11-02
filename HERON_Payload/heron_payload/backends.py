@@ -1,7 +1,6 @@
 """Simulated and subprocess UHD recorders, behind the same controller interface."""
 import copy
 import json
-import os
 import queue
 import shutil
 import subprocess
@@ -9,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import storage
 from .config import atomic_json, estimate
 
 
@@ -17,8 +17,9 @@ class FakeBackend:
     Setup app's signal check has something real to analyse."""
     simulated = True
 
-    def __init__(self, write_files=False, devices=None, storage_root=None):
+    def __init__(self, write_files=False, devices=None, storage_root=None, ssd_dir=None):
         self.storage_root_override = Path(storage_root) if storage_root else None
+        self.ssd_dir = ssd_dir
         self.config = None
         self.recording = False
         self.last = time.monotonic()
@@ -103,13 +104,20 @@ class FakeBackend:
                 labels=[c["label"] for c in r["channels"] if c["enabled"]]))
         return dict(radios=radios, disk_free_gb=round(self.free, 2), bytes_written=int(self.bytes),
                     rate_mbps=e["disk_mbps"] if self.recording else 0, backend_fault=self.fault,
+                    storage=self.where(self.config) if self.config else None,
                     **({"fault": self.fault} if self.fault else {}))
 
     def session_path(self):
         return self.session_dir
 
+    def where(self, config):
+        if self.storage_root_override:
+            return dict(path=str(self.storage_root_override), drive=storage.drive_label(self.storage_root_override), fallback=False,
+                        configured=config["storage"]["path"], note=None)
+        return storage.resolve(config, self.ssd_dir)
+
     def storage_root(self, config):
-        return self.storage_root_override or Path(config["storage"]["path"])
+        return Path(self.where(config)["path"])
 
 
 class Worker:
@@ -175,8 +183,10 @@ class Worker:
 class UHDBackend:
     simulated = False
 
-    def __init__(self, binary="/opt/heron/bin/heron-recorder", runtime="/var/lib/heron/runtime"):
+    def __init__(self, binary="/opt/heron/bin/heron-recorder", runtime="/var/lib/heron/runtime", ssd_dir=None):
         self.binary, self.runtime = Path(binary), Path(runtime)
+        self.ssd_dir = ssd_dir
+        self.where = None
         self.config, self.workers, self.session = None, {}, None
         self.recording = False
 
@@ -194,13 +204,13 @@ class UHDBackend:
     def prepare(self, config):
         self.close()
         self.config = copy.deepcopy(config)
-        mount = config["storage"]["require_mount"]
-        if mount and not os.path.ismount(mount):
-            raise ValueError("Required data disk is not mounted at " + mount)
-        root = Path(config["storage"]["path"])
+        # The data drive if it is mounted, otherwise ~/heron_recordings on the NUC's own SSD.
+        self.where = storage.resolve(config, self.ssd_dir)
+        root = Path(self.where["path"])
         root.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(root).free/1e9 <= config["storage"]["reserve_gb"]:
-            raise ValueError("Data disk is below the configured reserve.")
+            raise ValueError(f"The {self.where['drive']} has less than the {config['storage']['reserve_gb']:g} GB "
+                             "reserve free. Free space or lower 'Keep free on disk'.")
         self.runtime.mkdir(parents=True, exist_ok=True)
         try:
             for r in config["radios"]:
@@ -239,7 +249,7 @@ class UHDBackend:
             raise
 
     def start(self, session, plan=None):
-        root = Path(self.config["storage"]["path"])/session
+        root = Path(self.where["path"])/session
         root.mkdir(exist_ok=False)
         self.session = root
         atomic_json(root/"session.json", dict(config=self.config, mission=plan, state="starting", time_basis="shared PPS epoch; not certified UTC"))
@@ -290,10 +300,12 @@ class UHDBackend:
         return self.session
 
     def storage_root(self, config):
-        return Path(config["storage"]["path"])
+        if self.config is not None and self.where and config == self.config:
+            return Path(self.where["path"])
+        return Path(storage.resolve(config, self.ssd_dir)["path"])
 
     def status(self):
-        root = Path(self.config["storage"]["path"]) if self.config else self.runtime
+        root = Path(self.where["path"]) if self.config and self.where else self.runtime
         while not root.exists() and root != root.parent:
             root = root.parent
         rows, fault = [], None
@@ -308,6 +320,7 @@ class UHDBackend:
             rows.append(dict(id=ident, name=r["name"], serial=r["serial"], model=r["model"],
                              labels=[c["label"] for c in r["channels"] if c["enabled"]], **status))
         result = dict(radios=rows, disk_free_gb=round(shutil.disk_usage(root).free/1e9, 2),
+                      storage=dict(self.where) if self.config and self.where else None,
                       bytes_written=sum(r.get("bytes_written", 0) for r in rows),
                       rate_mbps=sum(r.get("rate_mbps", 0) for r in rows))
         if fault:

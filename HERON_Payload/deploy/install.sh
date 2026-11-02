@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install or update the HERON payload service on the NUC (Ubuntu Server 24.04).
 # Run from the copied HERON_Payload folder:   sudo bash deploy/install.sh
-# Safe to run again after copying a newer version; your saved setups in /var/lib/heron are kept.
+# Safe to run again; your saved setups in /var/lib/heron and /etc/heron/payload.env are kept.
+# To update an installed NUC without internet, use deploy/update.sh instead.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SRC="$(pwd)"

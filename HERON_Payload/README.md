@@ -39,6 +39,11 @@ Planner and QGroundControl.
 
 ## Recorded files
 
+Where: `/media/DataStore/heron` when the data drive is mounted there, otherwise `~/heron_recordings` on the
+NUC's own SSD (storage.py; the disk reserve still applies). Payload Setup's **Recordings** section lists
+both, draws a spectrogram and histogram of any channel in the browser (recordings.py sends ~1 MB of sample
+slices) and downloads single files.
+
 `<storage>/HERON_<UTC time>/` → `session.json`, `completion.json`, and per radio a folder with `settings.json`
 (actual UHD settings), `channel_N_000000.sc8` … (interleaved I,Q int8, 30 s per file by default) and
 `samples.jsonl` (sample offsets, device time, UHD error codes for gap detection).
@@ -69,8 +74,15 @@ NUC and installing Ubuntu Server 24.04 to the bench checklist. Network in short:
 `192.168.137.10`, the laptop's Ethernet port `192.168.137.1` (Windows Internet Connection Sharing gives the
 NUC internet through the laptop's Wi‑Fi when it needs updates). Payload Setup: `http://192.168.137.10:8080`.
 
+## Updating an installed NUC
+
+Copy the new `HERON_Payload` folder to the NUC, then `sudo bash HERON_Payload/deploy/update.sh` (no internet
+needed; keeps setups, `payload.env` and recordings). Details in SETUP_GUIDE.md.
+
 ## Status
 
+* v0.2.0: Recordings section (spectrogram, histogram, downloads), automatic NUC-SSD fallback, `update.sh`,
+  *One B200* preset. 32 payload tests pass, plus the planner integration tests.
 * Tested here: 24 payload tests (setup validation, auto-record rules, signal check, MAVLink agent with real
   MAVLink 2 bytes, lost-ack retry), 9 planner integration tests (planner ↔ agent over MAVLink), the recorder's
   disk writer compiled and tested, the full recorder compiled against UHD 4.6, and a complete simulated flight

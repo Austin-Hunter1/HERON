@@ -47,6 +47,9 @@ class Controller:
                     self.prepared_at = self.clock()
                     self.fallback_suppressed = False
                     self.event("Setup loaded: " + self.config["name"])
+                    where = (self.backend.status() or {}).get("storage") or {}
+                    if where.get("fallback"):
+                        self.event(where["note"])
                 except Exception as exc:
                     self.state, self.fault = "FAULT", str(exc)
                     self.backend.close()

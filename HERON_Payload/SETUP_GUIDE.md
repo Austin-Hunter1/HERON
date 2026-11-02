@@ -322,6 +322,7 @@ connector unless you choose TX/RX in Payload Setup.
 1. **Setup** drop‑down, start from:
    * *L5 direct + reflected* — one B210, both channels;
    * *SURGE single antenna* — one B210, RF B only (like 2023);
+   * *One B200 (single antenna)* — one B200, its only channel (RF A, RX2 port);
    * *Full payload (4 radios)* — two B200 + two B210, L1 and L5 (needs the external clock board).
 2. **Find radios on USB.** It fills in serials by model (B210s into B210 rows, B200/B200mini into B200
    rows). Radios found but not in the setup → **Add them to this setup**. Rows with no radio: switch them
@@ -331,12 +332,18 @@ connector unless you choose TX/RX in Payload Setup.
 4. Per channel: on/off, antenna name (what's written on the cable), RX2/TX‑RX, gain.
 5. **Reference clock:** *Internal* for radios recording independently; *External 10 MHz + PPS* only
    with a clock board wired to every radio.
-6. **Save recordings in:** `/media/DataStore/heron` (or `/home/heron/recordings` with no SSD).
+6. **Save recordings in:** `/media/DataStore/heron` (button **Use data drive**) or the NUC's own SSD
+   (button **Use NUC SSD**, `~/heron_recordings`). If the setup points at the data drive but nothing is
+   mounted at `/media/DataStore`, the payload records to the NUC SSD instead of refusing: the top bar says
+   *Recording to: NUC SSD*, the planner strip shows *(NUC SSD)* after the setup name, and *Keep free on disk*
+   still protects the system drive.
 7. Right panel: MB/s to disk, GB per minute, minutes that fit, USB load. Yellow note = check with a soak test.
 8. **Load onto payload** → *Loaded on payload*, top bar *Payload: Ready*.
 9. **Signal check → Record test** (antennas connected, outside or near a window for GPS). Each channel
    should read *Good level* or *Usable*. If it suggests a gain, click **Use … dB** → **Load onto
    payload** → test again.
+   The length menu goes from 5 s to 30 min, or **Until I stop** (a **Stop** button appears while it runs).
+   While it records it shows elapsed time, MB/s and the dropped-sample count.
 10. **Save** under your own name. After any reboot the NUC loads the last loaded setup by itself.
 
 ---
@@ -383,7 +390,7 @@ Payload Setup top bar → *Flight controller: STABILIZE* (or the current mode).
 2. Start the planner, **Fly** → connect to the drone over the telemetry radio.
 3. Within a few seconds the strip at the top says **Payload ready** + your setup name.
    *No signal from the NUC* → check Part 10 and `journalctl -u heron-payload -f`.
-4. **Record** → `REC 0:05`, MB/s showing → **Stop** → a new folder under *Recent recordings* in Payload Setup.
+4. **Record** → `REC 0:05`, MB/s showing → **Stop** → the new session appears at the top of *Recordings* in Payload Setup.
 5. **Auto:** write the mission to the drone → **Auto** → start WP (default WP1), stop WP (default last) →
    **Arm auto-record** (strip turns amber). It records from arrival at the start WP to the stop WP, and
    stops early on RTL, land or disarm.
@@ -396,25 +403,39 @@ Payload Setup top bar → *Flight controller: STABILIZE* (or the current mode).
 - [ ] Strip shows *Payload ready* over the telemetry radio.
 - [ ] 30 s Record/Stop from the planner works; Signal check good on every channel.
 - [ ] Props off, armed on the bench: Auto armed → AUTO mode → recording starts at WP1 → disarm stops it.
-- [ ] 15 min recording with the flight setup: **Dropped stays 0**.
+- [ ] 15 min recording with the flight setup (Signal check → **15 min** → Record test): **Dropped stays 0**.
 - [ ] Unplug the telemetry radio mid‑recording: the NUC keeps recording; the strip recovers when back.
 
 ## Field day
 Cable laptop ↔ NUC, browser `http://192.168.137.10:8080` to check the setup,
 then fly from the planner.
 
-## Copy recordings to Windows  [Windows]
+## Look at recordings  [Windows browser]
+Payload Setup → **Recordings** (bottom of the page) lists every session on the data drive and the NUC SSD,
+newest first, with setup, length, size and any dropped samples. Pick one, then per channel:
+* **Spectrogram + histogram** draws both from a few hundred short slices spread across the recording
+  (about 1 MB is read, so it is quick even for a long flight). Set *Start* / *Length* to zoom in on part of
+  it; **Save pictures** downloads the PNGs.
+* **Download…** saves one 30 s file (`.sc8`), plus `settings.json` / `samples.jsonl` per radio.
+Viewing and downloading pause while the payload is recording or armed, so the disk keeps up.
+
+## Copy whole sessions to Windows  [Windows]
+Easiest: **WinSCP** (free) → New site → SFTP, host `192.168.137.10`, your NUC user → drag the
+`HERON_…` folders from `/media/DataStore/heron/` (or `~/heron_recordings/`) to your laptop. Or:
 ```powershell
 scp -r heron@192.168.137.10:/media/DataStore/heron/HERON_20261101_* $HOME\HERON_data\
 ```
-(Change the date part to the session you want; recordings are large: ~5 GB per minute at 2 channels.)
+(Change the date part to the session you want; recordings are large: ~2.6 GB per minute per channel.)
 
 ## Update the payload software later  [Windows]
+No internet needed. Copy the new folder over (it merges into the old one), then run the updater:
 ```powershell
 scp -r $HOME\HERON_Payload heron@192.168.137.10:~/
-ssh -t heron@192.168.137.10 "cd HERON_Payload && sudo bash deploy/install.sh"
+ssh -t heron@192.168.137.10 "sudo bash HERON_Payload/deploy/update.sh"
 ```
-Saved setups are kept.
+It copies the code to `/opt/heron`, rebuilds the recorder only if its source changed, restarts the service
+and prints the new version (also shown next to the NUC's name at the top of Payload Setup). Your setups,
+`/etc/heron/payload.env` and all recordings are kept. It refuses to run while the payload is recording.
 
 ## Handy NUC commands
 | What | Command |
@@ -422,7 +443,8 @@ Saved setups are kept.
 | Live log | `journalctl -u heron-payload -f` |
 | Restart | `sudo systemctl restart heron-payload` |
 | Free the radios for UHD tools | `sudo systemctl stop heron-payload` (start again with `start`) |
-| Disk space | `df -h /media/DataStore` |
+| Disk space | `df -h /media/DataStore ~` |
+| Is the data drive mounted? | `findmnt /media/DataStore` (nothing printed = not mounted) |
 | Radios | `uhd_find_devices` |
 | Serial adapters | `ls -l /dev/serial/by-id/` |
 | Shut down safely | `sudo poweroff` |

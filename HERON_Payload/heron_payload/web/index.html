@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HERON Payload Setup</title>
   <link rel="icon" href="/static/heron-logo.avif" />
-  <link rel="stylesheet" href="/static/setup.css?v=4" />
+  <link rel="stylesheet" href="/static/setup.css?v=6" />
 </head>
 <body>
   <header class="top">
@@ -17,7 +17,7 @@
       <div class="vital"><span>Payload</span><b id="vState">—</b></div>
       <div class="vital"><span>Running setup</span><b id="vSetup">—</b></div>
       <div class="vital"><span>Flight controller</span><b id="vCube">—</b></div>
-      <div class="vital"><span>Data disk</span><b id="vDisk">—</b></div>
+      <div class="vital"><span>Recording to</span><b id="vDisk">—</b></div>
     </div>
   </header>
 
@@ -57,6 +57,11 @@
           <label><span>File length</span><span class="unit"><input data-k="storage.segment_seconds" type="number" min="1" max="3600" /><i>s</i></span></label>
           <label><span>Keep free on disk</span><span class="unit"><input data-k="storage.reserve_gb" type="number" min="1" max="10000" /><i>GB</i></span></label>
           <label class="wide"><span>Save recordings in</span><input data-k="storage.path" spellcheck="false" /></label>
+          <div class="wide where">
+            <button id="useDataDrive" type="button" class="btn quiet">Use data drive</button>
+            <button id="useSsd" type="button" class="btn quiet">Use NUC SSD</button>
+            <p id="whereNote" class="note"></p>
+          </div>
         </div>
       </section>
 
@@ -91,17 +96,17 @@
         <div class="check-head">
           <h2 id="checkHeading">Signal check</h2>
           <div class="check-run">
-            <select id="testSeconds" aria-label="Test length"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
+            <select id="testSeconds" aria-label="Test length">
+              <option value="5" selected>5 s</option><option value="10">10 s</option><option value="30">30 s</option>
+              <option value="60">1 min</option><option value="300">5 min</option><option value="900">15 min</option>
+              <option value="1800">30 min</option><option value="0">Until I stop</option>
+            </select>
             <button id="runTest" type="button" class="btn">Record test</button>
+            <button id="stopTest" type="button" class="btn primary hidden">Stop</button>
           </div>
         </div>
-        <p class="note">Records a short clip with the loaded setup and shows how the 8-bit samples fill the range. Aim for a wide bell with nothing piled at the edges.</p>
+        <p class="note">Records with the loaded setup (5 s up to 30 min, or until you press Stop), then shows how the 8-bit samples fill the range. Aim for a wide bell with nothing piled at the edges. Long runs are the soak test: dropped samples should stay 0.</p>
         <div id="testResult"></div>
-      </section>
-
-      <section class="sessions" aria-labelledby="sessHeading">
-        <h2 id="sessHeading">Recent recordings</h2>
-        <ol id="sessionList"></ol>
       </section>
 
       <section class="sessions" aria-labelledby="logHeading">
@@ -110,6 +115,20 @@
       </section>
     </aside>
   </main>
+
+  <section class="recs" aria-labelledby="recsHeading">
+    <div class="recs-head">
+      <h2 id="recsHeading">Recordings</h2>
+      <span id="recsWhere" class="note"></span>
+      <button id="recsRefresh" type="button" class="btn quiet">Refresh</button>
+    </div>
+    <div class="recs-grid">
+      <ol id="recList" class="rec-list" aria-label="Recording sessions"></ol>
+      <div id="recDetail" class="rec-detail">
+        <p class="note">Pick a recording to see its channels, draw a spectrogram and histogram, or download files.</p>
+      </div>
+    </div>
+  </section>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
@@ -146,6 +165,7 @@
   </template>
   <datalist id="serials"></datalist>
 
-  <script src="/static/setup.js?v=5"></script>
+  <script src="/static/setup.js?v=7"></script>
+  <script src="/static/recordings.js?v=1"></script>
 </body>
 </html>

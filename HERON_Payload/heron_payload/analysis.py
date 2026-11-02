@@ -72,9 +72,13 @@ def analyse_session(session_dir):
             ch = actual[n] if n < len(actual) else {}
             fmt = "sc8" if f.suffix == ".sc8" else "sc16"
             row = analyse_file(f, fmt)
-            row.update(radio=radio_dir.name, label=ch.get("label", f"channel {n}"), gain_db=ch.get("gain_db"),
-                       suggested_gain_db=(round(ch["gain_db"] + row["gain_change_db"], 1)
-                                          if ch.get("gain_db") is not None else None))
+            # The C++ recorder writes settings.json with Boost, which stores every number as a string ("45").
+            try:
+                gain = float(ch.get("gain_db"))
+            except (TypeError, ValueError):
+                gain = None
+            row.update(radio=radio_dir.name, label=ch.get("label", f"channel {n}"), gain_db=gain,
+                       suggested_gain_db=round(gain + row["gain_change_db"], 1) if gain is not None else None)
             result.append(row)
     if not result:
         raise ValueError("No sample files found in " + root.name)

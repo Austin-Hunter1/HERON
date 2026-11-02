@@ -58,7 +58,8 @@ def presets():
         _radio("reflected_l1", "Reflected L1", "b210", 1575.42, ["L1 reflected RHCP", "L1 reflected LHCP"]),
         _radio("reflected_l5", "Reflected L5", "b210", 1176.45, ["L5 reflected RHCP", "L5 reflected LHCP"]),
     ], clock="external")
-    return [l5, surge, full]
+    single = _setup("One B200 (single antenna)", [_radio("b200", "B200", "b200", 1176.45, ["L5 antenna"])])
+    return [l5, surge, single, full]
 
 
 def number(value, lo, hi, label):

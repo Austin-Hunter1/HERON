@@ -72,7 +72,8 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(set(values), set(P.STATUS_FIELDS))
         self.assertEqual(P.STATES[int(values[P.F_STATE])], "READY")
         texts = [m.text for m in self.down.out if m.get_type() == "STATUSTEXT"]
-        self.assertIn(P.SETUP_PREFIX + presets()[0]["name"], texts)
+        # "(NUC SSD)" is appended when no data drive is mounted (as on a test machine).
+        self.assertTrue(any(x.startswith(P.SETUP_PREFIX + presets()[0]["name"]) for x in texts), texts)
         hb = next(m for m in self.down.out if m.get_type() == "HEARTBEAT")
         self.assertEqual((hb.get_srcComponent(), hb.type), (191, 18))
 

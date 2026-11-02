@@ -11,21 +11,24 @@ import threading
 import time
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 
-from . import analysis
+from . import __version__, analysis, recordings, storage
 from .config import ProfileStore, estimate, validate
 
 WEB = Path(__file__).resolve().parent / "web"
 mimetypes.add_type("image/avif", ".avif")  # Python 3.12 (Ubuntu 24.04) does not know it
 mimetypes.add_type("font/woff2", ".woff2")
 BUSY_STATES = ("AUTO_ARMED", "RECORDING", "FINALIZING", "PREPARING")
+MAX_TEST_SECONDS = 3600         # timed bench recordings up to 1 hour; 0 = until Stop
 
 
-def create_app(controller, state_dir, on_applied=lambda: None):
+def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
     app = Flask(__name__, static_folder=None)
+    ssd_dir = str(ssd_dir or storage.default_ssd_dir())
     store = ProfileStore(Path(state_dir) / "setups.json")
-    test = dict(running=False, until=None, result=None, error=None, session=None)
+    # seconds == 0 means "record until Stop is pressed".
+    test = dict(running=False, until=None, started=None, seconds=None, result=None, error=None, session=None)
     lock = threading.Lock()
 
     @app.before_request
@@ -65,25 +68,74 @@ def create_app(controller, state_dir, on_applied=lambda: None):
     def static_file(name):
         return send_from_directory(WEB, name)
 
+    def where():
+        """Where recordings go right now (data drive, or the NUC SSD when no data drive is mounted)."""
+        snap_where = (controller.backend.status() or {}).get("storage") if controller.config else None
+        return snap_where or storage.resolve(controller.config or store.list()[0], ssd_dir)
+
+    def busy_check(what):
+        with lock:
+            testing = test["running"]
+        if controller.state in BUSY_STATES or testing:
+            raise ValueError(what + " is paused while the payload is recording or armed, so the disk keeps up.")
+
     @app.get("/api/state")
     def state():
         snap = controller.snapshot()
-        storage = controller.backend.storage_root(controller.config or store.list()[0])
+        w = snap.get("storage") or where()
         disk = None
-        probe = Path(storage)
+        probe = Path(w["path"])
         while not probe.exists() and probe != probe.parent:
             probe = probe.parent
         try:
             u = shutil.disk_usage(probe)
-            disk = dict(path=str(probe), total_gb=round(u.total / 1e9, 1), free_gb=round(u.free / 1e9, 1))
+            disk = dict(path=w["path"], drive=w["drive"], fallback=w["fallback"], configured=w["configured"],
+                        total_gb=round(u.total / 1e9, 1), free_gb=round(u.free / 1e9, 1))
         except OSError:
             pass
         with lock:
-            t = dict(test, remaining_s=max(0, round(test["until"] - time.monotonic(), 1)) if test["running"] else 0)
-            t.pop("until")
+            t = dict(test)
+            now = time.monotonic()
+            t["elapsed_s"] = round(now - test["started"], 1) if test["running"] else 0
+            t["remaining_s"] = (max(0, round(test["until"] - now, 1)) if test["until"] else None) if test["running"] else 0
+            t.pop("until"); t.pop("started")
         return jsonify(status=snap, active=copy.deepcopy(controller.config), host=socket.gethostname(),
-                       disk=disk, test=t, sessions=analysis.list_sessions(storage, 8),
+                       version=__version__, disk=disk, ssd_dir=ssd_dir, test=t,
                        locked=controller.state in BUSY_STATES)
+
+    def roots():
+        cfg = controller.config or store.list()[0]
+        found = [Path(controller.backend.storage_root(cfg))]
+        for r in storage.candidate_roots(cfg, ssd_dir):
+            if r not in found:
+                found.append(r)
+        return found
+
+    @app.get("/api/recordings")
+    def recording_list():
+        return jsonify(sessions=recordings.list_sessions(roots()),
+                       folders=[dict(path=str(r), drive=storage.drive_label(r), exists=r.is_dir()) for r in roots()])
+
+    @app.get("/api/recordings/view")
+    def recording_view():
+        busy_check("Viewing recordings")
+        a = request.args
+        session_dir = recordings.find_session(roots(), a.get("session"))
+        span = a.get("span", type=float)
+        return jsonify(recordings.sample_channel(session_dir, a.get("radio"), a.get("channel", 0, type=int),
+                                                 a.get("start", 0.0, type=float), span or None,
+                                                 a.get("rows", 240, type=int), a.get("nfft", 512, type=int),
+                                                 a.get("avg", 4, type=int)))
+
+    @app.get("/api/recordings/file")
+    def recording_file():
+        busy_check("Downloading")
+        a = request.args
+        session_dir = recordings.find_session(roots(), a.get("session"))
+        path = recordings.file_path(session_dir, a.get("radio") or None, a.get("name"))
+        prefix = "_".join(x for x in (session_dir.name, a.get("radio")) if x)
+        return send_file(path, as_attachment=True, download_name=f"{prefix}_{path.name}",
+                         mimetype="application/octet-stream", conditional=True)
 
     @app.get("/api/setups")
     def setups():
@@ -120,8 +172,8 @@ def create_app(controller, state_dir, on_applied=lambda: None):
     @app.post("/api/test")
     def start_test():
         seconds = body().get("seconds", 5)
-        if type(seconds) not in (int, float) or not 1 <= seconds <= 60:
-            raise ValueError("Test length must be 1-60 seconds.")
+        if type(seconds) not in (int, float) or not (seconds == 0 or 1 <= seconds <= MAX_TEST_SECONDS):
+            raise ValueError(f"Test length must be 1-{MAX_TEST_SECONDS // 60} minutes, or 0 to record until Stop.")
         with lock:
             if test["running"]:
                 raise ValueError("A test recording is already running.")
@@ -132,14 +184,22 @@ def create_app(controller, state_dir, on_applied=lambda: None):
                 raise ValueError("The aircraft is armed. Test recordings are for the bench.")
             controller.execute("start", dict(origin="test"))
             session_dir = controller.backend.session_path()
-            test.update(running=True, until=time.monotonic() + seconds, result=None, error=None,
-                        session=controller.session)
+            session = controller.session
+            started = time.monotonic()
+            test.update(running=True, started=started, until=started + seconds if seconds else None, seconds=seconds,
+                        result=None, error=None, session=session)
+
+        def still_ours():
+            return controller.state == "RECORDING" and controller.origin == "test" and controller.session == session
 
         def finish():
-            time.sleep(seconds)
+            # Wait for the timer, for Stop on the page, or for the recording to end some other way
+            # (disk reserve reached, recorder fault, ground station Stop, disarm).
+            while still_ours() and (not seconds or time.monotonic() < started + seconds):
+                time.sleep(0.2)
             result = error = None
             try:
-                if controller.state == "RECORDING" and controller.origin == "test":
+                if still_ours():
                     controller.execute("stop")
                 result = analysis.analyse_session(session_dir) if session_dir else None
                 if result is None:
@@ -152,6 +212,13 @@ def create_app(controller, state_dir, on_applied=lambda: None):
         threading.Thread(target=finish, daemon=True, name="test-recording").start()
         return jsonify(ok=True)
 
+    @app.post("/api/test/stop")
+    def stop_test():
+        """Stops a test recording made from this page; never a flight recording."""
+        if controller.state == "RECORDING" and controller.origin == "test":
+            controller.execute("stop")
+        return jsonify(status=controller.snapshot())
+
     @app.post("/api/stop")
     def stop():
         controller.execute("stop")
@@ -160,9 +227,9 @@ def create_app(controller, state_dir, on_applied=lambda: None):
     return app
 
 
-def serve(controller, state_dir, host, port, on_applied=lambda: None):
+def serve(controller, state_dir, host, port, on_applied=lambda: None, ssd_dir=None):
     from werkzeug.serving import make_server
-    server = make_server(host, port, create_app(controller, state_dir, on_applied), threaded=True)
+    server = make_server(host, port, create_app(controller, state_dir, on_applied, ssd_dir), threaded=True)
     threading.Thread(target=server.serve_forever, daemon=True, name="setup-http").start()
     controller.event(f"Payload Setup on http://{socket.gethostname()}:{port}")
     return server

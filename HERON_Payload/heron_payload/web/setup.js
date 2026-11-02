@@ -13,7 +13,7 @@
   };
 
   let setups = [], draft = null, active = null, status = null, disk = null, locked = false;
-  let devices = [], test = null, dirty = false, polling = null;
+  let devices = [], test = null, dirty = false, polling = null, ssdDir = null;
 
   async function api(path, body) {
     const opt = body === undefined ? {} : {
@@ -71,7 +71,8 @@
         let v = input.type === "checkbox" ? input.checked : input.type === "number" ? Number(input.value) : input.value;
         if (k === "model" && v !== r.model) {
           r.model = v;
-          if (v === "b200") r.channels = [r.channels[0]];
+          // A B200 has only RF A: keep whichever channel was in use (e.g. SURGE's RF B) and switch it on.
+          if (v === "b200") r.channels = [{ ...(r.channels.find((c) => c.enabled) || r.channels[0]), enabled: true }];
           else r.channels = [r.channels[0], { index: 1, enabled: false, label: "RF B antenna", port: "RX2", gain_db: r.channels[0].gain_db }];
           r.channels.forEach((c, i) => (c.index = i));
           return changed(true);
@@ -138,6 +139,7 @@
     $("budgetWarn").textContent = warn.join(" ");
     $("budgetWarn").classList.toggle("hidden", !warn.length);
     renderApply();
+    renderWhere();
   }
 
   function renderApply() {
@@ -230,14 +232,31 @@
     try { await api("/api/test", { seconds: Number($("testSeconds").value) }); await refresh(); }
     catch (e) { toast(e.message, true); }
   });
+  $("stopTest").addEventListener("click", async () => {
+    $("stopTest").disabled = true;
+    try { await api("/api/test/stop", {}); await refresh(); }
+    catch (e) { toast(e.message, true); }
+    finally { $("stopTest").disabled = false; }
+  });
+  const clock = (s) => { s = Math.max(0, Math.round(s)); return s < 60 ? s + " s" : Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
   function renderTest() {
     const box = $("testResult");
-    $("runTest").disabled = !!test?.running || locked;
-    if (test?.running) {
-      const total = Number($("testSeconds").value);
-      const pct = Math.min(100, 100 * (1 - test.remaining_s / total));
-      box.innerHTML = `<p class="note">Recording… ${Math.ceil(test.remaining_s)} s left</p><div class="progress"><i style="width:${pct}%"></i></div>`;
+    const running = !!test?.running;
+    $("runTest").disabled = running || locked;
+    $("runTest").classList.toggle("hidden", running);
+    $("stopTest").classList.toggle("hidden", !running);
+    $("testSeconds").disabled = running;
+    if (running) {
+      const dropped = (status?.radios || []).reduce((n, r) => n + (r.overflows || 0) + (r.gaps || 0), 0);
+      const rate = status?.rate_mbps ? ` · ${status.rate_mbps.toFixed(0)} MB/s` : "";
+      const drop = `<span class="${dropped ? "bad" : ""}">dropped ${dropped}</span>`;
+      if (test.remaining_s == null) {
+        box.innerHTML = `<p class="note">Recording ${clock(test.elapsed_s)}${rate} · ${drop}. Press Stop when done.</p><div class="progress live"><i></i></div>`;
+      } else {
+        const pct = Math.min(100, 100 * test.elapsed_s / Math.max(1, test.seconds));
+        box.innerHTML = `<p class="note">Recording ${clock(test.elapsed_s)} of ${clock(test.seconds)}${rate} · ${drop}</p><div class="progress"><i style="width:${pct}%"></i></div>`;
+      }
       return;
     }
     if (test?.error) { box.innerHTML = `<p class="warn">${esc(test.error)}</p>`; return; }
@@ -278,8 +297,8 @@
 
   // ---------------- status ----------------
   function renderStatus(s) {
-    status = s.status; active = s.active; disk = s.disk; locked = s.locked; test = s.test;
-    $("host").textContent = s.host + (status.simulated ? " (simulated radios)" : "");
+    status = s.status; active = s.active; disk = s.disk; locked = s.locked; test = s.test; ssdDir = s.ssd_dir || ssdDir;
+    $("host").textContent = s.host + (s.version ? " · v" + s.version : "") + (status.simulated ? " (simulated radios)" : "");
     const [text, tone] = STATE_TEXT[status.state] || [status.state, "warn"];
     $("vState").textContent = status.state === "RECORDING" ? `${text} ${Math.floor(status.elapsed_s)} s` : text;
     $("vState").dataset.tone = tone;
@@ -287,8 +306,9 @@
     const cube = status.cube || {};
     $("vCube").textContent = cube.connected ? `${cube.mode || "linked"}${cube.armed ? ", armed" : ""}` : "not linked";
     $("vCube").dataset.tone = cube.connected ? "good" : "warn";
-    $("vDisk").textContent = disk ? `${disk.free_gb} GB free` : "—";
-    $("vDisk").dataset.tone = disk && active && disk.free_gb <= active.storage.reserve_gb ? "bad" : "";
+    $("vDisk").textContent = disk ? `${disk.drive === "NUC SSD" ? "NUC SSD" : "Data drive"} · ${fmtFree(disk.free_gb)} free` : "—";
+    $("vDisk").dataset.tone = disk && active && disk.free_gb <= active.storage.reserve_gb ? "bad" : disk?.fallback ? "warn" : "";
+    renderWhere();
     const banner = $("lockBanner");
     if (status.state === "FAULT") {
       banner.textContent = "Payload fault: " + (status.fault || "unknown") + ". Fix the cause, then load the setup again.";
@@ -299,16 +319,36 @@
         : "Armed for auto-record from the ground station. Settings are locked until it is cancelled or finishes.";
       banner.className = "banner";
     } else banner.className = "banner hidden";
-    const list = $("sessionList");
-    list.innerHTML = s.sessions.length ? s.sessions.map((x) =>
-      `<li><b>${esc(x.name.replace(/^HERON_/, ""))}</b><span class="${x.complete === false ? "bad" : ""}">${fmtGB(x.bytes)}${x.complete === false ? ", incomplete" : x.complete == null ? ", in progress" : ""}</span></li>`
-    ).join("") : `<li class="empty">No recordings yet.</li>`;
     $("eventList").innerHTML = (status.events || []).slice(-6).reverse().map((e) =>
       `<li><b>${esc(e.text)}</b><span>${new Date(e.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></li>`
     ).join("") || `<li class="empty">Nothing yet.</li>`;
     renderTest();
     if (draft) budget();
+    window.HERON.state = s;
+    window.dispatchEvent(new CustomEvent("heron-state", { detail: s }));
   }
+
+  // ---------------- where recordings go ----------------
+  const DATA_DRIVE_PATH = "/media/DataStore/heron";
+  const fmtFree = (gb) => gb >= 1000 ? (gb / 1000).toFixed(1) + " TB" : Math.round(gb) + " GB";
+  function renderWhere() {
+    const note = $("whereNote");
+    if (!note || !draft) return;
+    const path = draft.storage.path;
+    $("useDataDrive").disabled = locked || path === DATA_DRIVE_PATH;
+    $("useSsd").disabled = locked || !ssdDir || path === ssdDir;
+    if (!disk) { note.textContent = ""; return; }
+    const loaded = active && active.storage.path === path;
+    if (!loaded) {
+      note.textContent = "Load onto payload to switch. Under /media/… the payload checks that drive is plugged in; if it is not, it records to the NUC SSD instead.";
+    } else if (disk.fallback) {
+      note.innerHTML = `<b>No data drive is mounted</b>, so recordings go to the NUC SSD (<code>${esc(disk.path)}</code>), keeping ${active.storage.reserve_gb} GB free.`;
+    } else {
+      note.innerHTML = `Recording to the ${disk.drive === "NUC SSD" ? "NUC SSD" : "data drive"}: <code>${esc(disk.path)}</code>, ${fmtFree(disk.free_gb)} free of ${fmtFree(disk.total_gb)}.`;
+    }
+  }
+  $("useDataDrive").addEventListener("click", () => { draft.storage.path = DATA_DRIVE_PATH; changed(true); });
+  $("useSsd").addEventListener("click", () => { if (ssdDir) { draft.storage.path = ssdDir; changed(true); } });
 
   async function refresh() {
     try { renderStatus(await api("/api/state")); }
@@ -316,6 +356,7 @@
   }
 
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+  window.HERON = { api, toast, esc, fmtGB, histSvg, state: null };
 
   async function boot() {
     const [st, su] = await Promise.all([api("/api/state"), api("/api/setups")]);

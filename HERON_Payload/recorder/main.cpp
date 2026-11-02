@@ -15,6 +15,7 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -46,6 +47,8 @@ void sync_file(const fs::path& p) {
 }
 struct Frame {std::vector<std::vector<Sample>> channels;double time;int error;};
 class Writer {
+    // Converts and writes on its own thread so the receive loop never waits for the disk.
+    // Speed matters: two B210 channels at 22 MS/s are 88 million values per second.
     std::mutex mutex;
     std::condition_variable cv;
     std::deque<Frame> queue;
@@ -58,15 +61,28 @@ class Writer {
     double rate;
     uint64_t segment_samples;
     size_t count;
+    size_t max_frames=0;
+    // sc16 -> sc8 lookup table: identical to round(v*scale), clamped, but ~10x faster than calling lround per value.
+    std::vector<int8_t> lut;
+    std::vector<uint8_t> lut_clip;
+    // Finished 30 s files are fsynced in the background so the writer keeps going meanwhile.
+    std::deque<std::future<void>> syncing;
+    void reap(bool all){
+        while(!syncing.empty()&&(all||syncing.front().wait_for(std::chrono::seconds(0))==std::future_status::ready)){
+            auto f=std::move(syncing.front());syncing.pop_front();f.get();   // rethrows a sync failure
+        }
+    }
     void run() {
       try {
         uint64_t offset=0,segment=0,in_segment=0;
         std::vector<std::ofstream> files(count);
         std::vector<fs::path> paths(count);
+        std::vector<int8_t> bytes8;
+        std::vector<int16_t> bytes16;
         std::ofstream meta(directory/"samples.jsonl");
         if(!meta)throw std::runtime_error("Cannot open sample metadata");
         meta<<std::setprecision(17);
-        auto close_files=[&](){for(size_t c=0;c<count;c++){if(files[c].is_open()){files[c].flush();files[c].close();if(files[c].fail())throw std::runtime_error("Disk write/close failed");sync_file(paths[c]);}}};
+        auto close_files=[&](){for(size_t c=0;c<count;c++){if(files[c].is_open()){files[c].flush();files[c].close();if(files[c].fail())throw std::runtime_error("Disk write/close failed");fs::path done=paths[c];syncing.push_back(std::async(std::launch::async,[done]{sync_file(done);}));}}reap(false);};
         auto open_files=[&](){for(size_t c=0;c<count;c++){std::ostringstream n;n<<"channel_"<<c<<"_"<<std::setw(6)<<std::setfill('0')<<segment<<(eight?".sc8":".sc16");paths[c]=directory/n.str();files[c].clear();files[c].open(paths[c],std::ios::binary|std::ios::out);if(!files[c])throw std::runtime_error("Cannot open sample file");}};
         open_files();
         for(;;){
@@ -77,11 +93,16 @@ class Writer {
             if(in_segment==segment_samples){close_files();segment++;in_segment=0;open_files();}
             size_t take=std::min<uint64_t>(n-consumed,segment_samples-in_segment);
             for(size_t c=0;c<count;c++){
-              if(eight){std::vector<int8_t> bytes(take*2);uint64_t clip=0;
-                auto q=[&](int16_t v)->int8_t{long r=std::lround(v*scale8);if(r>127){r=127;clip++;}else if(r<-128){r=-128;clip++;}return int8_t(r);};
-                for(size_t i=0;i<take;i++){bytes[2*i]=q(f.channels[c][consumed+i].real());bytes[2*i+1]=q(f.channels[c][consumed+i].imag());}
-                clipped+=clip;files[c].write(reinterpret_cast<const char*>(bytes.data()),bytes.size());}
-              else {std::vector<int16_t> bytes(take*2);for(size_t i=0;i<take;i++){bytes[2*i]=f.channels[c][consumed+i].real();bytes[2*i+1]=f.channels[c][consumed+i].imag();}files[c].write(reinterpret_cast<const char*>(bytes.data()),bytes.size()*sizeof(int16_t));}
+              const int16_t* src=reinterpret_cast<const int16_t*>(f.channels[c].data()+consumed);
+              if(eight){
+                bytes8.resize(take*2);uint64_t clip=0;
+                const int8_t* t=lut.data()+32768;const uint8_t* k=lut_clip.data()+32768;
+                for(size_t i=0;i<take*2;i++){bytes8[i]=t[src[i]];clip+=k[src[i]];}
+                clipped+=clip;files[c].write(reinterpret_cast<const char*>(bytes8.data()),bytes8.size());
+              } else {
+                bytes16.assign(src,src+take*2);
+                files[c].write(reinterpret_cast<const char*>(bytes16.data()),bytes16.size()*sizeof(int16_t));
+              }
               if(!files[c])throw std::runtime_error("Sample write failed (disk full or I/O error)");
             }
             meta<<"{\"sample_offset\":"<<offset<<",\"count\":"<<take<<",\"device_time\":"<<f.time+consumed/rate<<",\"segment\":"<<segment<<",\"segment_offset\":"<<in_segment<<",\"uhd_error\":"<<f.error<<"}\n";
@@ -90,16 +111,27 @@ class Writer {
           }
         }
         close_files();meta.flush();meta.close();if(meta.fail())throw std::runtime_error("Metadata close failed");sync_file(directory/"samples.jsonl");
-      }catch(const std::exception& e){std::lock_guard<std::mutex> lock(mutex);failure=e.what();failed=true;}
+        reap(true);
+      }catch(const std::exception& e){
+        try{reap(true);}catch(...){}
+        std::lock_guard<std::mutex> lock(mutex);failure=e.what();failed=true;
+      }
     }
 public:
     std::atomic<uint64_t> written{0};
     std::atomic<uint64_t> clipped{0};
     std::atomic<bool> failed{false};
     // sc8: scale so that `peak` x full-scale sc16 maps to +/-127 (UHD's own sc8 "peak" convention; SURGE used 0.25).
-    Writer(const fs::path& p,bool sc8,double sr,int seconds,size_t ch,double peak=0.25):directory(p),eight(sc8),scale8(127.0/(32767.0*peak)),rate(sr),segment_samples(uint64_t(std::llround(sr*seconds))),count(ch){thread=std::thread(&Writer::run,this);}
+    Writer(const fs::path& p,bool sc8,double sr,int seconds,size_t ch,double peak=0.25)
+        :directory(p),eight(sc8),scale8(127.0/(32767.0*peak)),rate(sr),segment_samples(uint64_t(std::llround(sr*seconds))),count(ch),
+         lut(65536),lut_clip(65536){
+        for(int v=-32768;v<=32767;v++){long r=std::lround(v*scale8);uint8_t clip=0;if(r>127){r=127;clip=1;}else if(r<-128){r=-128;clip=1;}lut[v+32768]=int8_t(r);lut_clip[v+32768]=clip;}
+        // Up to 512 MB of samples may wait for the disk (about 3 s at 2 x 22 MS/s), riding out short stalls.
+        max_frames=std::max<size_t>(8,size_t(512)*1024*1024/(32768*count*sizeof(Sample)));
+        thread=std::thread(&Writer::run,this);
+    }
     ~Writer(){try{finish();}catch(...) {}}
-    void push(Frame&& f){std::lock_guard<std::mutex> lock(mutex);if(failed)throw std::runtime_error(failure);size_t maximum=std::max<size_t>(8,64*1024*1024/(32768*count*sizeof(Sample)));if(queue.size()>=maximum)throw std::runtime_error("Disk writer cannot keep up; receive queue exhausted");queue.push_back(std::move(f));cv.notify_one();}
+    void push(Frame&& f){std::lock_guard<std::mutex> lock(mutex);if(failed)throw std::runtime_error(failure);if(queue.size()>=max_frames)throw std::runtime_error("Disk writer cannot keep up; receive queue exhausted");queue.push_back(std::move(f));cv.notify_one();}
     void finish(){if(thread.joinable()){{std::lock_guard<std::mutex> lock(mutex);stopping=true;cv.notify_one();}thread.join();}if(failed)throw std::runtime_error(failure);}
 };
 
