@@ -139,8 +139,12 @@ def _rate_tag(rate):
     return ("%gmsps" % (rate / 1e6)).replace(".", "p") if rate else "rate_unknown"
 
 
-def download_session(nuc, session, dest, experiment, report=print):
-    """Download one session into <dest>/<experiment>. Returns the list of collect names written."""
+def download_session(nuc, session, dest, experiment, report=print, progress=None):
+    """Download one session into <dest>/<experiment>. Returns the list of collect names written.
+
+    `progress(n)` is called with the size of every sample block written, so a page can show progress. It may
+    raise (for example to cancel); the half-written .dat.part file is then removed.
+    """
     plan = plan_session(session, experiment)
     exp_dir = Path(dest) / experiment
     raw_dir = exp_dir / "nuc" / session["name"]
@@ -166,11 +170,18 @@ def download_session(nuc, session, dest, experiment, report=print):
         report(f"{session['name']}: {c['label']} -> {dat.name} ({c['bytes'] / 1e9:.2f} GB, "
                f"{len(c['segments'])} segment(s))")
         written = 0
-        with open(part, "wb") as out:
-            for seg in c["segments"]:          # the segments in order, joined into one file like the wizard's
-                for block in nuc.stream("/api/recordings/file", session=session["name"], radio=c["radio"], name=seg):
-                    out.write(block)
-                    written += len(block)
+        try:
+            with open(part, "wb") as out:
+                for seg in c["segments"]:      # the segments in order, joined into one file like the wizard's
+                    for block in nuc.stream("/api/recordings/file", session=session["name"], radio=c["radio"],
+                                            name=seg):
+                        out.write(block)
+                        written += len(block)
+                        if progress:
+                            progress(len(block))
+        except BaseException:
+            part.unlink(missing_ok=True)
+            raise
         if written != c["bytes"]:
             raise RuntimeError(f"{dat.name}: got {written} bytes, the NUC listed {c['bytes']}")
         part.replace(dat)
@@ -282,6 +293,21 @@ def _write_yaml(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=110), encoding="utf-8")
 
 
+def default_experiment(session_name):
+    start = session_start(session_name)
+    return f"{(start or datetime.now(timezone.utc)).strftime('%Y%m%d')}_HERON_Payload"
+
+
+def pulled_into(dest, session_name):
+    """The experiment folder that already holds this session, or None."""
+    root = Path(dest)
+    if not root.is_dir():
+        return None
+    for marker in root.glob(f"*/nuc/{session_name}/pulled.json"):
+        return marker.parents[2].name
+    return None
+
+
 def pick(sessions, count, name, include_incomplete):
     if name:
         found = [s for s in sessions if s["name"] == name]
@@ -318,8 +344,7 @@ def main(argv=None):
         print("No finished session on the NUC. Use --list, or --include-incomplete.")
         return 1
     for s in chosen:
-        start = session_start(s["name"])
-        experiment = a.experiment or f"{(start or datetime.now(timezone.utc)).strftime('%Y%m%d')}_HERON_Payload"
+        experiment = a.experiment or default_experiment(s["name"])
         names = download_session(nuc, s, a.dest, experiment)
         if names:
             print(f"{s['name']}: {len(names)} collect(s) in {Path(a.dest) / experiment}")

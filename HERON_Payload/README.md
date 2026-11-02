@@ -61,7 +61,13 @@ The Signal check reports clipping and suggests a gain.
 
 ## Download recordings to the laptop (tools/heron_pull.py)
 
-Run on the laptop, in the HERON_Payload folder (`uv` installs PyYAML for it):
+**From a web page:** double-click `tools/HERON_Download.bat` (needs `uv`). It opens `http://localhost:8770`, a
+page that runs on the laptop: it lists the NUC's sessions, and **Download** saves one into the collects folder,
+with progress and Cancel. The NUC address and the collects folder are fields on the page (saved in
+`~/.heron_pull.json`). Keep the window open while it downloads. A page from the NUC itself cannot do this:
+browsers do not let a plain-http page write into a folder on the laptop.
+
+**From the terminal**, in the HERON_Payload folder (`uv` installs PyYAML for it):
 
 ```sh
 uv run tools/heron_pull.py --list            # sessions on the NUC

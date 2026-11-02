@@ -80,7 +80,7 @@
         </dl>
       </div>
       ${problems.length ? `<p class="warn">${problems.map(esc).join("<br>")}</p>` : ""}
-      <p class="note pull-cmd">To copy this session into D:\\01_Data\\collects on your laptop (one .dat, .yml and metadata.yml entry per channel), run in the HERON_Payload folder:
+      <p class="note pull-cmd">To copy this session into D:\\01_Data\\collects on your laptop (one .dat, .yml and metadata.yml entry per channel), double-click <b>HERON_Download.bat</b> in HERON_Payload\\tools and press Download, or run in the HERON_Payload folder:
         <code>uv run tools/heron_pull.py --nuc ${esc(location.origin)} --session ${esc(s.name)}</code></p>
       ${busy ? `<p class="warn">The payload is recording or armed. Viewing and downloading are paused so the disk keeps up.</p>` : ""}
       ${s.radios.map((r) => `
