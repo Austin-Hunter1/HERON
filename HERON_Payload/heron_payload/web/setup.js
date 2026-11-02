@@ -374,7 +374,8 @@
   }
 
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
-  window.HERON = { api, toast, esc, fmtGB, histSvg, state: null };
+  // editDraft lets other panels (sweeps.js) change the setup being edited, the same way the form does.
+  window.HERON = { api, toast, esc, fmtGB, histSvg, state: null, editDraft: (fn) => { fn(draft); changed(true); } };
 
   async function boot() {
     const [st, su] = await Promise.all([api("/api/state"), api("/api/setups")]);

@@ -203,7 +203,9 @@ class AutoRecordTests(unittest.TestCase):
 class SignalCheckTests(unittest.TestCase):
     def test_noise_level_verdicts(self):
         with tempfile.TemporaryDirectory() as d:
-            for gain, expect in ((45, ("low", "good")), (70, ("clipping",)), (5, ("too quiet",))):
+            # peak 1.0 (the collect wizard value, D-078) has 12 dB less digital gain than SURGE-era 0.25,
+            # so the simulated radio needs about 12 dB more RF gain for the same level.
+            for gain, expect in ((57, ("low", "good")), (76, ("clipping",)), (5, ("too quiet",))):
                 setup = copy.deepcopy(presets()[0])
                 for ch in setup["radios"][0]["channels"]:
                     ch["gain_db"] = gain

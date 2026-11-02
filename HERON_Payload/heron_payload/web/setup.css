@@ -247,6 +247,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .rec-radio-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: #f6f9f7; border-bottom: 1px solid var(--rule); }
 .rec-radio-head > span { color: var(--muted); font-size: .9rem; }
 .rec-radio-head .files { margin-left: auto; }
+.sweeps .fields { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); margin: 8px 0; }
+.sweeps textarea { width: 100%; font: inherit; font-size: .88rem; }
+.sweep-form { border-top: 1px solid var(--rule); padding: 10px 0; }
+.sweep-form summary { cursor: pointer; font-weight: 600; }
+.sweep-bests { display: grid; gap: 8px; margin: 10px 0; }
+.sweep-best { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: var(--r-sm); }
+.sweep-best span { color: var(--muted); font-size: .88rem; }
+.sweep-best .btn { justify-self: start; }
+.sweep-scroll { max-height: 300px; overflow: auto; margin-top: 8px; }
+.sweep-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.sweep-table th { position: sticky; top: 0; background: #f6f9f7; text-align: left; font-weight: 600; }
+.sweep-table th, .sweep-table td { padding: 3px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.sweep-table tr.on td { background: var(--teal-soft, #e3f2ef); }
+.sweep-table .btn { padding: 2px 8px; }
 .drops:empty { display: none; }
 .drops { padding: 4px 12px 10px; border-bottom: 1px solid var(--rule); }
 .drops .good-note { color: var(--muted); }

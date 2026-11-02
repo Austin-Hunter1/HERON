@@ -59,6 +59,21 @@ to find the values the NUC needs. Each radio's **Profile** list has the wizard's
 (L5 / L1 15 MS/s 15 MHz, L1CA 5 MS/s 5 MHz); **Bandwidth** is the analog filter and takes any typed value.
 The Signal check reports clipping and suggests a gain.
 
+## Automated tests in Payload Setup (sweeps.py)
+
+The **Automated tests** panel records short trials with the loaded setup, then loads that setup again. Nothing
+changes in the setup until you press **Use**; then save the setup and load it. Bench only (refused while armed).
+
+* **Gain sweep:** the collect wizard's gain calibration for every enabled channel at once: a coarse sweep
+  (10-70 dB), one trial at the gain predicted from the median of (sigma dB - gain dB) of the clean trials, then
+  2 dB steps between the two best. Score = -|sigma/full scale - 1/4.5| - 50 x clipped fraction, with sigma from
+  the 16th-84th percentile spread. Each channel gets its own best gain.
+* **Buffer sweep:** every combination of write method, samples per buffer, USB buffers (UHD device args) and
+  file buffer. A trial is clean with no overflow, no gap, and no drop in samples.jsonl ("Find drops").
+
+Trial recordings are deleted unless "Keep the trial recordings" is on. Each result is also saved as JSON in
+`<state dir>/sweeps/` (`/var/lib/heron/sweeps` on the NUC).
+
 ## Testing without hardware
 
 ```sh

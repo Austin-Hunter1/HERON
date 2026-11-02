@@ -114,6 +114,46 @@
         <div id="testResult"></div>
       </section>
 
+      <section class="sweeps" aria-labelledby="sweepHeading">
+        <div class="check-head">
+          <h2 id="sweepHeading">Automated tests</h2>
+          <button id="stopSweep" type="button" class="btn primary hidden">Stop sweep</button>
+        </div>
+        <p class="note">Each test records short trials with the loaded setup, then loads that setup again. Nothing changes in the setup until you press Use. Bench only.</p>
+        <details class="sweep-form" open>
+          <summary>Gain sweep: find each antenna's gain</summary>
+          <p class="note">The collect wizard's method: a coarse sweep, a predicted gain, then a fine sweep between the two best. Every enabled channel gets its own best gain.</p>
+          <div class="fields">
+            <label class="wide"><span>Coarse gains</span><input id="gGains" value="10, 20, 30, 40, 50, 60, 70" spellcheck="false" /></label>
+            <label><span>Seconds per gain</span><input id="gSeconds" type="number" min="1" max="600" value="8" /></label>
+            <label><span>Fine step</span><span class="unit"><input id="gFine" type="number" min="0.5" max="20" step="0.5" value="2" /><i>dB</i></span></label>
+            <label><span>Target</span><span class="unit"><input id="gTarget" type="number" min="2" max="10" step="0.1" value="4.5" /><i>σ to full scale</i></span></label>
+            <label class="tog"><input id="gKeep" type="checkbox" /><span>Keep the trial recordings</span></label>
+          </div>
+          <p id="gEstimate" class="note"></p>
+          <button id="runGain" type="button" class="btn">Run gain sweep</button>
+        </details>
+        <details class="sweep-form">
+          <summary>Buffer sweep: find buffers with no drops</summary>
+          <p class="note">Records every combination below. A trial is clean with no overflow, no gap and no drop in samples.jsonl.</p>
+          <div class="fields">
+            <label class="tog"><input id="bDirect" type="checkbox" checked /><span>Direct (collect wizard)</span></label>
+            <label class="tog"><input id="bThreaded" type="checkbox" checked /><span>Threaded</span></label>
+            <label class="wide"><span>Samples per buffer</span><input id="bSpb" value="2000, 10000, 50000" spellcheck="false" /></label>
+            <label class="wide"><span>USB buffers, one per line (- = as set up)</span><textarea id="bArgs" rows="3" spellcheck="false">-
+num_recv_frames=256
+num_recv_frames=1024</textarea></label>
+            <label class="wide"><span>File buffers (bytes)</span><input id="bFile" value="0, 4194304" spellcheck="false" /></label>
+            <label><span>Seconds per trial</span><input id="bSeconds" type="number" min="1" max="3600" value="30" /></label>
+            <label class="tog"><input id="bKeep" type="checkbox" /><span>Keep the trial recordings</span></label>
+          </div>
+          <p id="bEstimate" class="note"></p>
+          <button id="runBuffer" type="button" class="btn">Run buffer sweep</button>
+        </details>
+        <div id="sweepStatus"></div>
+        <div id="sweepResult"></div>
+      </section>
+
       <section class="sessions" aria-labelledby="logHeading">
         <h2 id="logHeading">Payload messages</h2>
         <ol id="eventList"></ol>
@@ -173,5 +213,6 @@
 
   <script src="/static/setup.js?v=8"></script>
   <script src="/static/recordings.js?v=2"></script>
+  <script src="/static/sweeps.js?v=1"></script>
 </body>
 </html>

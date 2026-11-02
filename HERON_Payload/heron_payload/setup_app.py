@@ -14,6 +14,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from . import __version__, analysis, recordings, storage
+from .sweeps import SweepRunner
 from .config import ProfileStore, estimate, validate
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -30,6 +31,8 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
     # seconds == 0 means "record until Stop is pressed".
     test = dict(running=False, until=None, started=None, seconds=None, result=None, error=None, session=None)
     lock = threading.Lock()
+    # Gain and buffer sweeps (sweeps.py). Their result files go next to the saved setups.
+    sweep = SweepRunner(controller, Path(state_dir) / "sweeps")
 
     @app.before_request
     def guard():
@@ -55,6 +58,8 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
         return request.get_json(silent=True) or {}
 
     def locked_check():
+        if sweep.running:
+            raise ValueError("A gain or buffer sweep is running. Stop it first.")
         if controller.state in BUSY_STATES:
             raise ValueError("The payload is " + {"AUTO_ARMED": "armed for auto-record",
                                                    "RECORDING": "recording"}.get(controller.state, "busy")
@@ -76,7 +81,7 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
     def busy_check(what):
         with lock:
             testing = test["running"]
-        if controller.state in BUSY_STATES or testing:
+        if controller.state in BUSY_STATES or testing or sweep.running:
             raise ValueError(what + " is paused while the payload is recording or armed, so the disk keeps up.")
 
     @app.get("/api/state")
@@ -101,7 +106,7 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
             t.pop("until"); t.pop("started")
         return jsonify(status=snap, active=copy.deepcopy(controller.config), host=socket.gethostname(),
                        version=__version__, disk=disk, ssd_dir=ssd_dir, test=t,
-                       locked=controller.state in BUSY_STATES)
+                       sweep=sweep.snapshot(), locked=controller.state in BUSY_STATES or sweep.running)
 
     def roots():
         cfg = controller.config or store.list()[0]
@@ -185,6 +190,8 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
         with lock:
             if test["running"]:
                 raise ValueError("A test recording is already running.")
+            if sweep.running:
+                raise ValueError("A gain or buffer sweep is running. Stop it first.")
             if controller.state != "READY":
                 raise ValueError("Apply a setup first." if controller.state == "IDLE" else
                                  "Test recordings need the payload READY (now " + controller.state + ").")
@@ -219,6 +226,22 @@ def create_app(controller, state_dir, on_applied=lambda: None, ssd_dir=None):
 
         threading.Thread(target=finish, daemon=True, name="test-recording").start()
         return jsonify(ok=True)
+
+    @app.post("/api/sweep/<kind>")
+    def start_sweep(kind):
+        """Start the gain sweep or the buffer sweep with the loaded setup (bench only)."""
+        if kind not in ("gain", "buffer"):
+            raise ValueError("Unknown sweep.")
+        with lock:
+            if test["running"]:
+                raise ValueError("A test recording is running. Stop it first.")
+        sweep.start(kind, body().get("params"))
+        return jsonify(sweep=sweep.snapshot())
+
+    @app.post("/api/sweep-stop")
+    def stop_sweep():
+        sweep.stop()
+        return jsonify(sweep=sweep.snapshot())
 
     @app.post("/api/test/stop")
     def stop_test():
