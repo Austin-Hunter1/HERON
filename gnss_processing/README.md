@@ -40,6 +40,8 @@ made for HERON's UAS GNSS-R work that are not upstream:
   earth instead of seeding the next epoch with it.
 - `scripts/run_notebook.py` -- runs notebook 00/01/02 headless with parameter
   overrides (see its docstring).
+- `pipeline_gui/` (new, D-078), `scripts/run_pipeline_gui.bat` -- a desktop window
+  that runs notebooks 00, 01 and 02 on one channel and writes a PDF report.
 - `notebooks/00-raw-signal-diagnostics.ipynb`, `01-acquisition-and-tracking.ipynb`,
   `02-navigation.ipynb` -- updated to use the above, plus per-run figure saving and
   a `CHANNEL_INDEX` disambiguation fix for collects with more than one capture per band.
@@ -109,6 +111,27 @@ through the same three notebooks as the GPS signals.
 
 Limits that you should know: no ionosphere correction for BeiDou, B1C narrow-band
 only, and B1C has no real-data check yet. See `docs/BDS_FOLLOW_UP.md`.
+
+## One-click run of notebooks 00, 01 and 02 with a PDF report (D-078)
+
+`pipeline_gui/` is a desktop window that runs the three notebooks on one channel.
+
+1. Double-click `scripts/run_pipeline_gui.bat` (Windows). On Linux, run
+   `python -m pipeline_gui` in this folder with the notebook interpreter.
+2. Browse to a collects folder. The default is `COLLECTS_PATH`. Each experiment
+   in it needs a `metadata.yml`.
+3. Click one channel in the table. Set the signals, the start offset, the track
+   duration (empty = to the end of the collect) and the reference position
+   (empty = the notebook 02 default).
+4. Click **Run**. The log shows each step. **Stop** stops the running notebook.
+5. Click **Open report** when the run ends.
+
+Each run makes `<OUTPUTS_PATH>/reports/<experiment>/<collect>_<band>_<time>/` with
+`report.pdf`, `figures/<step>/`, `notebooks/` (the executed notebooks) and
+`run_settings.json`. Notebook 02 of a signal is skipped when notebook 01 of that
+signal fails. The defaults (signals per band, time limit, report layout, the text
+the report copies) are in `configs/pipeline_gui.yml`. With no window:
+`python -m pipeline_gui --experiment 9 --channel 0 --signals GpsL1CA`.
 
 ---
 

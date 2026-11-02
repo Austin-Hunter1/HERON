@@ -1,0 +1,66 @@
+# Settings of the notebook pipeline window (`python -m pipeline_gui`, D-078).
+# The window runs notebooks 00, 01 and 02 on one channel of a collect, keeps
+# the figures, and writes a short PDF report.  The window reads this file each
+# time it starts.  A bad or missing value stops the start with a message.
+
+# Folder of experiments (each with a metadata.yml) shown when the window opens.
+# null: use COLLECTS_PATH from `.env`.  You can browse to another folder in the
+# window.
+collects_dir: null
+
+# Report folders go to <outputs_dir>/<reports_subdir>/<experiment>/.
+# null: use OUTPUTS_PATH from `.env`.  Tracking files from notebook 01 always go
+# to OUTPUTS_PATH, because notebook 02 reads them from there.
+outputs_dir: null
+reports_subdir: reports
+
+# Time limit for one notebook cell, in seconds.  Notebook 01 tracks a full
+# collect in one cell, so keep this long.
+cell_timeout_s: 7200
+
+# Interpreter and Jupyter kernel that run the notebooks.  null: the defaults of
+# scripts/run_notebook.py for this OS.
+notebook_python: null
+notebook_kernel: null
+
+# Default values of the window fields.
+start_offset_ms: 0.0
+# null: track from the start offset to the end of the collect (whole seconds).
+track_duration_s: null
+
+# Signals that each band can carry, in the order the window shows them.  The
+# names are the SIGNAL_ID classes of utils/signal_interfaces.py.
+signals:
+  L1: [GpsL1CA, BdsB1C, GpsL1C]
+  L2: [GpsL2C]
+  L5: [GpsL5, BdsB2a]
+
+# Signals whose checkbox is off when the window shows them.
+signals_off_by_default: [GpsL1C]
+
+# Signals that notebook 02 cannot navigate (GpsL1C stops in section 4: the
+# CNAV-2 ITOW needs an LDPC decoder that is not implemented).  The pipeline
+# runs notebook 01 for them and skips notebook 02.
+navigation_unsupported: [GpsL1C]
+
+report:
+  # Page size in inches (width, height).
+  page_size_in: [8.5, 11.0]
+  # Resolution of the PDF pages.  Higher gives sharper figures and a larger file.
+  dpi: 200
+  # Grid (columns, rows) of figures on one page.
+  figure_grid: [1, 2]
+  # Grid for figures that notebook 01 makes once for each satellite.
+  per_satellite_grid: [2, 3]
+  # A figure file name stem that matches this regular expression is a
+  # per-satellite figure (for example 03_prompt_components_G05).
+  per_satellite_pattern: "_[A-Z][0-9]{2}$"
+  # Text output to copy into the report, by the notebook heading (a markdown
+  # cell) that starts the section.  The text of all code cells up to the next
+  # heading of the same or higher level is copied.
+  excerpts:
+    "00": []
+    "01": ["## 8. Save the tracking results"]
+    "02": ["## 8. Position solution", "### 9.3 Residuals with the position held"]
+  # Maximum lines of text from one section.
+  max_excerpt_lines: 40
