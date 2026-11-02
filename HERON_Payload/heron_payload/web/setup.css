@@ -261,6 +261,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .
 .sweep-table th, .sweep-table td { padding: 3px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .sweep-table tr.on td { background: var(--teal-soft, #e3f2ef); }
 .sweep-table .btn { padding: 2px 8px; }
+.pull-cmd code { display: block; margin-top: 4px; user-select: all; overflow-wrap: anywhere; }
 .drops:empty { display: none; }
 .drops { padding: 4px 12px 10px; border-bottom: 1px solid var(--rule); }
 .drops .good-note { color: var(--muted); }

@@ -59,6 +59,24 @@ to find the values the NUC needs. Each radio's **Profile** list has the wizard's
 (L5 / L1 15 MS/s 15 MHz, L1CA 5 MS/s 5 MHz); **Bandwidth** is the analog filter and takes any typed value.
 The Signal check reports clipping and suggests a gain.
 
+## Download recordings to the laptop (tools/heron_pull.py)
+
+Run on the laptop, in the HERON_Payload folder (`uv` installs PyYAML for it):
+
+```sh
+uv run tools/heron_pull.py --list            # sessions on the NUC
+uv run tools/heron_pull.py                   # the newest finished session
+uv run tools/heron_pull.py --count 3 --experiment 20261102_Reflection_Test
+```
+
+Defaults: NUC `http://172.27.16.140:8080` (`--nuc`), destination `D:\01_Data\collects` (`--dest`), experiment
+folder `<UTC date>_HERON_Payload` (`--experiment`). It uses the Payload Setup API, so no SSH password is needed;
+the NUC refuses while it records or is armed. Each channel becomes one `.dat` (the 30 s segments joined) and a
+collect-wizard-style `.yml`, and its collection is added to the experiment's `metadata.yml`, so gnss_processing
+lists it like the wizard's collects. Collection ids start with the UTC time. The NUC's `session.json`,
+`completion.json`, `settings.json` and `samples.jsonl` go to `nuc/<session>/`. A session already pulled is
+skipped. Each recording in Payload Setup shows the command for that session.
+
 ## Automated tests in Payload Setup (sweeps.py)
 
 The **Automated tests** panel records short trials with the loaded setup, then loads that setup again. Nothing
