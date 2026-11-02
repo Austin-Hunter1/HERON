@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#132a2d" />
   <title>HERON Ground Control</title>
-  <link rel="preconnect" href="https://unpkg.com" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css?v=ground4" />
-  <link rel="stylesheet" href="/static/flight.css?v=12" />
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="/static/style.css?v=gold1" />
+  <link rel="stylesheet" href="/static/flight.css?v=flyhold3" />
+  <link rel="stylesheet" href="/static/payload-strip.css?v=2" />
 </head>
 <body class="click-wps" data-view="plan">
   <header id="appbar">
@@ -67,7 +67,7 @@
         <label class="field takeoff">
           <span>Takeoff time</span>
           <input type="datetime-local" id="start" required />
-          <small>Coordinated Universal Time (UTC)</small>
+          <small id="startLocal">UTC. Your local time for that instant shows here.</small>
         </label>
 
         <div class="field-grid">
@@ -131,7 +131,25 @@
           </div>
 
           <div id="surveyTools" class="hidden">
-            <p class="tool-guidance">For a river, choose a start and end. For a lake, choose the surface once. The drone tracks the satellite closest to the aim elevation.</p>
+            <label class="field"><span>Lake pattern</span>
+              <select id="survey_pattern">
+                <option value="fill">Fill · lanes across the whole surface</option>
+                <option value="edge">Shoreline edge · fly across or along the water's edge</option>
+              </select>
+            </label>
+            <p id="surveyGuide" class="tool-guidance">For a river, choose a start and end. For a lake, choose the surface once. The drone tracks the satellite closest to the aim elevation.</p>
+            <div id="edgeTools" class="hidden">
+              <div class="field-grid compact-grid">
+                <label class="field"><span>Flight lines</span><select id="edge_style"><option value="across" selected>Across the shore (back and forth)</option><option value="along">Along the shore (lanes)</option></select></label>
+                <label class="field edge-across"><span>Pass every</span><div class="input-unit"><input type="number" id="edge_pass_m" min="3" max="300" step="1" value="25" /><em>m</em></div></label>
+                <label class="field edge-across"><span>Over water</span><div class="input-unit"><input type="number" id="edge_water_m" min="5" max="500" step="5" value="40" /><em>m</em></div></label>
+                <label class="field edge-across"><span>Over land</span><div class="input-unit"><input type="number" id="edge_land_m" min="5" max="300" step="5" value="40" /><em>m</em></div></label>
+                <label class="field edge-along"><span>Lanes each side</span><select id="edge_lanes"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+                <label class="field edge-along"><span>Lane spacing</span><div class="input-unit"><input type="number" id="edge_lane_m" min="3" max="200" step="1" value="15" /><em>m</em></div></label>
+                <label class="field"><span>Stretch</span><select id="edge_long_way"><option value="0">Shorter way</option><option value="1">Longer way</option></select></label>
+              </div>
+              <p id="edgeHint" class="sweep-hint" aria-live="polite"></p>
+            </div>
             <div class="tool-actions"><span id="nSurveyPicks" class="selection-count">No water selected</span><button type="button" id="btnClearSurvey">Clear</button></div>
           </div>
 
@@ -155,7 +173,7 @@
               <label class="field"><span>Aim elevation</span><div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div></label>
               <label class="field"><span>Fly</span><select id="survey_style"><option value="continuous">Keep moving</option><option value="hover">Stop and hover</option></select></label>
             </div>
-            <label class="field"><span>Coverage</span>
+            <label id="coverageField" class="field"><span>Coverage</span>
               <select id="coverage">
                 <option value="125">Overlap · strips overlap 20% (wind margin)</option>
                 <option value="100" selected>Full · strips just touch</option>
@@ -182,7 +200,14 @@
         </div>
       </section>
 
-      <button type="submit" id="go"><span>Build mission</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 7l5 5-5 5"/></svg></button>
+      <div class="mission-actions">
+        <label class="file-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></svg>
+          Load .waypoints
+          <input type="file" id="wpFile" accept=".waypoints,.txt,text/plain" />
+        </label>
+        <button type="submit" id="go"><span>Build mission</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 7l5 5-5 5"/></svg></button>
+      </div>
     </form>
 
     <div id="status" class="hidden" role="status" aria-live="polite"></div>
@@ -274,11 +299,49 @@
       <button id="flightCenter" type="button" class="tool-btn" title="Center on aircraft" aria-label="Center on aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg></button>
       <button id="flightFollow" type="button" class="tool-btn" aria-pressed="false" title="Follow aircraft" aria-label="Follow aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 17-7-4-7 4z"/></svg></button>
       <button id="flightTrack" type="button" class="tool-btn" aria-pressed="true" title="Show flight trail" aria-label="Show flight trail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19c4 0 3-7 8-7s4-7 8-7"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="5" r="1.5"/></svg></button>
+      <button id="flightReflections" type="button" class="tool-btn reflections" aria-pressed="true" title="Hide live reflections" aria-label="Hide live reflections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 10.2 12.2"/><path d="M13.8 12.2 19 5"/><ellipse cx="12" cy="16.2" rx="6.2" ry="2.5"/></svg></button>
     </div>
 
     <div class="deck-actions">
-      <button id="flightLaunch" type="button" class="fly-btn hidden"><span class="fly-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></span><span><b>Fly mission</b><small id="flyHint">Auto takeoff, fly every waypoint, return home</small></span><svg class="fly-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+      <button id="flightLaunch" type="button" class="fly-btn hidden"><span class="fly-icon"><svg class="fly-ring" viewBox="0 0 44 44" aria-hidden="true"><circle id="flyRing" cx="22" cy="22" r="20" pathLength="100"/></svg><svg class="fly-play" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></span><span><b>Fly Mission</b><small id="flyHint">Auto takeoff, fly every waypoint, return home</small></span><svg class="fly-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+      <div id="flightWait" class="fly-wait hidden" aria-label="Scheduled takeoff">
+        <span>Takeoff in</span>
+        <b id="countdownValue" role="timer" aria-live="off" aria-label="Time until takeoff">00:00</b>
+        <small id="waitClock">—</small>
+        <div class="fly-wait-actions">
+          <button id="flightSkipWait" type="button">Fly now</button>
+          <button id="flightCancelLaunch" type="button">Cancel</button>
+        </div>
+      </div>
       <button id="flightRtl" type="button" class="rtl-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 10v10h12V10M10 20v-6h4v6"/></svg>Return home</button>
+    </div>
+
+    <div id="payloadStrip" class="pl-strip deck-card" data-state="OFFLINE" role="region" aria-label="Payload recorder">
+      <div class="pl-state" aria-live="polite">
+        <i class="pl-dot" aria-hidden="true"></i>
+        <div><b id="plState">Payload</b><small id="plSub">Waiting for the NUC</small></div>
+      </div>
+      <dl class="pl-stats">
+        <div><dt>Writing</dt><dd id="plRate">—</dd></div>
+        <div><dt>Disk left</dt><dd id="plLeft">—</dd></div>
+        <div><dt>Dropped</dt><dd id="plOvf">—</dd></div>
+      </dl>
+      <div class="pl-actions">
+        <button id="plAuto" type="button" class="pl-auto" aria-haspopup="dialog" aria-expanded="false" aria-controls="plPop">Auto <span id="plAutoText">off</span></button>
+        <button id="plRec" type="button" class="pl-rec"><i aria-hidden="true"></i><span>Record</span></button>
+      </div>
+      <div id="plPop" class="pl-pop deck-card hidden" role="dialog" aria-label="Auto-record">
+        <p>Record between two survey waypoints. The NUC follows the mission itself, so it keeps going if the radio link drops.</p>
+        <div class="pl-pop-row">
+          <label><span>Start at</span><select id="plStart"></select></label>
+          <label><span>Stop at</span><select id="plStop"></select></label>
+        </div>
+        <p id="plPopNote" class="pl-note"></p>
+        <div class="pl-pop-actions">
+          <button id="plCancelAuto" type="button" class="pl-ghost">Turn off</button>
+          <button id="plArm" type="button" class="pl-arm">Arm auto-record</button>
+        </div>
+      </div>
     </div>
 
     <section id="deckLog" class="deck-log deck-card" aria-label="Messages">
@@ -306,33 +369,6 @@
     </div>
     <p id="flightTransportNote" class="pop-note">Address and port apply to network links. USB uses the port and baud in the bar.</p>
   </div>
-
-  <dialog id="flightConfirm" aria-labelledby="flightConfirmTitle" aria-describedby="flightConfirmText">
-    <p class="confirm-kicker" id="confirmKicker">Fly mission</p>
-    <h2 id="flightConfirmTitle">Are you sure you want to fly?</h2>
-    <p id="flightConfirmText"></p>
-    <dl class="confirm-stats">
-      <div><dt>Waypoints</dt><dd id="cWp">—</dd></div>
-      <div><dt>Max altitude</dt><dd id="cAlt">—</dd></div>
-      <div><dt>Route</dt><dd id="cLen">—</dd></div>
-      <div><dt>Est. time</dt><dd id="cTime">—</dd></div>
-    </dl>
-    <ol class="confirm-steps">
-      <li>Arm motors in GUIDED</li>
-      <li id="cTakeoff">Take off</li>
-      <li id="cFly">Fly every waypoint in AUTO</li>
-      <li>Return home and land (RTL)</li>
-    </ol>
-    <p class="confirm-warn">Clear the launch area and keep your RC transmitter in hand. <b>Return home</b> and your RC mode switch override the mission at any time.</p>
-    <div class="dialog-row">
-      <button id="flightCancelLaunch" type="button" class="btn-quiet">Cancel</button>
-      <button id="flightConfirmLaunch" type="button" class="hold-btn" aria-describedby="holdHelp">
-        <svg class="hold-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="hold-track" cx="22" cy="22" r="19"/><circle id="holdRing" class="hold-prog" cx="22" cy="22" r="19"/></svg>
-        <span id="holdLabel">Hold to fly</span>
-      </button>
-    </div>
-    <p id="holdHelp" class="hold-help">Press and hold for 3 seconds (mouse, touch, Space or Enter). Let go to cancel.</p>
-  </dialog>
 
   <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Hide mission planner" aria-expanded="true">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
@@ -388,9 +424,10 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=ground7"></script>
+  <script src="/static/vendor/leaflet/leaflet.js"></script>
+  <script src="/static/app.js?v=tiles1"></script>
   <script src="/static/instruments.js?v=2"></script>
-  <script src="/static/flight.js?v=15"></script>
+  <script src="/static/flight.js?v=home2"></script>
+  <script src="/static/payload-strip.js?v=2"></script>
 </body>
 </html>

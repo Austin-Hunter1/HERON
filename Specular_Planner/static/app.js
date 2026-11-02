@@ -8,16 +8,22 @@ const map = L.map("map", {
 L.control.zoom({ position: "bottomright" }).addTo(map);
 L.DomEvent.disableClickPropagation(document.getElementById("sliderWrap"));
 L.DomEvent.disableScrollPropagation(document.getElementById("sliderWrap"));
-const baseTiles = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {
-    maxZoom: 19,
-    minZoom: 3,
-    keepBuffer: 2,
-    updateWhenZooming: false,
-    attribution: "Esri",
-  }
-).addTo(map);
+const esriTiles = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const baseTiles = L.tileLayer("/tiles/{z}/{y}/{x}.jpg", {
+  maxZoom: 19,
+  minZoom: 3,
+  keepBuffer: 2,
+  updateWhenZooming: false,
+  attribution: "Esri",
+}).addTo(map);
+baseTiles.on("tileerror", (event) => {
+  const img = event.tile;
+  if (!img || img.dataset.fallback) return;
+  img.dataset.fallback = "1";
+  const match = String(img.src).match(/\/tiles\/(\d+)\/(\d+)\/(\d+)\.jpg/);
+  if (!match) return;
+  img.src = esriTiles.replace("{z}", match[1]).replace("{y}", match[2]).replace("{x}", match[3]);
+});
 
 function oneWorldMinZoom() {
   const w = Math.max(map.getSize().x || 0, window.innerWidth || 0, 1024);
@@ -98,11 +104,45 @@ function satRaysWanted() {
   return map.getZoom() <= SAT_RAY_MAX_ZOOM;
 }
 function syncSatRays() {
-  const on = satRaysWanted();
+  const planning = document.body.dataset.view === "plan" || !document.body.dataset.view;
+  const on = planning && satRaysWanted();
   [rayLayer, padRayLayer, surveyRayLayer].forEach((g) => {
     if (on && !map.hasLayer(g)) map.addLayer(g);
     if (!on && map.hasLayer(g)) map.removeLayer(g);
   });
+}
+
+function setLayerOn(layer, on) {
+  if (!layer) return;
+  if (on && !map.hasLayer(layer)) layer.addTo(map);
+  if (!on && map.hasLayer(layer)) map.removeLayer(layer);
+}
+
+/** Colored reflection history stays on Plan. Fly shows the current mission route, or the one just read. */
+function setFlightMapChrome(showPlanRoute) {
+  const planning = document.body.dataset.view === "plan" || !document.body.dataset.view;
+  const route = planning || !!showPlanRoute;
+  [specLayer, trailLayer, droneLayer, splashLayer, surveySelLayer, surveyPickLayer, draftLayer, clickWpLayer].forEach((layer) => {
+    setLayerOn(layer, planning);
+  });
+  [wpLayer, targetLayer].forEach((layer) => setLayerOn(layer, route));
+  pathCopies.forEach((line) => setLayerOn(line, route));
+  if (!planning) {
+    [rayLayer, padRayLayer, surveyRayLayer].forEach((layer) => setLayerOn(layer, false));
+    Object.keys(bouncePrn).forEach((prn) => {
+      setGroupOnMap(bouncePrn[prn].lake, false);
+      setGroupOnMap(bouncePrn[prn].land, false);
+    });
+    return;
+  }
+  const lakeOn = document.getElementById("lyrLake").checked;
+  const landOn = document.getElementById("lyrLand").checked;
+  Object.keys(bouncePrn).forEach((prn) => {
+    const on = prnEnabled(prn);
+    setGroupOnMap(bouncePrn[prn].lake, lakeOn && on);
+    setGroupOnMap(bouncePrn[prn].land, landOn && on);
+  });
+  syncSatRays();
 }
 const trailLayer = L.layerGroup().addTo(map);
 const bouncePrn = {};
@@ -137,6 +177,7 @@ let playRate = 20;
 let missionMode = "click";
 let surveyStart = null;
 let surveyEnd = null;
+let edgePicks = [];
 let clickWps = [];
 let skySats = [];
 let skyFetchTimer = null;
@@ -187,13 +228,28 @@ function satDetailHtml(row, live) {
   return `<b>${row.sid}</b> · ${satConstName(row.constellation)}<br>el ${Number(row.el).toFixed(0)}° · az ${Number(row.az).toFixed(0)}°<br>${Number(row.lat).toFixed(2)}, ${Number(row.lon).toFixed(2)} · ${Number(row.alt_km).toFixed(0)} km<br>${maskTxt}<br>${useTxt}`;
 }
 
+/** Satellites an area plan is following. They stay the darker gold for the whole mission. */
+function areaTrackPrns(plan) {
+  const meta = (plan && plan.meta) || {};
+  const survey = meta.survey || {};
+  const area = meta.mode === "survey" || meta.mode === "areas" || (meta.mode === "file" && survey.aim_sid);
+  if (!area) return new Set();
+  const ids = new Set();
+  if (survey.aim_sid) ids.add(survey.aim_sid);
+  if (survey.last_sid) ids.add(survey.last_sid);
+  (survey.sids || []).forEach((sid) => sid && ids.add(sid));
+  (plan.hovers || []).forEach((hov) => hov.prn && ids.add(hov.prn));
+  return ids;
+}
+
 function satIcon(row, live) {
+  const aim = !!row.aimed;
+  const water = !aim && !!row.on_water;
   const cls = [
     "sat-mark",
     "c" + (row.constellation || String(row.sid)[0]),
     row.above_mask || row.el >= 20 ? "up" : row.el > 0 ? "low" : "down",
-    row.used ? "used" : "",
-    live ? "live" : "",
+    aim ? "aim" : water ? "water" : live ? "live" : row.used ? "used" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -289,7 +345,7 @@ function dropSatRec(rec) {
   if (rec.ray) padRayLayer.removeLayer(rec.ray);
 }
 
-function paintSats(rows, liveSet) {
+function paintSats(rows, liveSet, origin) {
   if (!rows || !rows.length) {
     if (lastSatRows.length) rows = lastSatRows;
     else return;
@@ -297,7 +353,7 @@ function paintSats(rows, liveSet) {
   const live = liveSet || new Set();
   const offs = wrapOffsets();
   const wrapKey = offs.join(",");
-  const padLL = padMarker ? padMarker.getLatLng() : null;
+  const padLL = origin || (padMarker ? padMarker.getLatLng() : null);
   const wantRays = satRaysWanted();
   const seen = new Set();
   rows.forEach((row) => {
@@ -313,7 +369,7 @@ function paintSats(rows, liveSet) {
     seen.add(row.sid);
     const isLive = live.has(row.sid);
     const useLons = lonsOnMap(row.lon);
-    const iconKey = `${isLive ? 1 : 0}|${row.used ? 1 : 0}|${satBand(row)}`;
+    const iconKey = `${row.aimed ? 1 : 0}|${row.on_water ? 1 : 0}|${isLive ? 1 : 0}|${row.used ? 1 : 0}|${satBand(row)}`;
     const zOff = isLive ? 900 : row.used ? 700 : row.above_mask ? 400 : 150;
     let rec = satMarks.get(row.sid);
     if (!rec || rec.wrapKey !== wrapKey || rec.mks.length !== useLons.length) {
@@ -354,9 +410,9 @@ function paintSats(rows, liveSet) {
         [row.lat, lonInView(row.lon)],
       ]);
       const style = {
-        color: isLive ? "#ffe66a" : "#7ee0ff",
-        weight: isLive ? 1.5 : 1,
-        opacity: isLive ? 0.5 : 0.22,
+        color: row.aimed ? "#ffb000" : row.on_water || isLive ? "#ffe66a" : "#7ee0ff",
+        weight: row.aimed || isLive ? 1.5 : 1,
+        opacity: row.aimed ? 0.85 : isLive || row.on_water ? 0.5 : 0.22,
         dashArray: "3 6",
         interactive: false,
       };
@@ -408,6 +464,9 @@ function scheduleSky() {
 }
 
 function prnEnabled(prn) {
+  // Area surveys check only the tracked satellite. That filter is for the plan coverage,
+  // not the live sky: in flight every satellite above the mask stays visible.
+  if (document.body.dataset.view && document.body.dataset.view !== "plan") return true;
   const box = document.querySelector(`#prnToggles input[data-prn="${prn}"]`);
   return !box || box.checked;
 }
@@ -419,13 +478,15 @@ function setGroupOnMap(group, on) {
 }
 
 function syncBounceLayers() {
-  const lakeOn = document.getElementById("lyrLake").checked;
-  const landOn = document.getElementById("lyrLand").checked;
+  const planning = document.body.dataset.view === "plan" || !document.body.dataset.view;
+  const lakeOn = planning && document.getElementById("lyrLake").checked;
+  const landOn = planning && document.getElementById("lyrLand").checked;
   for (const prn of Object.keys(bouncePrn)) {
-    const on = prnEnabled(prn);
+    const on = planning && prnEnabled(prn);
     setGroupOnMap(bouncePrn[prn].lake, lakeOn && on);
     setGroupOnMap(bouncePrn[prn].land, landOn && on);
   }
+  if (!planning) return;
   if (lastPlan) renderMixed(lastPlan, playT);
   else if (lastSatRows.length) paintSats(lastSatRows, lastSatLive);
 }
@@ -472,30 +533,17 @@ function paintFlightBounces(plan) {
   }
   document.getElementById("nLake").textContent = `(${(cov.counts && cov.counts.lake) || 0})`;
   document.getElementById("nLand").textContent = `(${(cov.counts && cov.counts.land) || 0})`;
-  const picked = pickedSids(plan);
   const box = document.getElementById("prnToggles");
   box.innerHTML = prns
     .map((p) => {
       const n = bouncePrn[p].nLake + bouncePrn[p].nLand;
-      const on = !picked || picked.has(p);
       return `<label class="prn-chip" style="border-color:${sidColor(p)};color:${sidColor(p)}">
-        <input type="checkbox" data-prn="${p}" ${on ? "checked" : ""} /> ${p} <span>(${n})</span>
+        <input type="checkbox" data-prn="${p}" checked /> ${p} <span>(${n})</span>
       </label>`;
     })
     .join("");
   document.getElementById("layers").classList.remove("hidden");
   syncBounceLayers();
-}
-
-function pickedSids(plan) {
-  const m = plan.meta || {};
-  if (m.mode !== "survey" && m.mode !== "areas") return null;
-  const s = m.survey || {};
-  const ids = [...(s.sids || [])];
-  if (s.aim_sid) ids.push(s.aim_sid);
-  if (s.last_sid) ids.push(s.last_sid);
-  const set = new Set(ids.filter(Boolean));
-  return set.size ? set : null;
 }
 
 function degTxt(v) {
@@ -526,14 +574,13 @@ function paintSurveyLock(plan) {
   const lock = document.getElementById("tileLock");
   const m = plan.meta || {};
   const s = m.survey || {};
-  if (m.mode !== "survey" && m.mode !== "areas") {
+  if (m.mode === "survey" || m.mode === "areas" || (m.mode === "file" && s.aim_sid)) {
+    lock.classList.remove("hidden");
+    lock.innerHTML = aimLockHtml(s);
+  } else {
     lock.classList.add("hidden");
     lock.innerHTML = "";
-    syncSatRays();
-    return;
   }
-  lock.classList.remove("hidden");
-  lock.innerHTML = aimLockHtml(s);
   const hovers = plan.hovers || [];
   // Moving sweeps are already drawn by their coverage strips; only mark hover stops.
   const step = hovers.length > 80 ? Math.ceil(hovers.length / 80) : 1;
@@ -561,6 +608,16 @@ function paintSurveyLock(plan) {
       { color: "#ffe66a", weight: 1, opacity: 0.35, dashArray: "3 4", interactive: false }
     );
   });
+  if (s.pattern === "edge") {
+    if (s.shore && s.shore.coordinates) {
+      addWrappedCopies(surveyRayLayer, s.shore.coordinates.map((p) => [p[1], p[0]]),
+        { color: "#ff9f43", weight: 4, opacity: 0.9, interactive: false });
+    }
+    ((s.lanes && s.lanes.coordinates) || []).forEach((ln) => {
+      addWrappedCopies(surveyRayLayer, ln.map((p) => [p[1], p[0]]),
+        { color: "#ffe66a", weight: 2, opacity: 0.85, interactive: false });
+    });
+  }
   if (s.stretch && s.stretch.coordinates && s.stretch.type === "LineString") {
     const latlngs = s.stretch.coordinates.map((p) => [p[1], p[0]]);
     addWrappedCopies(surveyRayLayer, latlngs, { color: "#ffe66a", weight: 2, opacity: 0.55, interactive: false });
@@ -843,7 +900,7 @@ function paintTargets() {
       .addTo(targetLayer);
   });
   updateSweepHint();
-}
+  }
 
 function ringAreaM2(ring) {
   const lat0 = ring.reduce((a, p) => a + p[1], 0) / ring.length;
@@ -878,7 +935,7 @@ function updateSweepHint() {
   const hint = document.getElementById("sweepHint");
   if (!hint) return;
   const { h, el, strip, lane, hover, custom } = sweepLaneM();
-  document.getElementById("tileField").classList.toggle("hidden", !custom);
+  document.getElementById("tileField").classList.toggle("hidden", !custom || isEdgePattern());
   if (!(lane > 0)) {
     hint.textContent = "Enter a lane spacing.";
     return;
@@ -990,7 +1047,8 @@ map.on("click", (e) => {
     return;
   }
   if (missionMode === "survey") {
-    pickWater(e.latlng);
+    if (isEdgePattern() && surveyStart && !layerIsLine(surveyStart.layer)) pickShore(e.latlng);
+    else pickWater(e.latlng);
     return;
   }
   if (missionMode === "click") {
@@ -1024,6 +1082,22 @@ document.addEventListener("keydown", (e) => {
 function pad() {
   const ll = padMarker.getLatLng();
   return { lat: ll.lat, lon: ll.lng, name: "Pad" };
+}
+
+/** Move the launch pad to where the aircraft actually left the ground. Does not clear the mission. */
+function movePadTo(lat, lon) {
+  if (!padMarker || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const here = padMarker.getLatLng();
+  if (map.distance(here, [lat, lon]) < 2) return;
+  padMarker.setLatLng([lat, lon]);
+  syncPadWrap();
+  if (lastPathPts.length >= 2) {
+    const pts = lastPathPts.map((p) => [p[0], p[1]]);
+    pts[0] = [lat, lon];
+    pts[pts.length - 1] = [lat, lon];
+    setMissionPath(pts);
+  }
+  if (lastPlan && lastPlan.pad) lastPlan.pad = { ...lastPlan.pad, lat, lon };
 }
 
 function pipLatLng(lat, lon, latlngs) {
@@ -1138,6 +1212,7 @@ function resetMission({ keepSelection = false } = {}) {
     targets = [];
     surveyStart = null;
     surveyEnd = null;
+    edgePicks = [];
     surveySelLayer.clearLayers();
     surveyPickLayer.clearLayers();
     clickWpLayer.clearLayers();
@@ -1208,6 +1283,7 @@ function setMode(m) {
   if (m !== "survey") {
     surveyStart = null;
     surveyEnd = null;
+    edgePicks = [];
     surveySelLayer.clearLayers();
     surveyPickLayer.clearLayers();
   }
@@ -1220,12 +1296,67 @@ function setMode(m) {
     startAreaDraw();
   }
   updateSweepHint();
+  syncSurveyPatternUi();
   setStatus("");
 }
 
 function layerIsLine(layer) {
   const g = (layer.feature && layer.feature.geometry) || {};
   return String(g.type || "").indexOf("Line") >= 0;
+}
+
+function isEdgePattern() {
+  return missionMode === "survey" && document.getElementById("survey_pattern").value === "edge";
+}
+
+/** Nearest point on a lake layer's outer shoreline (local metres; fine at lake scale). */
+function snapToShore(layer, latlng) {
+  let ring = layer.getLatLngs();
+  while (Array.isArray(ring) && Array.isArray(ring[0])) ring = ring[0];
+  if (!ring || ring.length < 2) return { lat: latlng.lat, lon: latlng.lng };
+  const k = Math.cos((latlng.lat * Math.PI) / 180);
+  const xy = (p) => [(p.lng - latlng.lng) * k, p.lat - latlng.lat];
+  let best = null;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const [ax, ay] = xy(a), [bx, by] = xy(b);
+    const dx = bx - ax, dy = by - ay;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+    const px = ax + t * dx, py = ay + t * dy;
+    const d = px * px + py * py;
+    if (!best || d < best.d) best = { d, lat: latlng.lat + py, lon: latlng.lng + px / k };
+  }
+  return { lat: best.lat, lon: best.lon };
+}
+
+function syncSurveyPatternUi() {
+  const edge = document.getElementById("survey_pattern").value === "edge";
+  document.getElementById("edgeTools").classList.toggle("hidden", !edge);
+  document.getElementById("coverageField").classList.toggle("hidden", edge && missionMode === "survey");
+  document.getElementById("sweepHint").classList.toggle("hidden", edge && missionMode === "survey");
+  document.getElementById("tileField").classList.toggle("hidden", edge && missionMode === "survey" || document.getElementById("coverage").value !== "custom");
+  document.getElementById("surveyGuide").textContent = edge
+    ? "Click the lake, then click two points on its shore to pick the stretch. Build mission with no points to cover the whole shoreline. Then fly back and forth across the edge, or lanes along it."
+    : "For a river, choose a start and end. For a lake, choose the surface once. The drone tracks the satellite closest to the aim elevation.";
+  const across = document.getElementById("edge_style").value === "across";
+  document.querySelectorAll(".edge-across").forEach((el) => el.classList.toggle("hidden", !across));
+  document.querySelectorAll(".edge-along").forEach((el) => el.classList.toggle("hidden", across));
+  const hint = document.getElementById("edgeHint");
+  if (across) {
+    const pm = Number(document.getElementById("edge_pass_m").value) || 0;
+    const wm = Number(document.getElementById("edge_water_m").value) || 0;
+    const lm = Number(document.getElementById("edge_land_m").value) || 0;
+    if (hint) hint.textContent = `Back-and-forth passes square to the shore, one every ${pm} m: ${wm} m out over the water to ${lm} m inland, then the next pass comes back. The drone flies offset toward the satellite so its reflection, not the aircraft, crosses the edge.`;
+    return;
+  }
+  const n = Number(document.getElementById("edge_lanes").value) || 0;
+  const sp = Number(document.getElementById("edge_lane_m").value) || 0;
+  const offs = [];
+  for (let k = n; k >= 1; k--) offs.push(-k * sp);
+  offs.push(0);
+  for (let k = 1; k <= n; k++) offs.push(k * sp);
+  if (hint) hint.textContent = `${2 * n + 1} reflection lanes at ${offs.map((d) => `${d > 0 ? "+" : ""}${d}`).join(", ")} m from the shore (0 on the edge, − land, + water). The drone flies offset toward the satellite so its reflection, not the aircraft, rides each lane.`;
 }
 
 function paintSurveyPicks() {
@@ -1253,6 +1384,11 @@ function paintSurveyPicks() {
       interactive: false,
     }).addTo(surveyPickLayer);
   };
+  if (isEdgePattern() && !layerIsLine(surveyStart.layer)) {
+    edgePicks.forEach((p, i) => mark(p, i === 0 ? "FROM" : "TO"));
+    if (n) n.textContent = edgePicks.length === 0 ? "lake selected · whole shore" : edgePicks.length === 1 ? "click the other end of the stretch" : "shore stretch set";
+    return;
+  }
   mark(surveyStart, "START");
   if (surveyEnd) {
     mark(surveyEnd, "END");
@@ -1287,8 +1423,27 @@ function pickWater(latlng) {
   }
   surveyStart = { lat: latlng.lat, lon: latlng.lng, layer: found };
   surveyEnd = null;
+  edgePicks = [];
   paintSurveyPicks();
+  if (isEdgePattern()) {
+    setStatus("Click two points on the shore for the stretch, or Build mission for the whole shoreline.");
+    return;
+  }
   computePlan();
+}
+
+function pickShore(latlng) {
+  // A click inside a different waterbody switches to that one.
+  let other = null;
+  lakeLayer.eachLayer((layer) => {
+    if (!other && layer !== surveyStart.layer && clickOnLayer(layer, latlng)) other = layer;
+  });
+  if (other) return pickWater(latlng);
+  if (edgePicks.length >= 2) edgePicks = [];
+  edgePicks.push(snapToShore(surveyStart.layer, latlng));
+  paintSurveyPicks();
+  if (edgePicks.length === 2) computePlan();
+  else setStatus("Now click the other end of the shore stretch.");
 }
 
 async function computePlan() {
@@ -1296,6 +1451,14 @@ async function computePlan() {
   const gen = ++planGen;
   if (missionMode === "survey" && !surveyStart) {
     setStatus("Select a waterbody first.", true);
+    return;
+  }
+  if (isEdgePattern() && surveyStart && layerIsLine(surveyStart.layer)) {
+    setStatus("Shoreline edge works on lakes and ponds. Switch Lake pattern to Fill for rivers.", true);
+    return;
+  }
+  if (isEdgePattern() && edgePicks.length === 1) {
+    setStatus("Click the other end of the shore stretch, or Clear to use the whole shoreline.", true);
     return;
   }
   if (missionMode === "survey" && surveyStart && layerIsLine(surveyStart.layer) && !surveyEnd) {
@@ -1321,7 +1484,7 @@ async function computePlan() {
   btn.disabled = true;
   const msg =
     missionMode === "survey"
-      ? "Tiling the waterbody…"
+      ? isEdgePattern() ? "Laying passes across the shoreline…" : "Tiling the waterbody…"
       : missionMode === "click"
         ? "Speculars along your route…"
         : "Tiling the box…";
@@ -1352,6 +1515,19 @@ async function computePlan() {
         if (surveyEnd) {
           body.click_lat2 = surveyEnd.lat;
           body.click_lon2 = surveyEnd.lon;
+        }
+        if (isEdgePattern()) {
+          body.survey_pattern = "edge";
+          body.edge = {
+            style: document.getElementById("edge_style").value,
+            pass_m: Number(document.getElementById("edge_pass_m").value),
+            water_m: Number(document.getElementById("edge_water_m").value),
+            land_m: Number(document.getElementById("edge_land_m").value),
+            lanes: Number(document.getElementById("edge_lanes").value),
+            lane_m: Number(document.getElementById("edge_lane_m").value),
+            long_way: document.getElementById("edge_long_way").value === "1",
+            picks: edgePicks.length === 2 ? edgePicks : [],
+          };
         }
       }
       body.max_wp = Number(document.getElementById("max_wp").value);
@@ -1488,9 +1664,10 @@ function drawTrails(plan, tSec, current) {
 }
 
 function prnLabIcon(prn, hit) {
+  const kind = hit === "aim" ? " aim" : hit ? " hit" : "";
   return L.divIcon({
     className: "",
-    html: `<div class="prn-lab${hit ? " hit" : ""}">${prn}</div>`,
+    html: `<div class="prn-lab${kind}">${prn}</div>`,
     iconSize: [52, 16],
     iconAnchor: [26, 8],
   });
@@ -1528,7 +1705,7 @@ function upsertSpec(s, drone, hit, col) {
       color: col,
       weight: hit ? 3.5 : 2.5,
       fillColor: col,
-      fillOpacity: hit ? 0.38 : s.on_water ? 0.22 : 0.08,
+      fillOpacity: hit === "aim" ? 0.55 : hit ? 0.32 : s.on_water ? 0.22 : 0.08,
     })
       .bindTooltip(tip, { sticky: true })
       .addTo(specLayer);
@@ -1549,7 +1726,7 @@ function upsertSpec(s, drone, hit, col) {
       color: col,
       fillColor: col,
       weight: hit ? 3.5 : 2.5,
-      fillOpacity: hit ? 0.38 : s.on_water ? 0.22 : 0.08,
+      fillOpacity: hit === "aim" ? 0.55 : hit ? 0.32 : s.on_water ? 0.22 : 0.08,
     });
     part.fill.setTooltipContent(tip);
     if (part.labels.length !== lons.length) {
@@ -1633,21 +1810,22 @@ function renderMixed(plan, tSec) {
 
   const hits = [];
   const live = new Set();
+  const tracked = areaTrackPrns(plan);
   for (const s of f.speculars) {
     if (!prnEnabled(s.prn)) continue;
-    const picked = !!(s.in_target || s.aimed);
+    const aimed = !!s.aimed || tracked.has(s.prn);
     const wet = !!s.on_water;
-    const hit = picked || wet;
-    const col = hit ? "#ffe66a" : "#6b7584";
+    const hit = aimed ? "aim" : wet;
+    const col = aimed ? "#ffb000" : wet ? "#ffe66a" : "#6b7584";
     upsertSpec(s, f.drone, hit, col);
     // Trails are reconstructed from mission time, never from display refreshes.
     if (hit) live.add(s.prn);
-    if (picked) hits.push(`${s.prn} ${s.el.toFixed(0)}°`);
+    if (aimed) hits.push(`${s.prn} ${s.el.toFixed(0)}°`);
 
     if (paintTable) {
       const tr = document.createElement("tr");
       const zone = `${s.fresnel_along_m.toFixed(0)}×${s.fresnel_across_m.toFixed(0)}`;
-      const hitTxt = s.aimed ? "lock" : s.in_target ? "area" : s.on_water ? "water" : "land";
+      const hitTxt = aimed ? "lock" : s.in_target ? "area" : s.on_water ? "water" : "land";
       tr.innerHTML = `
       <td>${s.prn}</td>
       <td>${s.el.toFixed(0)}</td>
@@ -1690,8 +1868,16 @@ function renderMixed(plan, tSec) {
         : f.speculars.length
           ? `${f.speculars.length} bounce`
           : "No sats above mask";
-  const satRows = f.sats && f.sats.length ? f.sats : lastSatRows.length ? lastSatRows : skySats;
-  paintSats(satRows, live);
+  const aimedSats = new Set(f.speculars.filter((s) => s.aimed).map((s) => s.prn));
+  tracked.forEach((sid) => aimedSats.add(sid));
+  const waterSats = new Set(f.speculars.filter((s) => s.on_water && !aimedSats.has(s.prn)).map((s) => s.prn));
+  const sky = f.sats && f.sats.length ? f.sats : lastSatRows.length ? lastSatRows : skySats;
+  const satRows = (sky || []).map((row) => ({
+    ...row,
+    aimed: aimedSats.has(row.sid),
+    on_water: waterSats.has(row.sid) && !aimedSats.has(row.sid),
+  }));
+  paintSats(satRows, new Set());
 }
 
 function stopPlay() {
@@ -1757,6 +1943,7 @@ async function loadDefaults() {
 
   targets = [];
   document.getElementById("start").value = d.start;
+  showTakeoffLocal();
   document.getElementById("duration").value = d.duration_min;
   document.getElementById("h_agl").value = d.h_agl;
   document.getElementById("speed").value = d.speed_mps;
@@ -1793,7 +1980,10 @@ function paintSummary(plan) {
   const m = plan.meta || {};
   const sum = document.getElementById("summary");
   const mode =
-    m.mode === "survey" ? "Tile water" : m.mode === "click" || m.mode === "manual" ? "Route" : "Measure";
+    m.mode === "file" ? "Waypoint file"
+      : m.mode === "survey" ? (m.survey?.pattern === "edge" ? "Shoreline edge" : "Tile water")
+        : m.mode === "click" || m.mode === "manual" ? "Route"
+          : "Measure";
   const when = (m.start || "").replace("T", " ").slice(0, 16);
   const mins = (Number(m.total_s) / 60).toFixed(1);
   const dist = Number(m.transit_m) || 0;
@@ -1811,9 +2001,11 @@ function paintSummary(plan) {
       ${statCell("Duration", mins, "min")}
       ${statCell("Distance", distTxt, distUnit)}
       ${statCell("Speed", m.speed_mps ?? "—", "m/s")}
-      ${statCell("Hover", Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
+      ${statCell("Hover", m.loiter_mixed ? "mixed" : Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), m.loiter_mixed || Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
       ${statCell("L5 on water", prns.length)}
     </div>
+    ${m.survey?.pattern === "edge" && m.survey.edge_style === "across" ? `<p>Shoreline edge · ${m.survey.n_passes} back-and-forth passes across ${(m.survey.shore_m / 1000).toFixed(2)} km of ${m.survey.whole_shore ? "the whole shore" : "shore"}, one every ${m.survey.edge_pass_m} m · ${m.survey.edge_water_m} m over water to ${m.survey.edge_land_m} m inland (${m.survey.lanes_km} km of passes). Look for the jump in reflected power on each pass.</p>` : ""}
+    ${m.survey?.pattern === "edge" && m.survey.edge_style !== "across" ? `<p>Shoreline edge · ${m.survey.n_passes} lanes along ${(m.survey.shore_m / 1000).toFixed(2)} km of ${m.survey.whole_shore ? "the whole shore" : "shore"} (${m.survey.lanes_km} km flown) · offsets ${m.survey.edge_offsets_m.map((d) => (d > 0 ? "+" : "") + d).join(", ")} m. The edge is where reflected power jumps between the land and water lanes.</p>` : ""}
     ${m.survey?.sweep_bearing_deg != null ? `<p>${escHtml(String(m.survey.sweep_bearing_deg))}° sweep · ${m.survey.n_passes} passes · lanes every ${m.survey.lane_spacing_m} m · strip ≈ ${m.survey.footprint_m} m wide</p>` : ""}
     ${m.survey?.sampled_yaw_error_deg != null ? `<p>Sampled heading-setpoint error: ${m.survey.sampled_yaw_error_deg}°. This excludes aircraft yaw lag and fixed mounting tilt.</p>` : ""}
     ${m.survey?.sampled_tracking_error_m != null ? `<p>Sampled reflection error: ${m.survey.sampled_tracking_error_m} m between checkpoints. Geometry only; turns and aircraft response are not modeled.</p>` : ""}
@@ -1827,8 +2019,21 @@ function paintSummary(plan) {
   sum.classList.remove("hidden");
 }
 
+function takeoffField(iso) {
+  const text = String(iso || "");
+  const when = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text}Z`);
+  if (!text || Number.isNaN(when.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${when.getUTCFullYear()}-${pad(when.getUTCMonth() + 1)}-${pad(when.getUTCDate())}T${pad(when.getUTCHours())}:${pad(when.getUTCMinutes())}`;
+}
+
 function showPlan(plan) {
   lastPlan = plan;
+  const savedTakeoff = takeoffField(plan.meta && plan.meta.start);
+  if (savedTakeoff) {
+    document.getElementById("start").value = savedTakeoff;
+    showTakeoffLocal();
+  }
   window.dispatchEvent(new CustomEvent("heron:plan-ready", { detail: plan }));
   stopPlay();
   playT = 0;
@@ -1839,12 +2044,30 @@ function showPlan(plan) {
   clearSpecParts();
 
   const m = plan.meta;
-  paintTargets();
+  const areas = (plan.targets || []).filter((t) => t.coordinates && t.coordinates.length >= 3);
+  if (areas.length) {
+    targetLayer.clearLayers();
+    areas.forEach((t, i) => {
+      L.polygon(ringToLatLngs(t.coordinates), {
+        color: "#ffb000",
+        weight: 2,
+        fillColor: "#ffb000",
+        fillOpacity: 0.14,
+      })
+        .bindTooltip(t.name || `area ${i + 1}`, { sticky: true })
+        .addTo(targetLayer);
+    });
+  } else {
+    paintTargets();
+  }
   if (plan.coverage?.target?.uncovered) {
     L.geoJSON(plan.coverage.target.uncovered, {style:{color:"#d83b65",weight:1,fillColor:"#d83b65",fillOpacity:0.3},interactive:false}).addTo(targetLayer);
   }
   const hovers = plan.hovers || [];
-  const pts = [[plan.pad.lat, plan.pad.lon], ...hovers.map((h) => [h.lat, h.lon]), [plan.pad.lat, plan.pad.lon]];
+  // route_line includes the lead-in point before WP1 when the mission has one.
+  const pts = Array.isArray(plan.route_line) && plan.route_line.length >= 2
+    ? plan.route_line.map((p) => [p[0], p[1]])
+    : [[plan.pad.lat, plan.pad.lon], ...hovers.map((h) => [h.lat, h.lon]), [plan.pad.lat, plan.pad.lon]];
   setMissionPath(pts);
 
   wpLayer.clearLayers();
@@ -2189,6 +2412,65 @@ document.getElementById("form").addEventListener("submit", async (ev) => {
   else computePlan();
 });
 
+async function loadWaypointFile(file, gen) {
+  setStatus(`Reading ${file.name}…`);
+  const btn = document.getElementById("go");
+  btn.disabled = true;
+  try {
+    const text = await file.text();
+    if (gen !== planGen) return;
+    if (!selectedConsts().length) throw new Error("Turn on at least one constellation.");
+    const r = await fetch("/api/plan/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wpl: text,
+        filename: file.name,
+        start: document.getElementById("start").value,
+        duration_min: Number(document.getElementById("duration").value),
+        elev_mask: Number(document.getElementById("mask").value),
+        constellations: selectedConsts(),
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Could not read that waypoint file.");
+    if (gen !== planGen) return;
+    if (missionMode !== "click") setMode("click");
+    clickWps = [];
+    paintClickWps();
+    const m = data.meta || {};
+    if (m.h_agl != null) document.getElementById("h_agl").value = m.h_agl;
+    if (m.speed_mps != null) document.getElementById("speed").value = m.speed_mps;
+    if (m.loiter_s != null && !m.loiter_mixed) document.getElementById("loiter").value = m.loiter_s;
+    if (padMarker && data.pad) {
+      padMarker.setLatLng([data.pad.lat, data.pad.lon]);
+      syncPadWrap();
+    }
+    showPlan(data);
+    const pts = [[data.pad.lat, data.pad.lon], ...(data.hovers || []).map((h) => [h.lat, h.lon])];
+    if (pts.length > 1) {
+      map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [360, 40], paddingBottomRight: [80, 80] });
+    }
+    const warn = (data.import_warnings || []).filter(Boolean).join(" ");
+    const n = (data.hovers || []).length;
+    setStatus(warn || `Loaded ${file.name}. ${n} waypoint${n === 1 ? "" : "s"}. Playback and simulator updated.`, !!warn);
+  } catch (e) {
+    if (gen === planGen) setStatus(String(e.message || e), true);
+  } finally {
+    if (gen === planGen) btn.disabled = false;
+  }
+}
+
+document.getElementById("wpFile").addEventListener("change", () => {
+  const input = document.getElementById("wpFile");
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file) return;
+  const gen = ++planGen;
+  window.dispatchEvent(new Event("heron:plan-invalid"));
+  loadWaypointFile(file, gen);
+});
+
 document.getElementById("modeClick").onclick = () => setMode("click");
 document.getElementById("modeGround").onclick = () => setMode("ground");
 document.getElementById("g_from").addEventListener("change", paintGroundZone);
@@ -2203,8 +2485,15 @@ document.getElementById("btnClearWp").onclick = () => {
   paintClickWps();
 };
 document.getElementById("btnClearSurvey").onclick = () => {
+  if (isEdgePattern() && surveyStart && edgePicks.length) {
+    // First Clear drops the stretch and keeps the lake (whole shoreline).
+    edgePicks = [];
+    paintSurveyPicks();
+    return;
+  }
   surveyStart = null;
   surveyEnd = null;
+  edgePicks = [];
   surveySelLayer.clearLayers();
   surveyPickLayer.clearLayers();
   paintSurveyPicks();
@@ -2251,7 +2540,27 @@ map.on("zoomend", refreshWrapLayers);
   L.DomEvent.disableClickPropagation(sideBtn);
 })();
 
-document.getElementById("start").addEventListener("change", scheduleSky);
+function showTakeoffLocal() {
+  const note = document.getElementById("startLocal");
+  const raw = document.getElementById("start").value;
+  if (!note) return;
+  if (!raw) {
+    note.textContent = "UTC. Your local time for that instant shows here.";
+    return;
+  }
+  const when = new Date(`${raw}Z`);
+  const local = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short",
+  }).format(when);
+  note.textContent = `${raw.replace("T", " ")} UTC is ${local} here.`;
+}
+
+document.getElementById("start").addEventListener("change", () => {
+  showTakeoffLocal();
+  scheduleSky();
+});
+document.getElementById("start").addEventListener("input", showTakeoffLocal);
 document.getElementById("mask").addEventListener("change", scheduleSky);
 document.getElementById("h_agl").addEventListener("change", scheduleSky);
 ["cG", "cE", "cC"].forEach((id) => {
@@ -2479,3 +2788,20 @@ for (const id of ["survey_style", "coverage", "sweep_bearing", "max_leg_m", "roi
   });
 }
 updateSweepHint();
+
+// Shoreline edge settings.
+for (const id of ["survey_pattern", "edge_style", "edge_pass_m", "edge_water_m", "edge_land_m", "edge_lanes", "edge_lane_m", "edge_long_way"]) {
+  const el = document.getElementById(id);
+  el.addEventListener("input", syncSurveyPatternUi);
+  el.addEventListener("change", () => {
+    syncSurveyPatternUi();
+    if (id === "survey_pattern") {
+      edgePicks = [];
+      if (surveyStart) paintSurveyPicks();
+    }
+    if (!lastPlan) return;
+    resetMission({ keepSelection: true });
+    setStatus("Settings changed. Build mission to update the route and export.");
+  });
+}
+syncSurveyPatternUi();

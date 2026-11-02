@@ -38,6 +38,24 @@ class FlightTests(unittest.TestCase):
         self.service.submit("upload", self.plan_id)
         self.assertEqual(finish(self.service)["state"], "complete")
 
+    def test_launch_waits_for_the_planned_time_unless_skipped(self):
+        from datetime import datetime, timedelta, timezone
+        self.service.plans[self.plan_id]["meta"]["start"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=30)
+        ).isoformat()
+        self.upload()
+        self.service.submit("launch", self.plan_id, "LAUNCH", wait_until_start=True)
+        deadline = time.monotonic() + 3
+        while "Waiting" not in self.service.job["message"] and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertIn("Waiting", self.service.job["message"])
+        self.assertFalse(self.service.link.armed)
+        self.service.rtl()
+        self.assertEqual(finish(self.service)["state"], "error")
+        self.service.submit("launch", self.plan_id, "LAUNCH", wait_until_start=False)
+        self.assertEqual(finish(self.service)["state"], "complete")
+        self.assertTrue(self.service.link.armed)
+
     def test_upload_readback_launch_rtl(self):
         self.assertFalse(self.service.preflight(self.plan_id)["ready"])
         self.upload()
@@ -64,6 +82,34 @@ class FlightTests(unittest.TestCase):
         while self.service.snapshot()["target"] is None and time.monotonic() < deadline:
             time.sleep(0.05)
         self.assertIsNotNone(self.service.snapshot()["target"])
+
+    def test_takeoff_pulses_the_next_waypoint_not_the_launch_pad(self):
+        self.upload()
+        items = flight_items(self.wpl)
+        pad = self.plan["pad"]
+        # Aircraft armed somewhere other than the pad stored in the mission.
+        self.service.link.home.update(lat=pad["lat"] + 0.01, lon=pad["lon"])
+        self.service.link.position.update(lat=pad["lat"] + 0.01, lon=pad["lon"])
+        self.service.link.current = 1  # NAV_TAKEOFF, whose lat/lon is the planned pad
+        target = self.service.snapshot()["target"]
+        self.assertTrue(target["taking_off"])
+        self.assertEqual(target["wp"], 1)
+        self.assertGreater(abs(target["lat"] - pad["lat"]) + abs(target["lon"] - pad["lon"]), 1e-4)
+        self.assertAlmostEqual(target["lat"], 40.0861, places=5)
+        self.service.link.current = 2  # DO_CHANGE_SPEED still before the first waypoint
+        target = self.service.snapshot()["target"]
+        self.assertTrue(target["taking_off"])
+        self.assertAlmostEqual(target["lat"], 40.0861, places=5)
+        wp_seq = next(i["seq"] for i in items if i["command"] == 16 and i["seq"] > 0)
+        self.service.link.current = wp_seq
+        target = self.service.snapshot()["target"]
+        self.assertFalse(target["taking_off"])
+        self.assertEqual(target["seq"], wp_seq)
+        self.service.link.current = items[-1]["seq"]  # RTL, after the last waypoint
+        target = self.service.snapshot()["target"]
+        self.assertTrue(target["returning"])
+        self.assertFalse(target["taking_off"])
+        self.assertAlmostEqual(target["lat"], pad["lat"] + 0.01, places=5)
 
     def test_read_mission_reports_roi_aim_points(self):
         plan = mission()
@@ -165,11 +211,71 @@ class FlightTests(unittest.TestCase):
         self.assertFalse(self.service.link.armed)
         self.assertIsNone(self.service.verified)
 
-    def test_wrong_field_blocks_upload(self):
-        self.service.link.home["lat"] += 1
-        self.service.submit("upload", self.plan_id)
-        self.assertEqual(finish(self.service)["state"], "error")
-        self.assertEqual(self.service.link.items, [])
+    def test_far_from_pad_still_uploads_and_launches_where_it_sits(self):
+        self.service.link.position["lat"] += 0.01  # about 1.1 km from the planned pad
+        self.upload()
+        pad = next(c for c in self.service.preflight(self.plan_id)["checks"] if c["key"] == "pad")
+        self.assertTrue(pad["ok"])
+        self.assertIn("m from the planned pad", pad["message"])
+        self.service.set_check("route_radius", False)
+        self.service.submit("launch", self.plan_id, "LAUNCH")
+        self.assertEqual(finish(self.service)["state"], "complete")
+        self.assertAlmostEqual(self.service.link.home["lat"], 40.096045, places=6)
+
+    def test_stale_home_before_arming_does_not_block(self):
+        # Powered up at the car, carried to the shore: arming moves Home to the aircraft.
+        self.service.link.home["lat"] += 0.01
+        self.upload()
+        self.assertTrue(self.service.preflight(self.plan_id)["ready"])
+        self.service.submit("launch", self.plan_id, "LAUNCH")
+        self.assertEqual(finish(self.service)["state"], "complete")
+        link = self.service.link
+        self.assertLess(abs(link.home["lat"] - 40.086045), 1e-6)
+
+    def test_aircraft_a_little_off_the_pad_still_launches(self):
+        self.service.link.position["lat"] += 0.0004  # about 45 m north of the planned pad
+        self.upload()
+        self.assertTrue(self.service.preflight(self.plan_id)["ready"])
+        self.service.submit("launch", self.plan_id, "LAUNCH")
+        self.assertEqual(finish(self.service)["state"], "complete")
+        self.assertAlmostEqual(self.service.link.home["lat"], 40.086445, places=6)
+
+    def test_locked_home_elsewhere_disarms_before_auto(self):
+        self.upload()
+        link = self.service.link
+        original = link.arm
+
+        def arm_with_locked_home(cancel):
+            original(cancel)
+            link.home["lat"] += 0.01  # Home stays where DO_SET_HOME locked it
+        with patch.object(link, "arm", side_effect=arm_with_locked_home):
+            self.service.submit("launch", self.plan_id, "LAUNCH")
+            job = finish(self.service)
+        self.assertEqual(job["state"], "error")
+        self.assertIn("Home is", job["message"])
+        self.assertFalse(link.armed)
+        self.assertNotEqual(link.mode_id, 3)
+
+    def test_sim_flies_the_mission_speed_not_a_fixed_demo_speed(self):
+        link = self.service.link
+        items = flight_items(self.wpl)
+        speed_seq = next(i["seq"] for i in items if i["command"] == 178)
+        link.upload(items, None)
+        link.armed, link.flying, link.mode_id, link.alt = True, True, 3, 30
+        link.current = speed_seq
+        link.snapshot()
+        self.assertEqual(link.speed, 5)
+        far = {"lat": link.position["lat"] + 0.01, "lon": link.position["lon"]}
+        link.last = time.monotonic() - 0.5
+        link._fly_to(far, 0.5)
+        self.assertAlmostEqual(link.ground_speed, 5, places=3)
+
+    def test_skip_all_arming_checks_is_not_read_as_all_enabled(self):
+        from engine.flight import PARAM_ALIASES
+        key, convert = PARAM_ALIASES["ARMING_SKIPCHK"]
+        self.assertEqual((key, convert(0)), ("ARMING_CHECK", 1))
+        self.assertLess(convert(-1), 0)
+        self.assertLess(convert(8), 0)
 
     def test_armed_upload_blocked(self):
         self.service.link.armed = True
@@ -177,13 +283,34 @@ class FlightTests(unittest.TestCase):
         self.assertEqual(finish(self.service)["state"], "error")
         self.assertEqual(self.service.link.items, [])
 
+    def test_ground_check_does_not_fail_once_airborne(self):
+        self.upload()
+        baseline = self.service.link.snapshot()
+        flying = {**baseline, "armed": True, "landed": 2, "relative_alt": 30}
+        with patch.object(self.service.link, "snapshot", return_value=flying):
+            landed = next(c for c in self.service.preflight(self.plan_id)["checks"] if c["key"] == "landed")
+        self.assertTrue(landed["ok"])
+        self.assertIn("in the air", landed["message"])
+
+    def test_disarmed_aircraft_on_the_ground_without_a_landed_message(self):
+        self.upload()
+        baseline = self.service.link.snapshot()
+        sitting = {**baseline, "armed": False, "landed": None,
+                   "relative_alt": -1.2, "vertical_speed": 0,
+                   "fresh": {**baseline["fresh"], "landed": False, "position": True}}
+        with patch.object(self.service.link, "snapshot", return_value=sitting):
+            landed = next(c for c in self.service.preflight(self.plan_id)["checks"] if c["key"] == "landed")
+        self.assertTrue(landed["ok"])
+        self.assertIn("on the ground", landed["message"])
+
     def test_stale_or_unhealthy_state_blocks_launch(self):
         self.upload()
         baseline = self.service.link.snapshot()
         changes = [
             {"connected": False}, {"battery_pct": -1}, {"battery_pct": 20},
             {"gps_fix": 2}, {"satellites": 0}, {"ekf_ok": False},
-            {"sensors_ok": False}, {"landed": 0}, {"params_fresh": False},
+            {"sensors_ok": False},
+            {"landed": 0, "relative_alt": 20, "fresh": {**baseline["fresh"], "landed": False}},
             {"fresh": {**baseline["fresh"], "position": False}},
             {"params": {**baseline["params"], "ARMING_CHECK": 0}},
             {"params": {**baseline["params"], "ARMING_CHECK": -4108}},
@@ -210,9 +337,9 @@ class FlightTests(unittest.TestCase):
             self.assertTrue(report["ready"])
             skipped = {c["key"] for c in report["checks"] if not c["enabled"]}
             self.assertEqual(skipped, {"fence_circle", "route_radius"})
-        for key in ("landed", "verified", "pad"):
-            with self.subTest(key=key), self.assertRaises(FlightError):
-                self.service.set_check(key, False)
+        self.service.set_check("landed", False)
+        with self.assertRaises(FlightError):
+            self.service.set_check("verified", False)
 
     def test_ardupilot_messages_keep_source_and_severity(self):
         self.service.event("PreArm: Compass not calibrated", "ardupilot", 2)
@@ -346,6 +473,31 @@ class PlannerIntegrationTests(unittest.TestCase):
         self.assertEqual(len(parser.ids), len(set(parser.ids)))
         refs = set(re.findall(r'el\("([^"]+)"\)', (root / "static/flight.js").read_text()))
         self.assertFalse(refs - set(parser.ids), refs - set(parser.ids))
+
+    def test_live_reflections_follow_the_aircraft_from_launch(self):
+        from datetime import datetime, timezone
+        import app as planner
+        client = planner.app.test_client()
+        body = {
+            "lat": 40.0824, "lon": -105.2268, "alt": 30,
+            "launched": "2026-09-29T15:00:00", "elapsed_s": 0,
+            "constellations": ["G"], "mask": 5, "aim": "G01",
+        }
+        first = client.post("/api/reflections", json=body)
+        self.assertEqual(first.status_code, 200, first.json)
+        self.assertTrue(first.json["speculars"])
+        sky = datetime.fromisoformat(first.json["time"])
+        self.assertLess(abs((datetime.now(timezone.utc) - sky).total_seconds()), 5)
+        self.assertFalse(first.json["time"].startswith("2026-09-29"))
+        moved = client.post("/api/reflections", json=dict(body, lat=40.09, lon=-105.20, elapsed_s=30))
+        prn = first.json["speculars"][0]["prn"]
+        there = next(s for s in moved.json["speculars"] if s["prn"] == prn)
+        here = first.json["speculars"][0]
+        self.assertGreater(abs(here["lat"] - there["lat"]) + abs(here["lon"] - there["lon"]), 1e-4)
+        ground = client.post("/api/reflections", json=dict(body, alt=1))
+        self.assertEqual(ground.json["speculars"], [])
+        self.assertTrue(ground.json["sats"])
+        self.assertTrue(any(row["above_mask"] for row in ground.json["sats"]))
 
 
 if __name__ == "__main__":

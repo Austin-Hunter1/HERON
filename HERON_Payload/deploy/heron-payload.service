@@ -1,0 +1,32 @@
+[Unit]
+Description=HERON GNSS-R payload (MAVLink on TELEM2 + Payload Setup web app)
+After=local-fs.target network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=heron
+Group=heron
+SupplementaryGroups=dialout plugdev
+WorkingDirectory=/opt/heron
+EnvironmentFile=/etc/heron/payload.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/heron/.venv/bin/python -m heron_payload.agent \
+    --connect ${HERON_CUBE_PORT} --baud ${HERON_CUBE_BAUD} --system-id ${HERON_SYSTEM_ID} \
+    --http ${HERON_SETUP_HTTP} --state-dir /var/lib/heron --recorder /opt/heron/bin/heron-recorder
+Restart=on-failure
+RestartSec=5
+# Stop finishes the open files: the agent stops the recorders and syncs before exiting.
+TimeoutStopSec=40
+KillMode=mixed
+StateDirectory=heron
+StateDirectoryMode=0750
+# UHD streams more reliably with real-time thread priority and locked memory.
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

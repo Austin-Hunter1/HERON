@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import math
+import re
+from datetime import datetime, timezone
+
+# Mission Planner and QGroundControl skip this line. The aircraft never sees it.
+_TAKEOFF_LINE = re.compile(r"^#\s*HERON\s+takeoff\s+(\S+)\s*$", re.IGNORECASE)
+_META_LINE = re.compile(r"^#\s*HERON\s+meta\s+(\{.*\})\s*$", re.IGNORECASE)
+_TAKEOFF_NAME = re.compile(r"HERON_(\d{8})_(\d{4})")
 
 # MAVLink mission commands for aurealia based on the stock values (i need to verify these)
 NAV_WAYPOINT = 16
@@ -13,8 +21,72 @@ DO_SET_ROI = 201
 DO_CHANGE_SPEED = 178
 CONDITION_YAW = 115
 
+# Heading on a long transit: face a lead-in point on the first pass line, turn to the
+# survey heading over the last LEAD_IN_M, so the antenna is aimed before WP1.
+LEAD_IN_M = 50.0
+MIN_LEAD_TRANSIT_M = 100.0  # shorter transits keep the old behaviour
+TRANSIT_YAW_RATE = 30.0     # deg/s for the face-forward and line-up turns
+
 FRAME_GLOBAL = 0
 FRAME_RELATIVE_ALT = 3
+
+
+def _bearing(lat0, lon0, lat1, lon1):
+    dlat = lat1 - lat0
+    dlon = (lon1 - lon0) * math.cos(math.radians((lat0 + lat1) / 2.0))
+    if abs(dlat) < 1e-12 and abs(dlon) < 1e-12:
+        return None
+    return (math.degrees(math.atan2(dlon, dlat)) + 360.0) % 360.0
+
+def _dist_m(a, b):
+    return math.hypot((a[0] - b[0]) * 111132.92,
+                      (a[1] - b[1]) * 111132.92 * math.cos(math.radians((a[0] + b[0]) / 2.0)))
+
+
+def lead_in_point(pad: dict, hovers: list[dict]) -> tuple[float, float] | None:
+    """Point LEAD_IN_M before WP1 on the first pass line (or the pad-to-WP1 line), or None."""
+    if not hovers:
+        return None
+    h0 = (float(hovers[0]["lat"]), float(hovers[0]["lon"]))
+    p = (float(pad["lat"]), float(pad["lon"]))
+    if _dist_m(p, h0) < MIN_LEAD_TRANSIT_M:
+        return None
+    k = math.cos(math.radians(h0[0]))
+    def xy(lat, lon):
+        return ((lon - h0[1]) * 111132.92 * k, (lat - h0[0]) * 111132.92)
+    if len(hovers) > 1 and hovers[0].get("pass_id") is not None and hovers[1].get("pass_id") == hovers[0]["pass_id"]:
+        (ax, ay), (bx, by) = (0.0, 0.0), xy(float(hovers[1]["lat"]), float(hovers[1]["lon"]))
+    else:
+        (ax, ay), (bx, by) = xy(*p), (0.0, 0.0)
+    n = math.hypot(bx - ax, by - ay)
+    if n < 1.0:
+        return None
+    x, y = -(bx - ax) / n * LEAD_IN_M, -(by - ay) / n * LEAD_IN_M
+    return (h0[0] + y / 111132.92, h0[1] + x / (111132.92 * k))
+
+
+def _lead(plan: dict):
+    """Lead-in for body-yaw plans. Imports record whether their file had one."""
+    meta = plan.get("meta") or {}
+    if meta.get("roi_mode") != "body_yaw":
+        return None
+    if "lead_in" in meta and not meta["lead_in"]:
+        return None
+    return lead_in_point(plan["pad"], plan.get("hovers") or [plan["hover"]])
+
+
+def plan_route_line(plan: dict, lead=None) -> list[list[float]]:
+    """Straight-leg map line: pad, lead-in if any, waypoints, pad."""
+    pad = plan["pad"]
+    hovers = plan.get("hovers") or [plan["hover"]]
+    lead = lead if lead is not None else _lead(plan)
+    pts = [[float(pad["lat"]), float(pad["lon"])]]
+    if lead:
+        pts.append([lead[0], lead[1]])
+    pts += [[float(h["lat"]), float(h["lon"])] for h in hovers]
+    pts.append([float(pad["lat"]), float(pad["lon"])])
+    return pts
+
 
 # CHECK WAYPOINT CAPACITY ON CUBE!!
 SOFT_WP_CAP = 100
@@ -46,8 +118,12 @@ def qgc_wpl(plan: dict) -> str:
     Mission Planner Copter file.
 
     Seq 0 is HOME (MP convention). Then TAKEOFF, cruise speed, optional pad
-    delay, then for water surveys DO_SET_ROI (yaw at bounce) + WAYPOINT
-    (Delay = loiter seconds), then clear ROI and RTL.
+    delay. Aim commands come before the waypoint they belong to, because
+    ArduPilot runs them with the next navigation command. Then RTL.
+
+    Body yaw on a long transit: the nose faces a lead-in point on the first
+    pass line, turns to the survey heading on the 50 m run-in, and faces home
+    before RTL.
     """
     meta = plan["meta"]
     h = float(meta["h_agl"])
@@ -69,13 +145,23 @@ def qgc_wpl(plan: dict) -> str:
             _row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, hold_s, 0, 0, 0, pad["lat"], pad["lon"], h)
         )
         idx += 1
-    if meta.get("roi_mode") == "body_yaw":
-        # Clear a previous ROI before using absolute body headings.
+    roi_mode = meta.get("roi_mode", "per_point")
+    # ArduPilot runs a DO/CONDITION with the next NAV command. Put the aim before the
+    # waypoint so it applies on the way there, which is the leg the heading was computed for.
+    if roi_mode == "body_yaw":
         lines.append(_row(idx, 0, FRAME_GLOBAL, DO_SET_ROI, 0, 0, 0, 0, 0, 0, 0))
+        idx += 1
+    lead = _lead(plan)
+    if lead:
+        out_yaw = _bearing(float(pad["lat"]), float(pad["lon"]), lead[0], lead[1])
+        if out_yaw is not None:
+            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, out_yaw, TRANSIT_YAW_RATE, 0, 0, 0, 0, 0))
+            idx += 1
+        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, 0, 0, 0, 0, lead[0], lead[1], h))
         idx += 1
     prev = None
     used_roi = False
-    for hov in hovers:
+    for k, hov in enumerate(hovers):
         delay = int(round(float(hov.get("loiter_s") if hov.get("loiter_s") is not None else default_loiter)))
         delay = max(0, min(delay, 65535))
         lat, lon = float(hov["lat"]), float(hov["lon"])
@@ -88,25 +174,33 @@ def qgc_wpl(plan: dict) -> str:
                     lines[j] = "\t".join(parts)
                     break
             continue
-        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, delay, 0, 0, 0, lat, lon, h))
-        idx += 1
-        if meta.get("roi_mode") == "body_yaw":
-            yaw = float(hov["yaw_deg"])
-            if not math.isfinite(yaw):
-                raise ValueError("Invalid antenna heading.")
-            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, yaw % 360, 15, 0, 0, 0, 0, 0))
-            idx += 1
-        splash = _splash_ll(hov) if meta.get("roi_mode", "per_point") == "per_point" else None
+        splash = _splash_ll(hov) if roi_mode == "per_point" else None
         if splash:
             slat, slon = splash
-            # DO/CONDITION commands belong after the NAV they run alongside.
             lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, DO_SET_ROI, 0, 0, 0, 0, slat, slon, 0))
             idx += 1
             used_roi = True
+        if roi_mode == "body_yaw":
+            yaw = float(hov["yaw_deg"])
+            if not math.isfinite(yaw):
+                raise ValueError("Invalid antenna heading.")
+            # The run-in is only LEAD_IN_M long, so the line-up turn uses the faster rate.
+            rate = TRANSIT_YAW_RATE if (k == 0 and lead) else 15
+            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, yaw % 360, rate, 0, 0, 0, 0, 0))
+            idx += 1
+        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, delay, 0, 0, 0, lat, lon, h))
+        idx += 1
         prev = (lat, lon)
     if used_roi:
         lines.append(_row(idx, 0, FRAME_GLOBAL, DO_SET_ROI, 0, 0, 0, 0, 0, 0, 0))
         idx += 1
+    # Nose toward home on the return. WP_YAW_BEHAVIOR 2 does not turn during RTL,
+    # so the heading has to be commanded before that item.
+    if roi_mode == "body_yaw" and prev is not None:
+        home_yaw = _bearing(prev[0], prev[1], float(pad["lat"]), float(pad["lon"]))
+        if home_yaw is not None:
+            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, home_yaw, 15, 0, 0, 0, 0, 0))
+            idx += 1
     lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_RTL, 0, 0, 0, 0, pad["lat"], pad["lon"], 0))
     return "\n".join(lines) + "\n"
 
@@ -122,6 +216,250 @@ def items_wpl(items: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def takeoff_from_wpl(text: str) -> datetime | None:
+    """Planned takeoff saved in a HERON waypoint file, or None for other files."""
+    if not text:
+        return None
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        match = _TAKEOFF_LINE.match(line.strip().lstrip("\ufeff"))
+        if not match:
+            continue
+        raw = match.group(1).replace("Z", "+00:00")
+        try:
+            when = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return when.astimezone(timezone.utc)
+    return None
+
+
+def takeoff_from_name(filename: str) -> datetime | None:
+    """HERON_20261018_2130.waypoints was named from the planned takeoff."""
+    match = _TAKEOFF_NAME.search(str(filename or "").replace("\\", "/").split("/")[-1])
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1) + match.group(2), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def heron_meta_from_wpl(text: str) -> dict:
+    """Track satellites and area rings saved beside the takeoff time."""
+    if not text:
+        return {}
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        match = _META_LINE.match(line.strip().lstrip("\ufeff"))
+        if not match:
+            continue
+        try:
+            data = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def _mission_meta_line(plan: dict | None) -> str | None:
+    if not plan:
+        return None
+    hovers = plan.get("hovers") or []
+    track = [h.get("prn") or "" for h in hovers]
+    areas = []
+    for i, tgt in enumerate(plan.get("targets") or []):
+        ring = tgt.get("coordinates") or []
+        if len(ring) < 3:
+            continue
+        areas.append({
+            "name": tgt.get("name") or f"area {i + 1}",
+            "ring": [[round(float(p[0]), 6), round(float(p[1]), 6)] for p in ring],
+        })
+    payload = {}
+    if plan.get("pad") and (plan.get("hovers") or plan.get("hover")) and _lead(plan):
+        payload["lead_in"] = True
+    if any(track):
+        payload["track"] = track
+    if areas:
+        payload["areas"] = areas
+    if not payload:
+        return None
+    return "# HERON meta " + json.dumps(payload, separators=(",", ":"))
+
+
+def annotate_wpl(wpl: str, start, plan: dict | None = None) -> str:
+    """Keep the planned takeoff, track satellite, and area in the saved file. Upload strips these lines."""
+    if isinstance(start, datetime):
+        when = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+    elif start:
+        when = takeoff_from_wpl(f"# HERON takeoff {start}")
+    else:
+        when = None
+    lines = [
+        ln for ln in wpl.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if not _TAKEOFF_LINE.match(ln.strip()) and not _META_LINE.match(ln.strip())
+    ]
+    notes = []
+    if when is not None:
+        notes.append("# HERON takeoff " + when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    meta = _mission_meta_line(plan)
+    if meta:
+        notes.append(meta)
+    if not notes:
+        return wpl
+    at = 1 if lines and lines[0].strip() == "QGC WPL 110" else 0
+    lines[at:at] = notes
+    text = "\n".join(lines)
+    return text if text.endswith("\n") else text + "\n"
+
+
+def normalize_wpl(text: str) -> str:
+    """Canonical QGC WPL 110 text. Mission Planner rows are tabs; some exports use spaces."""
+    if text is None or len(text) > 2_000_000:
+        raise ValueError("Waypoint file is too large.")
+    raw = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    lines = [ln.strip() for ln in raw.split("\n") if ln.strip() and not ln.strip().startswith("#")]
+    if not lines:
+        raise ValueError("empty waypoint file")
+    if lines[0] != "QGC WPL 110":
+        raise ValueError(f"need 'QGC WPL 110' header, got {lines[0]!r}")
+    if len(lines) > 802:
+        raise ValueError("Waypoint file has too many items.")
+    out = ["QGC WPL 110"]
+    for i, ln in enumerate(lines[1:], start=1):
+        parts = ln.split("\t") if "\t" in ln else ln.split()
+        if len(parts) != 12:
+            raise ValueError(f"line {i}: expected 12 fields, got {len(parts)}")
+        out.append("\t".join(parts))
+    return "\n".join(out) + "\n"
+
+
+def _near_m(lat1: float, lon1: float, lat2: float, lon2: float, tol_m: float = 3.0) -> bool:
+    mean = math.radians((lat1 + lat2) / 2.0)
+    north = (lat1 - lat2) * 111132.92
+    east = (lon1 - lon2) * 111132.92 * math.cos(mean)
+    return math.hypot(north, east) <= tol_m
+
+
+def route_from_wpl(text: str, lead_in: bool = False) -> dict:
+    """
+    Launch point, cruise, and fly-to points from a Mission Planner file.
+
+    A waypoint sitting on Home before the route leaves is the pad hold, not a
+    survey point. Yaw and ROI rows belong to the waypoint they are written beside.
+    lead_in=True (from the HERON meta line) drops the run-in point HERON adds
+    before WP1 so it is not read as a survey point.
+    """
+    items = parse_wpl(normalize_wpl(text))
+    if not items:
+        raise ValueError("That waypoint file has no mission items.")
+    home = items[0]
+    if abs(home["lat"]) <= 1e-7 and abs(home["lon"]) <= 1e-7:
+        raise ValueError("Home in that file is 0,0. It needs a real launch point.")
+    pad = {"lat": home["lat"], "lon": home["lon"], "name": "Pad"}
+    warnings: list[str] = []
+    h_agl = None
+    speed = None
+    hold_s = 0.0
+    hovers: list[dict] = []
+    current = None
+    left_home = False
+    # Older files write the aim point before its waypoint. Current files write it after.
+    aim_leads = None
+    pending_yaw = None
+    pending_splash = None
+    skip_lead = bool(lead_in)
+    lead_ll = None
+
+    def _stash_aim(kind, value):
+        nonlocal aim_leads, pending_yaw, pending_splash, current
+        if current is None or aim_leads:
+            if kind == "yaw":
+                pending_yaw = value
+            else:
+                pending_splash = value
+            aim_leads = True
+            return
+        if kind == "yaw":
+            hovers[current]["yaw_deg"] = value
+        else:
+            hovers[current]["splash_lat"], hovers[current]["splash_lon"] = value
+        if aim_leads is None:
+            aim_leads = False
+
+    for it in items[1:]:
+        cmd = it["command"]
+        if cmd == NAV_TAKEOFF:
+            h_agl = float(it["alt"])
+        elif cmd == DO_CHANGE_SPEED and float(it["p2"]) > 0 and speed is None:
+            speed = float(it["p2"])
+        elif cmd in (NAV_WAYPOINT, NAV_LOITER_TIME) and (abs(it["lat"]) > 1e-7 or abs(it["lon"]) > 1e-7):
+            delay = max(0.0, float(it["p1"]))
+            at_home = _near_m(it["lat"], it["lon"], pad["lat"], pad["lon"])
+            if at_home and not hovers and not left_home and delay >= 8:
+                hold_s = delay
+                continue
+            if skip_lead and not hovers:
+                skip_lead = False
+                lead_ll = (float(it["lat"]), float(it["lon"]))
+                left_home = True
+                pending_yaw = None  # the face-the-lead-in heading, not a survey heading
+                continue
+            left_home = True
+            hovers.append(
+                {
+                    "lat": float(it["lat"]),
+                    "lon": float(it["lon"]),
+                    "alt": float(it["alt"]),
+                    "loiter_s": delay,
+                    "name": f"WP{len(hovers) + 1}",
+                }
+            )
+            current = len(hovers) - 1
+            if pending_yaw is not None:
+                hovers[current]["yaw_deg"] = pending_yaw
+                pending_yaw = None
+            if pending_splash is not None:
+                hovers[current]["splash_lat"], hovers[current]["splash_lon"] = pending_splash
+                pending_splash = None
+        elif cmd == CONDITION_YAW:
+            _stash_aim("yaw", float(it["p1"]) % 360.0)
+        elif cmd == DO_SET_ROI and (it["lat"] or it["lon"]):
+            _stash_aim("splash", (float(it["lat"]), float(it["lon"])))
+        elif cmd == NAV_RTL:
+            break
+    if not hovers:
+        raise ValueError("That waypoint file has no fly-to points.")
+    if h_agl is None or h_agl <= 0:
+        h_agl = next((h["alt"] for h in hovers if h["alt"] > 0), None)
+        if h_agl is None:
+            raise ValueError("That file has no takeoff altitude.")
+        warnings.append("No takeoff altitude in the file; playback uses the first waypoint altitude.")
+    alts = [h["alt"] for h in hovers if h["alt"] > 0]
+    if alts and max(abs(a - h_agl) for a in alts) > 0.5:
+        warnings.append("Waypoint altitudes differ; playback uses the takeoff altitude. The file itself is unchanged.")
+    if speed is None:
+        speed = 8.0
+        warnings.append("No speed command in the file; playback uses 8 m/s.")
+    delays = [h["loiter_s"] for h in hovers]
+    has_yaw = any("yaw_deg" in h for h in hovers)
+    has_splash = any("splash_lat" in h for h in hovers)
+    return {
+        "pad": pad,
+        "h_agl": float(h_agl),
+        "speed_mps": float(speed),
+        "hold_s": float(hold_s),
+        "loiter_s": float(delays[0]),
+        "loiter_mixed": any(abs(d - delays[0]) > 0.5 for d in delays),
+        "roi_mode": "body_yaw" if has_yaw else "per_point" if has_splash else "none",
+        "waypoints": hovers,
+        "lead_in": lead_ll,
+        "warnings": warnings,
+    }
+
+
 def parse_wpl(text: str) -> list[dict]:
     lines = [ln.strip() for ln in text.replace("\r\n", "\n").split("\n") if ln.strip()]
     if not lines:
@@ -130,9 +468,11 @@ def parse_wpl(text: str) -> list[dict]:
         raise ValueError(f"need 'QGC WPL 110' header, got {lines[0]!r}")
     items = []
     for i, ln in enumerate(lines[1:]):
-        parts = ln.split("\t")
+        if ln.startswith("#"):
+            continue
+        parts = ln.split("\t") if "\t" in ln else ln.split()
         if len(parts) != 12:
-            raise ValueError(f"line {i + 1}: expected 12 tab-separated fields, got {len(parts)}")
+            raise ValueError(f"line {i + 1}: expected 12 fields, got {len(parts)}")
         seq, current, frame, cmd = (int(float(parts[j])) for j in range(4))
         p1, p2, p3, p4, lat, lon, alt, auto = (float(parts[j]) for j in range(4, 12))
         items.append(
@@ -224,7 +564,7 @@ def validate_wpl(text: str, plan: dict | None = None) -> dict:
             if not unique_hovers or unique_hovers[-1] != pt:
                 unique_hovers.append(pt)
         hold = int(round(float((plan.get("meta") or {}).get("hold_s") or 0))) >= 8
-        expect = len(unique_hovers) + (1 if hold else 0)
+        expect = len(unique_hovers) + (1 if hold else 0) + (1 if _lead(plan) else 0)
         if len(flown) != expect:
             warnings.append(f"file has {len(flown)} fly-to WPs, plan has {len(unique_hovers)} unique hovers")
         if items:
@@ -291,11 +631,11 @@ def run_card(plan: dict) -> str:
             pct = f"{s['coverage_pct']}% coverage" if s.get("coverage_pct") is not None else "custom spacing"
             lines.append(f"Reflection strip about {s['footprint_m']} m wide; {pct}.")
         if m.get("roi_mode") == "body_yaw":
-            lines.append("Body-fixed antenna: absolute yaw commands follow predicted reflection azimuth. Yaw only; fixed antenna tilt and aircraft response require validation.")
+            lines.append("On the way to each waypoint the aircraft yaws to that leg's reflection azimuth. The gimbal is not commanded.")
         elif m.get("roi_mode", "per_point") == "none":
             lines.append("No ROI commands. Antenna pointing is not controlled by this mission.")
         else:
-            lines.append("Legacy per-waypoint ROI uses fixed ground targets, not continuous reflection tracking; yaw depends on mount configuration.")
+            lines.append("On the way to each waypoint the gimbal looks at that splash. It is one ground point per leg, not a continuous track.")
         if s.get("sampled_tracking_error_m") is not None:
             lines.append(f"Sampled straight-leg reflection error: {s['sampled_tracking_error_m']} m. Geometric preview only; turns and aircraft dynamics are not modeled.")
         return "\n".join(lines) + "\n"
@@ -320,7 +660,8 @@ def run_card(plan: dict) -> str:
         geom = hov.get("t_in_window")
         extra = ""
         if prn:
-            extra = f"  aim {prn} el {hov.get('el'):.0f}"
+            el = hov.get("el")
+            extra = f"  aim {prn}" + (f" el {el:.0f}" if el is not None else "")
         else:
             extra = "  (centroid fallback)"
         when = f"  arrive +{arrive:.0f}s" if arrive is not None else ""

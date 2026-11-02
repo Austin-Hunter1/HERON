@@ -373,3 +373,343 @@ def build_survey(
         info["stretch"] = mapping(centerline)
         info["stretch_m"] = round(line_length_m(centerline), 1)
     return hovers, info
+
+
+def _local_frame(clat: float, clon: float):
+    my = 111132.92
+    mx = max(1.0, my * math.cos(math.radians(clat)))
+    to_xy = lambda lat, lon: ((lon - clon) * mx, (lat - clat) * my)
+    to_ll = lambda x, y: (clat + y / my, clon + x / mx)
+    return to_xy, to_ll, mx, my
+
+
+def shore_stretch(poly, a=None, b=None, long_way=False):
+    """Shoreline (outer ring) of the lake in local metres, optionally cut between two picks.
+
+    Returns (LineString in metres, to_ll, local polygon, closed). With no picks the whole ring is used.
+    """
+    poly = _as_polygon(poly)
+    if poly.geom_type == "MultiPolygon":
+        poly = max(poly.geoms, key=lambda g: g.area)
+    clat, clon = poly.centroid.y, poly.centroid.x
+    _to_xy, to_ll, mx, my = _local_frame(clat, clon)
+    local = affine_transform(poly, [mx, 0, 0, my, -clon * mx, -clat * my])
+    ring = LineString(local.exterior.coords)
+    L = ring.length
+    if a is None or b is None:
+        return ring, to_ll, local, True
+    pa = ring.project(Point(_to_xy(*a)))
+    pb = ring.project(Point(_to_xy(*b)))
+    if abs(pa - pb) < 1.0:
+        raise ValueError("Pick two different points on the shore.")
+    lo, hi = sorted((pa, pb))
+    inner = hi - lo
+    outer = L - inner
+    use_inner = (inner <= outer) != bool(long_way)
+    if use_inner:
+        seg = substring(ring, lo, hi)
+        if pa > pb:
+            seg = LineString(list(seg.coords)[::-1])
+    else:
+        # Wrap through the ring's start point.
+        part1 = list(substring(ring, hi, L).coords)
+        part2 = list(substring(ring, 0, lo).coords)
+        seg = LineString(part1 + part2[1:])
+        if pa < pb:
+            seg = LineString(list(seg.coords)[::-1])
+    return seg, to_ll, local, False
+
+
+def _smooth_shore(local, r=8.0):
+    """Round off jagged mapped shoreline so offset lanes come out smooth (closing, then opening)."""
+    g = local.buffer(r, quad_segs=12).buffer(-2 * r, quad_segs=12).buffer(r, quad_segs=12)
+    if g.is_empty:
+        g = local.buffer(0)
+    if g.geom_type == "MultiPolygon":
+        g = max(g.geoms, key=lambda x: x.area)
+    return g
+
+
+def _rings(g):
+    if g.is_empty:
+        return []
+    polys = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
+    return [LineString(p.exterior.coords) for p in polys if p.geom_type == "Polygon" and p.area > 1.0]
+
+
+def _arc(ring, a_pt, b_pt, mid_pt):
+    """Sub-arc of a closed ring from near A to near B, choosing the side that passes the stretch midpoint."""
+    L = ring.length
+    pa, pb = ring.project(a_pt), ring.project(b_pt)
+    lo, hi = sorted((pa, pb))
+    inner = substring(ring, lo, hi)
+    outer = LineString(list(substring(ring, hi, L).coords) + list(substring(ring, 0, lo).coords)[1:])
+    seg = inner if inner.distance(mid_pt) <= outer.distance(mid_pt) else outer
+    if Point(seg.coords[0]).distance(a_pt) > Point(seg.coords[-1]).distance(a_pt):
+        seg = LineString(list(seg.coords)[::-1])
+    return seg
+
+
+def _densify(line, max_seg):
+    pts = list(line.coords)
+    out = [pts[0]]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        d = math.hypot(x1 - x0, y1 - y0)
+        n = max(1, int(math.ceil(d / max_seg - 1e-9)))
+        for k in range(1, n + 1):
+            out.append((x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n))
+    return out
+
+
+def build_edge_survey(
+    poly,
+    *,
+    h_agl: float,
+    el: float,
+    loiter_s: float,
+    lanes: int = 2,
+    lane_m: float = 15.0,
+    a=None,
+    b=None,
+    long_way: bool = False,
+    survey_style: str = "continuous",
+    max_wp: int = 200,
+    max_leg_m: float = 120.0,
+):
+    """Lanes that follow the shoreline: one on the edge itself, plus N on the land side and N on the water side.
+
+    The reflection point rides each lane parallel to the edge, so inner lanes see coherent water,
+    outer lanes see land, and the edge sits between them. Points are REFLECTION targets; the planner
+    offsets the drone toward the satellite afterwards.
+    """
+    lanes = int(lanes)
+    if not (1 <= lanes <= 6 and 3 <= lane_m <= 200):
+        raise ValueError("Use 1–6 lanes each side and 3–200 m between lanes.")
+    stretch, to_ll, local, closed = shore_stretch(poly, a, b, long_way)
+    smooth = _smooth_shore(local, r=min(10.0, max(3.0, lane_m * 0.6)))
+    along, across = fresnel_axes(h_agl, el if el else 50.0)
+    footprint_m = 2.0 * min(along, across)
+    continuous = survey_style == "continuous"
+    step = min(max_leg_m, 150.0) if continuous else max(3.0, footprint_m)
+    a_pt, b_pt = Point(stretch.coords[0]), Point(stretch.coords[-1])
+    mid_pt = stretch.interpolate(0.5, normalized=True)
+    # Signed offsets: negative = over land (outside), positive = over water (inside). Far land first.
+    # Zero is the shoreline itself: the reflection rides right along the edge too.
+    offsets = [-k * lane_m for k in range(lanes, 0, -1)] + [0.0] + [k * lane_m for k in range(1, lanes + 1)]
+
+    lane_lines = []
+    for d in offsets:
+        grown = smooth if d == 0 else smooth.buffer(-d, quad_segs=16)  # shrink into the water, grow onto land
+        rings = _rings(grown)
+        if not rings:
+            continue
+        ring = min(rings, key=lambda r: r.distance(mid_pt))
+        if closed:
+            # Whole shore: start each loop at the point nearest the previous lane's end.
+            line = ring
+        else:
+            line = _arc(ring, a_pt, b_pt, mid_pt)
+        # ~2 m tolerance keeps the curve smooth to well under a Fresnel footprint with far fewer waypoints.
+        line = line.simplify(2.0)
+        if line.length < 10.0:
+            continue
+        lane_lines.append((d, line))
+    if not lane_lines:
+        raise ValueError("No room for shoreline lanes there. Pick a longer stretch or use fewer lanes.")
+
+    hovers, drawn, strips = [], [], []
+    last = None
+    for li, (d, line) in enumerate(lane_lines):
+        pts = list(line.coords)
+        if closed:
+            ring = LineString(pts)
+            start_d = ring.project(Point(last)) if last else 0.0
+            L = ring.length
+            pts = list(substring(ring, start_d, L).coords) + list(substring(ring, 0, start_d).coords)[1:]
+        elif li % 2 == 1:
+            pts = pts[::-1]
+        dense = _densify(LineString(pts), step)
+        last = dense[-1]
+        drawn.append([list(to_ll(x, y)[::-1]) for x, y in dense])
+        for j, (x, y) in enumerate(dense):
+            lat, lon = to_ll(x, y)
+            hovers.append({
+                "pass_id": li if continuous else None,
+                "lat": lat, "lon": lon, "splash_lat": lat, "splash_lon": lon,
+                "name": (f"shore · {j+1}" if d == 0 else f"{'water' if d > 0 else 'land'} {abs(d):.0f}m · {j+1}"),
+                "prn": None, "el": el, "az": None, "t_in_window": 0,
+                "drone_on_water": True, "score": el or 0, "fallback": True,
+                "loiter_s": 0.0 if continuous else loiter_s,
+                "science": True, "edge_offset_m": d,
+            })
+        # Coverage targets: the lane's footprint strip, in short chunks so each is a simple polygon.
+        lane = LineString(dense)
+        chunk = 150.0
+        n = max(1, int(math.ceil(lane.length / chunk)))
+        for k in range(n):
+            part = substring(lane, lane.length * k / n, lane.length * (k + 1) / n)
+            if part.length < 1.0:
+                continue
+            band = part.buffer(max(2.0, footprint_m / 2.0), cap_style="flat")
+            if band.geom_type != "Polygon":
+                continue
+            ring_ll = [list(to_ll(x, y)[::-1]) for x, y in band.exterior.coords]
+            strips.append({"name": f"lane {li+1}.{k+1}", "coordinates": ring_ll})
+    if len(hovers) > max_wp:
+        raise ValueError(
+            f"These shoreline lanes need {len(hovers)} waypoints and the limit is {max_wp}. "
+            "Pick a shorter stretch, use fewer lanes, raise the waypoint limit, or use Keep moving."
+        )
+    shore_ll = [list(to_ll(x, y)[::-1]) for x, y in stretch.coords]
+    mid_ll = to_ll(mid_pt.x, mid_pt.y)
+    info = {
+        "pattern": "edge",
+        "edge_lanes": lanes,
+        "edge_lane_m": lane_m,
+        "edge_offsets_m": [d for d, _ in lane_lines],
+        "n_passes": len(lane_lines),
+        "shore_m": round(stretch.length, 1),
+        "lanes_km": round(sum(l.length for _, l in lane_lines) / 1000, 2),
+        "whole_shore": closed,
+        "footprint_m": round(footprint_m, 2),
+        "fresnel_along_m": round(along, 2),
+        "fresnel_across_m": round(across, 2),
+        "n_cells": len(hovers),
+        "max_wp": max_wp,
+        "along_stream": False,
+        "survey_style": survey_style,
+        "shore": {"type": "LineString", "coordinates": shore_ll},
+        "lanes": {"type": "MultiLineString", "coordinates": drawn},
+        "strips": strips,
+        "centroid": {"lat": mid_ll[0], "lon": mid_ll[1]},
+    }
+    return hovers, info
+
+
+def build_edge_cross_survey(
+    poly,
+    *,
+    h_agl: float,
+    el: float,
+    loiter_s: float,
+    pass_m: float = 25.0,
+    land_m: float = 40.0,
+    water_m: float = 40.0,
+    a=None,
+    b=None,
+    long_way: bool = False,
+    survey_style: str = "continuous",
+    max_wp: int = 200,
+):
+    """Back-and-forth passes square to the shoreline: water to land, step along the shore, land to water.
+
+    Each pass carries the reflection point straight across the edge, so the jump from coherent (water)
+    to diffuse (land) shows up once per pass. Normals come from a smoothed shoreline so neighbouring
+    passes stay roughly parallel instead of fanning on every wiggle. Points are REFLECTION targets.
+    """
+    if not (3 <= pass_m <= 300 and 5 <= land_m <= 300 and 5 <= water_m <= 500):
+        raise ValueError("Pass spacing 3–300 m, land reach 5–300 m, water reach 5–500 m.")
+    stretch, to_ll, local, closed = shore_stretch(poly, a, b, long_way)
+    smooth = _smooth_shore(local, r=min(10.0, max(3.0, pass_m * 0.5)))
+    # A heavier smoothing only for pass directions.
+    calm = _smooth_shore(local, r=max(15.0, min(60.0, (land_m + water_m) / 3.0)))
+    along, across = fresnel_axes(h_agl, el if el else 50.0)
+    footprint_m = 2.0 * min(along, across)
+    continuous = survey_style == "continuous"
+    a_pt, b_pt = Point(stretch.coords[0]), Point(stretch.coords[-1])
+    mid_pt = stretch.interpolate(0.5, normalized=True)
+    rings = _rings(smooth)
+    if not rings:
+        raise ValueError("Could not trace that shoreline.")
+    ring = min(rings, key=lambda r: r.distance(mid_pt))
+    shore = ring if closed else _arc(ring, a_pt, b_pt, mid_pt)
+    calm_rings = _rings(calm) or rings
+    calm_ring = min(calm_rings, key=lambda r: r.distance(mid_pt))
+    L = shore.length
+    n = max(1, int(L // pass_m) + (0 if closed else 1))
+    ds = [L * i / n for i in range(n)] if closed else ([L * i / (n - 1) for i in range(n)] if n > 1 else [L / 2])
+    half = max(pass_m, 15.0)
+    sample = (land_m + water_m) if continuous else max(3.0, footprint_m)
+
+    hovers, drawn, strips = [], [], []
+    k = 0
+    passes_m = 0.0
+    for d in ds:
+        p = shore.interpolate(d)
+        c = calm_ring.project(p)
+        q0 = calm_ring.interpolate(c - half if closed or c - half > 0 else 0)
+        q1 = calm_ring.interpolate(c + half)
+        tx, ty = q1.x - q0.x, q1.y - q0.y
+        tl = math.hypot(tx, ty)
+        if tl < 1e-6:
+            continue
+        nx, ny = -ty / tl, tx / tl
+        if not smooth.contains(Point(p.x + nx * 3.0, p.y + ny * 3.0)):
+            nx, ny = -nx, -ny
+            if not smooth.contains(Point(p.x + nx * 3.0, p.y + ny * 3.0)):
+                continue
+        # Water leg stops where the ray leaves the water again (narrow arms, islands).
+        ray = LineString([(p.x - nx * 0.5, p.y - ny * 0.5), (p.x + nx * water_m, p.y + ny * water_m)])
+        wet = ray.intersection(smooth)
+        parts = [wet] if wet.geom_type == "LineString" else [g for g in getattr(wet, "geoms", []) if g.geom_type == "LineString"]
+        touching = [g for g in parts if g.distance(p) < 1.5]
+        reach = min(water_m, max((max(p.distance(Point(cc)) for cc in g.coords) for g in touching), default=0.0))
+        if reach < 5.0:
+            continue
+        span = land_m + reach
+        npts = max(2, int(math.ceil(span / sample - 1e-6)) + 1)
+        offs = [reach - span * j / (npts - 1) for j in range(npts)]  # water first
+        if k % 2 == 1:
+            offs = offs[::-1]  # next pass comes back land to water
+        pts = [(p.x + nx * o, p.y + ny * o, o) for o in offs]
+        drawn.append([list(to_ll(x, y)[::-1]) for x, y, _ in pts])
+        for j, (x, y, o) in enumerate(pts):
+            lat, lon = to_ll(x, y)
+            hovers.append({
+                "pass_id": k if continuous else None,
+                "lat": lat, "lon": lon, "splash_lat": lat, "splash_lon": lon,
+                "name": f"pass {k+1} · {'water' if o > 0 else 'land'} {abs(o):.0f}m",
+                "prn": None, "el": el, "az": None, "t_in_window": 0,
+                "drone_on_water": True, "score": el or 0, "fallback": True,
+                "loiter_s": 0.0 if continuous else loiter_s,
+                "science": True, "edge_offset_m": round(o, 1),
+            })
+        hw = max(2.0, footprint_m / 2.0)
+        (xs, ys, _), (xe, ye, _) = pts[0], pts[-1]
+        band = [(xs - ny * hw, ys + nx * hw), (xe - ny * hw, ye + nx * hw), (xe + ny * hw, ye - nx * hw), (xs + ny * hw, ys - nx * hw)]
+        ring_ll = [list(to_ll(x, y)[::-1]) for x, y in band]
+        strips.append({"name": f"pass {k+1}", "coordinates": ring_ll + [ring_ll[0]]})
+        passes_m += span
+        k += 1
+    if not hovers:
+        raise ValueError("No usable passes there. Pick a longer stretch or shorten the reach.")
+    if len(hovers) > max_wp:
+        raise ValueError(
+            f"These passes need {len(hovers)} waypoints and the limit is {max_wp}. "
+            "Space the passes farther apart, pick a shorter stretch, or use Keep moving."
+        )
+    shore_ll = [list(to_ll(x, y)[::-1]) for x, y in stretch.coords]
+    mid_ll = to_ll(mid_pt.x, mid_pt.y)
+    info = {
+        "pattern": "edge",
+        "edge_style": "across",
+        "edge_pass_m": round(L / max(1, len(ds) - (0 if closed else 1)), 1),
+        "edge_land_m": land_m,
+        "edge_water_m": water_m,
+        "n_passes": k,
+        "shore_m": round(L, 1),
+        "lanes_km": round(passes_m / 1000, 2),
+        "whole_shore": closed,
+        "footprint_m": round(footprint_m, 2),
+        "fresnel_along_m": round(along, 2),
+        "fresnel_across_m": round(across, 2),
+        "n_cells": len(hovers),
+        "max_wp": max_wp,
+        "along_stream": False,
+        "survey_style": survey_style,
+        "shore": {"type": "LineString", "coordinates": shore_ll},
+        "lanes": {"type": "MultiLineString", "coordinates": drawn},
+        "strips": strips,
+        "centroid": {"lat": mid_ll[0], "lon": mid_ll[1]},
+    }
+    return hovers, info

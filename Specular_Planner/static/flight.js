@@ -21,9 +21,13 @@
       // "plan" flies the mission built on Plan; "aircraft" flies the one read from the drone.
       source: "plan", awaitingRead: false, onboardLayer: L.layerGroup(), onboardKey: "",
       activeLayer: L.layerGroup(), activeKey: "",
+      launchAt: 0, nextReflect: 0, reflecting: false, reflectSeq: 0, liveSpecs: null,
+      groundLL: null, tookOff: false,
     };
   }
   const services = { flight: service("#ffb13b"), sim: service("#ffb13b") };
+  const liveLayer = L.layerGroup();
+  const liveParts = new Map();
   const pfd = new window.HeronInstruments.PFD(el("pfd"));
   const hsi = new window.HeronInstruments.HSI(el("hsi"));
   let view = "plan";
@@ -32,14 +36,18 @@
   let confirmingPlan = null;
   let following = false;
   let showTrail = true;
+  let showReflections = true;
   let portsKey = "";
   let eventsKey = "";
   let checksKey = "";
   let logFilter = "all";
   let wasLiveAttached = false;
   let toastTimer = null;
-  let hold = null;
-  let holdDone = false;
+  let countdown = null;
+  let launchSent = false;
+  let waiting = false;
+  let holding = false;
+  let holdFrame = 0;
 
   const active = () => (view === "sim" ? "sim" : "flight");
   const attachedOf = (name) => !!services[name].state?.telemetry?.transport;
@@ -141,6 +149,7 @@
 
   function setView(next) {
     if (!VIEWS.includes(next)) next = "plan";
+    if (next !== view) cancelWait();
     view = next;
     document.body.dataset.view = next;
     document.querySelectorAll(".ab-tabs [data-view]").forEach((tab) => {
@@ -148,11 +157,11 @@
     });
     const flying = next !== "plan";
     if (flying) stopPlay();
-    // The predicted playback, satellites and bounce points belong to Plan only.
-    [droneLayer, satLayer, specLayer, trailLayer].forEach((layer) => {
-      if (flying) map.removeLayer(layer);
-      else if (!map.hasLayer(layer)) layer.addTo(map);
-    });
+    // Predicted playback and its colored history stay on Plan. Live reflections are drawn separately.
+    if (!flying) {
+      clearLiveSpecs();
+      if (map.hasLayer(liveLayer)) map.removeLayer(liveLayer);
+    }
     if (padMarker && padMarker.dragging) {
       if (flying) padMarker.dragging.disable();
       else padMarker.dragging.enable();
@@ -166,6 +175,7 @@
     syncMapLayers();
     setTimeout(() => map.invalidateSize(), 0);
     render();
+    if (!flying && typeof renderMixed === "function" && lastPlan) renderMixed(lastPlan, playT);
   }
 
   function aircraftIcon(kind) {
@@ -210,7 +220,8 @@
   function paintOnboard(name) {
     const s = services[name];
     const onboard = onboardOf(name);
-    const show = onboard && onboard.path.length && !(onboard.plan_id && onboard.plan_id === planId && s.source === "plan");
+    // Only a mission the pilot just read. A remembered download must not appear on its own.
+    const show = s.source === "aircraft" && onboard && onboard.path.length;
     const home = show ? launchPoint(name).point : null;
     const rois = show ? onboard.roi || [] : [];
     const key = show ? JSON.stringify([onboard.path, rois, home, onboard.error]) : "";
@@ -265,7 +276,7 @@
     s.activeKey = key;
     s.activeLayer.clearLayers();
     if (!target) return;
-    if (roi) {
+    if (roi && !target.returning) {
       L.polyline([[target.lat, target.lon], [roi.lat, roi.lon]],
         { color: "#ffe66a", weight: 2.5, opacity: 0.95, interactive: false }).addTo(s.activeLayer);
       L.marker([roi.lat, roi.lon], {
@@ -277,7 +288,7 @@
       interactive: false, keyboard: false, zIndexOffset: 1000,
       icon: L.divIcon({
         className: "active-wp",
-        html: `<i></i><b>${target.wp ? `WP${target.wp}` : "Next"}</b>`,
+        html: `<i></i><b>${target.returning ? "Home" : target.wp ? `WP${target.wp}` : "Next"}</b>`,
         iconSize: [34, 34],
         iconAnchor: [17, 17],
       }),
@@ -326,6 +337,23 @@
       s.home.setLatLng(ll);
     }
     syncMapLayers();
+  }
+
+  /** The pad becomes the spot the aircraft was sitting when it took off. */
+  function syncPadToTakeoff(tel, connected) {
+    if (!connected || !tel.position || typeof movePadTo !== "function") return;
+    const s = services.flight;
+    const alt = tel.relative_alt;
+    const low = finite(alt) && alt < 2;
+    const up = !!tel.armed && finite(alt) && alt >= 2;
+    if (!up && (low || tel.landed === 1)) {
+      s.groundLL = { lat: tel.position.lat, lon: tel.position.lon };
+      if (tel.armed === false) s.tookOff = false;
+    }
+    if (!up || s.tookOff) return;
+    const spot = s.groundLL || tel.position;
+    s.tookOff = true;
+    movePadTo(spot.lat, spot.lon);
   }
 
   function renderPorts(st) {
@@ -533,22 +561,34 @@
 
     const flyable = disarmed && !busy && !!id && ready && verified;
     const launching = busy && st?.job?.action === "launch";
+    if (waiting && !flyable) {
+      waiting = false;
+      confirmingPlan = null;
+      stopCountdown();
+      resetHold();
+      message("Launch checks changed. Hold Fly Mission again.", true);
+    }
+    if (holding && !flyable) resetHold();
     const launchBtn = el("flightLaunch");
     launchBtn.disabled = !flyable;
+    launchBtn.classList.toggle("ready", flyable && !launching);
     launchBtn.classList.toggle("sim", name === "sim");
-    launchBtn.classList.toggle("hidden", !connected || !hasMission || unflyable || (!!tel.armed && !launching));
-    launchBtn.classList.toggle("ready", flyable);
+    const when = plannedStart(name);
+    const future = when && when.getTime() - Date.now() > 1000;
+    const dock = connected && hasMission && !unflyable && (!tel.armed || launching);
+    const face = !dock ? "none" : waiting ? "wait" : "fly";
+    launchBtn.classList.toggle("hidden", face !== "fly");
+    el("flightWait").classList.toggle("hidden", face !== "wait");
+    el("flightWait").classList.toggle("sim", name === "sim");
+    const clock = future ? clockParts(when) : null;
     el("flyHint").textContent = launching ? st.job.message
       : !connected ? "No aircraft link"
         : tel.armed ? "Aircraft is armed"
           : !id ? "Load a mission first"
             : !verified ? "Write or read the mission first"
               : !ready ? `${failing} launch check${failing === 1 ? "" : "s"} still failing`
-                : "Auto takeoff, fly every waypoint, return home";
-    if (el("flightConfirm").open) {
-      el("flightConfirmLaunch").disabled = !flyable && !holdDone;
-      if (!flyable && !holdDone) holdCancel();
-    }
+                : clock ? `${clock.utc} UTC · ${clock.local} ${clock.tz}`
+                  : "Hold to take off";
 
     el("flightRefresh").disabled = !connected || busy;
     const skipped = checks.length - enabled.length;
@@ -578,10 +618,13 @@
     let frac = 0;
     let eta = "";
     if (tel.mode === "AUTO" && target) {
-      frac = target.total ? Math.max(0, target.wp - 1) / target.total : 0;
-      text = target.wp ? `Waypoint ${target.wp} of ${target.total}` : "Taking off";
-      if (tel.position) {
-        const d = meters(tel.position, target);
+      const climbing = !!target.taking_off;
+      const returning = !!target.returning;
+      frac = returning ? 1 : climbing ? 0 : target.total ? Math.max(0, target.wp - 1) / target.total : 0;
+      text = returning ? "Returning home" : climbing || !target.wp ? "Taking off" : `Waypoint ${target.wp} of ${target.total}`;
+      const aim = returning && tel.home ? tel.home : target;
+      if (tel.position && !climbing) {
+        const d = meters(tel.position, aim);
         eta = `${fmtDist(d)}${tel.speed > 0.5 ? ` · ${fmtTime(d / tel.speed)}` : ""}`;
       }
     } else if (tel.mode === "AUTO") {
@@ -633,9 +676,18 @@
     el("tClimb").textContent = pos && finite(tel.vertical_speed) ? `${tel.vertical_speed > 0.05 ? "+" : ""}${tel.vertical_speed.toFixed(1)} m/s` : "—";
     el("tHome").textContent = pos && tel.home ? fmtDist(meters(tel.position, tel.home)) : "—";
     el("tWp").textContent = target
-      ? `WP ${target.seq}${pos ? ` · ${fmtDist(meters(tel.position, target))}` : ""}`
+      ? (target.returning
+        ? `Home${pos ? ` · ${fmtDist(meters(tel.position, tel.home || target))}` : ""}`
+        : target.taking_off
+        ? "Takeoff"
+        : `WP ${target.seq}${pos ? ` · ${fmtDist(meters(tel.position, target))}` : ""}`)
       : connected && tel.mission_current != null ? `Item ${tel.mission_current}` : "—";
-    el("tLanded").textContent = connected && tel.fresh?.landed ? LANDED[tel.landed] || "Unknown" : "—";
+    const inferredGround = connected && tel.armed === false && tel.fresh?.position
+      && finite(tel.relative_alt) && tel.relative_alt > -5 && tel.relative_alt < 3
+      && Math.abs(tel.vertical_speed || 0) < 1;
+    el("tLanded").textContent = connected && tel.fresh?.landed
+      ? LANDED[tel.landed] || "Unknown"
+      : inferredGround ? "On ground" : "—";
     el("flightCenter").disabled = !tel.position;
     el("flightFollow").disabled = !pos;
   }
@@ -736,6 +788,176 @@
     toastTimer = setTimeout(() => toast.remove(), 9000);
   }
 
+  function clearLiveSpecs() {
+    liveParts.forEach((part) => {
+      liveLayer.removeLayer(part.outline);
+      liveLayer.removeLayer(part.fill);
+      part.labels.forEach((marker) => liveLayer.removeLayer(marker));
+      if (part.ray) liveLayer.removeLayer(part.ray);
+    });
+    liveParts.clear();
+  }
+
+  /** The satellite the current waypoint is tracking, when the plan recorded one. */
+  function aimPrn(name) {
+    const hovers = plan?.hovers || [];
+    if (!hovers.length) return null;
+    const target = services[name].state?.target;
+    const index = !target || target.taking_off ? 0 : Math.max(0, (target.wp || 1) - 1);
+    return hovers[index]?.prn || hovers[0].prn || null;
+  }
+
+  function paintLiveSpecs(speculars, drone) {
+    const seen = new Set();
+    for (const s of speculars || []) {
+      if (typeof prnEnabled === "function" && !prnEnabled(s.prn)) continue;
+      seen.add(s.prn);
+      const tracked = typeof areaTrackPrns === "function" ? areaTrackPrns(plan) : new Set();
+      const aimed = !!s.aimed || tracked.has(s.prn);
+      const onWater = !!s.on_water && !aimed;
+      const hit = aimed ? "aim" : onWater;
+      const col = aimed ? "#ffb000" : onWater ? "#ffe66a" : "#6b7584";
+      const ring = fresnelRing(s.lat, s.lon, s.fresnel_along_m, s.fresnel_across_m, s.az);
+      const tip = `${s.prn}  ${Number(s.fresnel_along_m).toFixed(0)}×${Number(s.fresnel_across_m).toFixed(0)} m  el ${Number(s.el).toFixed(0)}°`;
+      let part = liveParts.get(s.prn);
+      if (!part) {
+        const outline = L.polygon(ring, {
+          color: "#000", weight: hit ? 6 : 5, fillOpacity: 0, opacity: 0.55, interactive: false,
+        }).addTo(liveLayer);
+        const fill = L.polygon(ring, {
+          color: col, weight: hit ? 3.5 : 2.5, fillColor: col,
+          fillOpacity: hit === "aim" ? 0.55 : hit ? 0.32 : 0.18,
+        }).bindTooltip(tip, { sticky: true }).addTo(liveLayer);
+        const labels = [L.marker([s.lat, s.lon], {
+          icon: prnLabIcon(s.prn, hit), interactive: false, zIndexOffset: 800,
+        }).addTo(liveLayer)];
+        const ray = L.polyline([[drone.lat, drone.lon], [s.lat, s.lon]], {
+          color: col, weight: hit ? 2.5 : 1.5, opacity: hit ? 0.9 : 0.45,
+          dashArray: hit ? null : "4 4", interactive: false,
+        }).addTo(liveLayer);
+        part = { outline, fill, labels, ray };
+        liveParts.set(s.prn, part);
+      } else {
+        part.outline.setLatLngs(ring);
+        part.fill.setLatLngs(ring);
+        part.outline.setStyle({ weight: hit ? 6 : 5 });
+        part.fill.setStyle({
+          color: col, fillColor: col, weight: hit ? 3.5 : 2.5,
+          fillOpacity: hit === "aim" ? 0.55 : hit ? 0.32 : 0.18,
+        });
+        part.fill.setTooltipContent(tip);
+        part.labels[0].setLatLng([s.lat, s.lon]);
+        part.labels[0].setIcon(prnLabIcon(s.prn, hit));
+        part.ray.setLatLngs([[drone.lat, drone.lon], [s.lat, s.lon]]);
+        part.ray.setStyle({
+          color: col, weight: hit ? 2.5 : 1.5, opacity: hit ? 0.9 : 0.45,
+          dashArray: hit ? null : "4 4",
+        });
+      }
+    }
+    for (const prn of [...liveParts.keys()]) {
+      if (seen.has(prn)) continue;
+      const part = liveParts.get(prn);
+      liveLayer.removeLayer(part.outline);
+      liveLayer.removeLayer(part.fill);
+      part.labels.forEach((marker) => liveLayer.removeLayer(marker));
+      if (part.ray) liveLayer.removeLayer(part.ray);
+      liveParts.delete(prn);
+    }
+  }
+
+  function pullReflections(name, tel) {
+    const s = services[name];
+    if (s.reflecting || Date.now() < s.nextReflect) return;
+    s.reflecting = true;
+    const seq = ++s.reflectSeq;
+    const body = {
+      lat: tel.position.lat,
+      lon: tel.position.lon,
+      alt: tel.relative_alt,
+      mask: document.getElementById("mask")?.value || plan?.meta?.elev_mask,
+      constellations: (typeof selectedConsts === "function" && selectedConsts().length)
+        ? selectedConsts()
+        : plan?.meta?.constellations,
+      targets: plan?.targets || null,
+      aim: aimPrn(name),
+    };
+    fetch("/api/reflections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || seq !== s.reflectSeq || view === "plan" || active() !== name) return;
+        const consts = new Set(body.constellations || []);
+        const above = (data.sats || []).filter((row) => row.above_mask && (!consts.size || consts.has(row.constellation)));
+        s.liveSpecs = {
+          speculars: (data.speculars || []).filter((sp) => !consts.size || consts.has(sp.constellation)),
+          lat: body.lat, lon: body.lon, alt: body.alt,
+        };
+        if (typeof paintSats === "function" && above.length) {
+          const aim = aimPrn(name);
+          const tracked = typeof areaTrackPrns === "function" ? areaTrackPrns(plan) : new Set();
+          paintSats(above.map((row) => ({
+            ...row,
+            aimed: (!!aim && row.sid === aim) || tracked.has(row.sid),
+            on_water: !!row.on_water && row.sid !== aim && !tracked.has(row.sid),
+          })), new Set(), { lat: body.lat, lng: body.lon });
+        }
+        placeLiveSpecs(name, s.state?.telemetry || tel);
+      })
+      .catch(() => {})
+      .finally(() => {
+        s.reflecting = false;
+        // Match the live telemetry poll so a new sky sample is ready each marker move.
+        s.nextReflect = Date.now() + 250;
+      });
+  }
+
+  /**
+   * Draw the last reflections at where the aircraft is now, not where it was when they were asked for.
+   * Over a second the sky barely moves, so each point keeps its offset from the aircraft. The offset
+   * is h / tan(el), so it scales with height; the Fresnel zone scales with the square root of height.
+   */
+  function placeLiveSpecs(name, tel) {
+    const live = services[name].liveSpecs;
+    if (!live || !tel?.position || !finite(tel.relative_alt) || live.alt <= 0) return;
+    const k = Math.max(0, tel.relative_alt) / live.alt;
+    const mLat = 111132.92;
+    const mLon = mLat * Math.cos((live.lat * Math.PI) / 180);
+    const moved = live.speculars.map((sp) => {
+      const [lat, lon] = destPoint(tel.position.lat, tel.position.lon,
+        (sp.lat - live.lat) * mLat * k, (sp.lon - live.lon) * mLon * k);
+      return { ...sp, lat, lon,
+        fresnel_along_m: sp.fresnel_along_m * Math.sqrt(k), fresnel_across_m: sp.fresnel_across_m * Math.sqrt(k) };
+    });
+    paintLiveSpecs(moved, tel.position);
+  }
+
+  /** Reflections start at the real launch and use the current clock, not the planned takeoff time. */
+  function syncLiveReflections(name, tel, connected) {
+    const s = services[name];
+    const shown = view !== "plan" && active() === name;
+    if (connected && tel.armed && (tel.mode === "AUTO" || tel.mode === "RTL" || tel.mode === "LAND")) {
+      if (!s.launchAt) {
+        s.launchAt = Date.now();
+        s.nextReflect = 0;
+      }
+    }
+    if (connected && tel.fresh?.landed && !tel.armed && tel.landed === 1) s.launchAt = 0;
+    const tracking = shown && showReflections && connected && tel.position && finite(tel.relative_alt);
+    if (!tracking) {
+      s.liveSpecs = null;
+      if (shown) clearLiveSpecs();
+      if (map.hasLayer(liveLayer)) map.removeLayer(liveLayer);
+      return;
+    }
+    if (!map.hasLayer(liveLayer)) liveLayer.addTo(map);
+    placeLiveSpecs(name, tel);
+    pullReflections(name, tel);
+  }
+
   function render() {
     const name = active();
     const s = services[name];
@@ -757,9 +979,15 @@
       }
       if (!os.state?.onboard && os.source === "aircraft") os.source = "plan";
       paintMap(other, otel, !!otel.connected && Date.now() - os.at < 4000);
+      if (other === "flight") syncPadToTakeoff(otel, !!otel.connected && Date.now() - os.at < 4000);
       paintOnboard(other);
       paintActive(other);
     }
+    if (typeof setFlightMapChrome === "function") {
+      const showingRead = view !== "plan" && services[name].source === "aircraft";
+      setFlightMapChrome(!showingRead);
+    }
+    syncLiveReflections(name, tel, connected);
     renderConnection();
     renderStatusBar(name, tel, connected);
     el("abConnFly").classList.toggle("hidden", view === "sim");
@@ -787,7 +1015,7 @@
   function invalidate() {
     planId = null;
     confirmingPlan = null;
-    if (el("flightConfirm").open) el("flightConfirm").close();
+    cancelWait();
     render();
   }
 
@@ -836,7 +1064,13 @@
     if (!el("connPopover").contains(event.target) && event.target !== el("connSettings")) closePopover();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closePopover();
+    if (event.key === "Escape") {
+      closePopover();
+      if (waiting) {
+        cancelWait();
+        render();
+      }
+    }
   });
 
   el("simButton").onclick = () => {
@@ -871,7 +1105,7 @@
   el("flightRefresh").onclick = () => action(active(), "refresh");
   el("flightUpload").onclick = () => action(active(), "upload", { plan_id: planId });
   el("flightRtl").onclick = () => {
-    if (el("flightConfirm").open) el("flightConfirm").close();
+    cancelWait();
     action(active(), "rtl");
   };
   el("flightUseHome").onclick = () => {
@@ -904,6 +1138,18 @@
     el("flightTrack").setAttribute("aria-pressed", String(showTrail));
     syncMapLayers();
   };
+  el("flightReflections").onclick = () => {
+    showReflections = !showReflections;
+    const button = el("flightReflections");
+    button.setAttribute("aria-pressed", String(showReflections));
+    button.title = showReflections ? "Hide live reflections" : "Show live reflections";
+    button.setAttribute("aria-label", button.title);
+    if (!showReflections) {
+      clearLiveSpecs();
+      if (map.hasLayer(liveLayer)) map.removeLayer(liveLayer);
+    }
+    render();
+  };
   el("logToggle").onclick = () => setLogOpen(el("deckLog").classList.contains("collapsed"));
   document.querySelectorAll("#deckLog [data-filter]").forEach((button) => {
     button.onclick = () => {
@@ -935,104 +1181,154 @@
     };
   });
 
-  el("flightLaunch").onclick = () => {
-    const name = active();
+  function plannedStart(name) {
     const id = missionId(name);
-    if (!id || el("flightLaunch").disabled) return;
-    const st = services[name].state;
-    const summary = st?.mission?.plan_id === id ? st.mission : onboardOf(name);
-    const demo = name === "sim";
-    const fromDrone = services[name].source === "aircraft";
-    confirmingPlan = { name, id };
-    el("confirmKicker").textContent = demo ? "Fly mission · Simulation" : "Fly mission · Real aircraft";
-    el("flightConfirm").classList.toggle("sim", demo);
-    el("flightConfirmTitle").textContent = demo ? "Fly the simulated mission?" : "Are you sure you want to fly?";
-    el("flightConfirmText").textContent = `${fromDrone ? "The mission stored on the drone" : plan?.exports?.filename || "HERON mission"}`
-      + ". HERON downloads it again and re-runs launch checks before arming.";
-    el("cWp").textContent = summary ? String(summary.n_wp) : "—";
-    el("cAlt").textContent = summary ? `${Math.round(summary.max_alt)} m` : "—";
-    el("cLen").textContent = summary ? fmtDist(summary.length_m) : "—";
-    el("cTime").textContent = summary ? `≈${fmtTime(summary.est_s)}` : "—";
-    el("cTakeoff").textContent = summary ? `Take off to ${Math.round(summary.takeoff_alt)} m above Home` : "Take off";
-    el("cFly").textContent = summary ? `Fly all ${summary.n_wp} waypoints in AUTO` : "Fly every waypoint in AUTO";
-    holdReset();
-    el("flightConfirmLaunch").disabled = false;
-    el("flightConfirm").showModal();
-  };
-  el("flightCancelLaunch").onclick = () => el("flightConfirm").close();
-  el("flightConfirm").addEventListener("close", () => {
-    holdCancel();
+    const state = services[name].state;
+    // Reading a known HERON mission back must preserve its schedule.
+    const raw = id && id === planId && plan?.meta?.start
+      || (state?.mission?.plan_id === id ? state.mission.start : null)
+      || (state?.onboard?.plan_id === id ? state.onboard.start : null);
+    if (!raw) return null;
+    // The planner treats timestamps without a zone as UTC.
+    const iso = String(raw);
+    const when = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`);
+    return Number.isNaN(when.getTime()) ? null : when;
+  }
+  function clockParts(when) {
+    const utc = when.toLocaleTimeString("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit" });
+    const local = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const tz = new Intl.DateTimeFormat("en-GB", { timeZoneName: "short" })
+      .formatToParts(when).find((part) => part.type === "timeZoneName")?.value || "Local";
+    return { utc, local, tz };
+  }
+  function remainText(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const clock = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    return h ? `${String(h).padStart(2, "0")}:${clock}` : clock;
+  }
+  const HOLD_MS = 900;
+  function paintHold(p) {
+    const ring = el("flyRing");
+    if (p <= 0) {
+      ring.style.strokeDasharray = "";
+      ring.style.strokeDashoffset = "";
+      return;
+    }
+    ring.style.strokeDasharray = "100";
+    ring.style.strokeDashoffset = String((1 - p) * 100);
+  }
+  function resetHold() {
+    holding = false;
+    if (holdFrame) cancelAnimationFrame(holdFrame);
+    holdFrame = 0;
+    paintHold(0);
+    el("flightLaunch").classList.remove("holding");
+  }
+  function stopCountdown() {
+    if (countdown) clearTimeout(countdown);
+    countdown = null;
+  }
+  function cancelWait() {
+    waiting = false;
     confirmingPlan = null;
-  });
-
-  // Hold-to-fly: the launch only goes out after an uninterrupted 3 s press.
-  const HOLD_MS = 3000;
-  const RING = 2 * Math.PI * 19;
-  el("holdRing").style.strokeDasharray = String(RING);
-
-  function holdReset() {
-    holdDone = false;
-    el("holdRing").style.strokeDashoffset = String(RING);
-    el("flightConfirmLaunch").classList.remove("holding", "done");
-    el("holdLabel").textContent = "Hold to fly";
+    stopCountdown();
+    resetHold();
   }
-  function holdCancel() {
-    if (!hold) return;
-    cancelAnimationFrame(hold.raf);
-    hold = null;
-    if (!holdDone) holdReset();
+  function startCountdown(when) {
+    waiting = true;
+    resetHold();
+    const clock = clockParts(when);
+    el("waitClock").textContent = `${clock.utc} UTC · ${clock.local} ${clock.tz}`;
+    const tick = () => {
+      const left = when.getTime() - Date.now();
+      el("countdownValue").textContent = remainText(left);
+      el("countdownValue").classList.toggle("long", remainText(left).length > 5);
+      if (left <= 0) return sendLaunch();
+      countdown = setTimeout(tick, 200);
+    };
+    tick();
+    render();
+    el("flightCancelLaunch").focus({ preventScroll: true });
   }
-  function holdTick() {
-    if (!hold) return;
-    const elapsed = performance.now() - hold.t0;
-    const p = Math.min(1, elapsed / HOLD_MS);
-    el("holdRing").style.strokeDashoffset = String(RING * (1 - p));
-    el("holdLabel").textContent = p < 1 ? `Keep holding… ${Math.ceil((HOLD_MS - elapsed) / 1000)}` : "Launching";
-    if (p >= 1) return holdComplete();
-    hold.raf = requestAnimationFrame(holdTick);
-  }
-  function holdStart(event) {
-    const button = el("flightConfirmLaunch");
-    if (hold || holdDone || button.disabled) return;
-    event.preventDefault();
-    hold = { t0: performance.now(), raf: 0 };
-    button.classList.add("holding");
-    navigator.vibrate?.(15);
-    holdTick();
-  }
-  function holdComplete() {
-    hold = null;
-    holdDone = true;
-    el("flightConfirmLaunch").classList.remove("holding");
-    el("flightConfirmLaunch").classList.add("done");
-    navigator.vibrate?.([30, 40, 30]);
+  function sendLaunch() {
+    if (launchSent) return;
     const pending = confirmingPlan;
     const name = pending?.name;
     const stillValid = pending && pending.id === missionId(name) && active() === name && !el("flightLaunch").disabled;
-    setTimeout(() => el("flightConfirm").close(), 250);
+    waiting = false;
+    stopCountdown();
+    resetHold();
+    confirmingPlan = null;
     if (!stillValid) {
-      message("Mission or aircraft state changed. Review launch checks again.", true);
+      launchSent = false;
+      message("Mission or aircraft state changed. Hold Fly Mission again.", true);
+      render();
       return;
     }
-    action(name, "launch", { plan_id: pending.id, confirmation: "LAUNCH" });
+    launchSent = true;
+    action(name, "launch", { plan_id: pending.id, confirmation: "LAUNCH", wait_until_start: false })
+      .finally(() => { launchSent = false; });
   }
-  const holdButton = el("flightConfirmLaunch");
-  holdButton.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    holdButton.setPointerCapture(event.pointerId);
-    holdStart(event);
+  function confirmHold() {
+    const name = active();
+    const id = missionId(name);
+    if (!id || el("flightLaunch").disabled || waiting || launchSent) {
+      resetHold();
+      return;
+    }
+    const when = plannedStart(name);
+    confirmingPlan = { name, id, plannedAt: when };
+    navigator.vibrate?.([18, 24, 18]);
+    if (when && when.getTime() - Date.now() > 1000) {
+      startCountdown(when);
+      return;
+    }
+    sendLaunch();
+  }
+  function beginHold(event) {
+    const launch = el("flightLaunch");
+    if (holding || launch.disabled || launch.classList.contains("hidden") || waiting) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    holding = true;
+    launch.classList.add("holding");
+    if (event.pointerId != null) launch.setPointerCapture(event.pointerId);
+    const started = performance.now();
+    const frame = (now) => {
+      if (!holding) return;
+      const p = Math.min(1, (now - started) / HOLD_MS);
+      paintHold(p);
+      if (p >= 1) {
+        holding = false;
+        confirmHold();
+        return;
+      }
+      holdFrame = requestAnimationFrame(frame);
+    };
+    holdFrame = requestAnimationFrame(frame);
+  }
+  const launch = el("flightLaunch");
+  launch.addEventListener("pointerdown", beginHold);
+  launch.addEventListener("pointerup", resetHold);
+  launch.addEventListener("pointercancel", resetHold);
+  launch.addEventListener("lostpointercapture", () => { if (holding) resetHold(); });
+  launch.addEventListener("keydown", (event) => {
+    if (event.repeat || (event.key !== " " && event.key !== "Enter")) return;
+    event.preventDefault();
+    beginHold(event);
   });
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach((type) => holdButton.addEventListener(type, holdCancel));
-  holdButton.addEventListener("keydown", (event) => {
-    if ((event.key === " " || event.key === "Enter") && !event.repeat) holdStart(event);
-    else if (event.key === " " || event.key === "Enter") event.preventDefault();
+  launch.addEventListener("keyup", (event) => {
+    if (event.key === " " || event.key === "Enter") resetHold();
   });
-  holdButton.addEventListener("keyup", (event) => {
-    if (event.key === " " || event.key === "Enter") holdCancel();
-  });
-  holdButton.addEventListener("blur", holdCancel);
-  holdButton.addEventListener("click", (event) => event.preventDefault());
-  holdButton.addEventListener("contextmenu", (event) => event.preventDefault());
+  launch.addEventListener("contextmenu", (event) => event.preventDefault());
+  el("flightSkipWait").onclick = () => sendLaunch();
+  el("flightCancelLaunch").onclick = () => {
+    cancelWait();
+    render();
+  };
 
   L.DomEvent.disableClickPropagation(el("deck"));
   L.DomEvent.disableScrollPropagation(el("deck"));
@@ -1041,3 +1337,4 @@
   setInterval(schedule, 100);
   setInterval(render, 1000); // Expire displayed data even if an HTTP poll hangs.
 })();
+

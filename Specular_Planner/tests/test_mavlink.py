@@ -48,6 +48,8 @@ class MemoryAircraft:
         self.drop_count = False
         self.drop_download_seq = None
         self.heartbeats = 0
+        self.unread = set()
+        self.listable = True
 
     def write(self, data):
         with self.wire_lock:
@@ -59,8 +61,11 @@ class MemoryAircraft:
                 self.heartbeats += 1
             elif kind == "PARAM_REQUEST_READ":
                 key = m.param_id.rstrip("\x00")
-                if key in DEMO_PARAMS:
+                if key in DEMO_PARAMS and key not in self.unread:
                     self.air.param_value_send(key.encode(), DEMO_PARAMS[key], 9, len(DEMO_PARAMS), 0)
+            elif kind == "PARAM_REQUEST_LIST" and self.listable:
+                for n, (key, value) in enumerate(DEMO_PARAMS.items()):
+                    self.air.param_value_send(key.encode(), value, 9, len(DEMO_PARAMS), n)
             elif kind == "COMMAND_LONG":
                 self.commands.append(m.command)
                 if m.command == self.reject:
@@ -198,6 +203,16 @@ class WireTests(unittest.TestCase):
         self.link.mode(6, None)
         self.assertEqual(self.link.snapshot()["mode_id"], 6)
 
+    def test_params_ignored_by_name_come_from_the_full_list(self):
+        self.peer.unread = {"ARMING_CHECK", "SYSID_MYGCS", "RTL_ALT"}
+        self.assertEqual(self.link.refresh(self.cancel), [])
+        self.assertTrue(self.link.snapshot()["params_fresh"])
+
+    def test_params_never_reported_do_not_stop_upload(self):
+        self.peer.unread, self.peer.listable = {"RTL_ALT"}, False
+        self.assertEqual(self.link.refresh(self.cancel, need_home=False), ["RTL_ALT"])
+        self.assertEqual(self.link.snapshot()["params_missing"], ["RTL_ALT"])
+
     def test_mission_read_from_aircraft_is_flyable(self):
         self.link.upload(self.items, self.cancel)
         readback = self.link.download(self.cancel)
@@ -206,10 +221,10 @@ class WireTests(unittest.TestCase):
         compare_items(onboard, self.link.download(self.cancel))
         self.assertEqual([i["command"] for i in onboard], [i["command"] for i in self.items])
 
-    def test_legacy_upload_requests_supported(self):
+    def test_legacy_upload_requests_get_integer_items(self):
         self.peer.legacy_request = True
         self.link.upload(self.items, self.cancel)
-        # Float-coordinate legacy protocol has lower precision than MISSION_ITEM_INT.
+        self.assertEqual({m.get_type() for m in self.peer.items.values()}, {"MISSION_ITEM_INT"})
         compare_items(self.items, self.link.download(self.cancel))
 
     def test_upload_rejection(self):

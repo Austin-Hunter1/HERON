@@ -425,8 +425,9 @@ body[data-view="sim"] #deck:not(.attached)::before { display: none; }
 }
 #deck .fly-btn.sim { --fly: var(--sim); }
 #deck .fly-btn.hidden { display: none; }
-.fly-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; color: var(--deck-faint); background: rgba(255, 255, 255, 0.05); border-radius: 12px; transition: inherit; }
-.fly-icon svg { width: 20px; height: 20px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.fly-icon { position: relative; width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; color: var(--deck-faint); background: rgba(255, 255, 255, 0.05); border-radius: 12px; transition: inherit; }
+.fly-play { width: 20px; height: 20px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.fly-ring { position: absolute; inset: -7px; width: auto; height: auto; fill: none; stroke: transparent; stroke-width: 2.4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; pointer-events: none; }
 .fly-btn > span:nth-child(2) { flex: 1; min-width: 0; }
 .fly-btn b { display: block; font-size: 16px; font-weight: 800; letter-spacing: 0.01em; }
 .fly-btn small { display: block; overflow: hidden; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
@@ -436,13 +437,56 @@ body[data-view="sim"] #deck:not(.attached)::before { display: none; }
   color: #06140d;
   background: linear-gradient(135deg, var(--fly), color-mix(in srgb, var(--fly) 72%, #fff));
   border-color: transparent;
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--fly) 40%, transparent), 0 0 0 0 color-mix(in srgb, var(--fly) 45%, transparent);
-  animation: fly-ready 2.4s ease-in-out infinite;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--fly) 40%, transparent);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
 }
 #deck .fly-btn.ready:hover { color: #06140d; background: linear-gradient(135deg, var(--fly), color-mix(in srgb, var(--fly) 60%, #fff)); transform: translateY(-1px); }
 #deck .fly-btn.ready .fly-icon { color: var(--fly); background: #0b1117; }
 #deck .fly-btn.ready small { opacity: 0.8; }
 #deck .fly-btn.ready .fly-lock { display: none; }
+#deck .fly-btn.ready .fly-ring { stroke: transparent; }
+#deck .fly-btn.ready.holding,
+#deck .fly-btn.ready.holding:hover { transform: none; }
+#deck .fly-btn.holding .fly-ring { stroke: #fff; stroke-width: 2.75; }
+#deck .fly-btn.holding .fly-icon { transform: scale(0.94); }
+.fly-wait {
+  --fly: var(--live);
+  width: 320px;
+  padding: 14px 14px 12px;
+  color: var(--deck-ink);
+  background: var(--deck);
+  border: 1px solid var(--deck-line-strong);
+  border-radius: 16px;
+  box-shadow: var(--deck-shadow);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  animation: fly-in 260ms ease-out;
+}
+.fly-wait.sim { --fly: var(--sim); }
+.fly-wait.hidden { display: none; }
+.fly-wait > span { display: block; color: var(--deck-faint); font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+#flightWait #countdownValue {
+  display: block;
+  margin-top: 2px;
+  color: #fff;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+#flightWait #countdownValue.long { font-size: 34px; }
+.fly-wait small { display: block; margin-top: 6px; color: var(--deck-muted); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.fly-wait-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; }
+#deck .fly-wait-actions button { min-height: 40px; padding: 0 16px; border-radius: 10px; font-size: 13px; font-weight: 800; }
+#deck #flightSkipWait { color: #06140d; background: var(--fly); border: 0; }
+#deck #flightSkipWait:hover { color: #06140d; filter: brightness(1.08); }
+#deck .fly-wait.sim #flightSkipWait { color: #2a1a04; }
+#deck #flightCancelLaunch { color: var(--deck-muted); background: transparent; border: 1px solid var(--deck-line-strong); }
+#deck #flightCancelLaunch:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 @keyframes fly-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
 @keyframes fly-ready {
   0%, 100% { box-shadow: 0 10px 30px color-mix(in srgb, var(--fly) 40%, transparent), 0 0 0 0 color-mix(in srgb, var(--fly) 45%, transparent); }
@@ -539,6 +583,8 @@ body[data-view="sim"] #deck:not(.attached)::before { display: none; }
 #deck .tool-btn { width: 32px; min-height: 32px; height: 32px; padding: 0; display: grid; place-items: center; background: transparent; border: 0; border-bottom: 1px solid var(--deck-line); border-radius: 0; }
 #deck .tool-btn:last-child { border-bottom: 0; }
 #deck .tool-btn[aria-pressed="true"] { color: var(--info); background: rgba(79, 214, 255, 0.12); }
+#deck .tool-btn.reflections[aria-pressed="true"] { color: #ffe66a; background: rgba(255, 230, 106, 0.16); }
+#deck .tool-btn.reflections[aria-pressed="true"] ellipse { fill: currentColor; fill-opacity: 0.45; }
 .tool-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 #deck .rtl-btn {
@@ -654,63 +700,126 @@ body[data-view="sim"] #deck:not(.attached)::before { display: none; }
 
 /* ---------- Launch dialog, toast, markers ---------- */
 #flightConfirm {
-  width: min(480px, calc(100vw - 32px));
-  padding: 22px;
-  color: var(--deck-ink);
-  background: var(--deck-solid);
-  border: 1px solid var(--deck-line-strong);
+  --launch-blue: #b7dbff;
+  --launch-ink: #f3f6f8;
+  --launch-muted: #8ea3b6;
+  --launch-line: rgba(255, 255, 255, 0.08);
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 28px);
+  padding: 0;
+  overflow-x: hidden;
+  color: var(--launch-ink);
+  background: #161c22;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-#flightConfirm::backdrop { background: rgba(4, 8, 12, 0.65); backdrop-filter: blur(3px); }
-#flightConfirm h2 { margin: 0 0 8px; font-size: 18px; }
-#flightConfirm p { margin: 0 0 10px; color: var(--deck-muted); font-size: 13px; line-height: 1.5; }
-#flightConfirmText { color: var(--deck-ink) !important; }
-.dialog-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-#flightConfirm button { min-height: 38px; padding: 0 16px; color: var(--deck-ink); border: 1px solid var(--deck-line-strong); border-radius: 8px; }
-.confirm-kicker { margin: 0 0 4px !important; color: var(--bad) !important; font-size: 10.5px !important; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
-#flightConfirm.sim .confirm-kicker { color: var(--sim) !important; }
-#flightConfirm { --hold: var(--bad); }
-#flightConfirm.sim { --hold: var(--sim); }
-.confirm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 14px 0; overflow: hidden; background: var(--deck-line); border-radius: 10px; }
-.confirm-stats div { padding: 9px 10px; background: rgba(0, 0, 0, 0.25); }
-.confirm-stats dt { color: var(--deck-faint); font-size: 9px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-.confirm-stats dd { margin: 2px 0 0; font: 700 15px/1.2 var(--mono); }
-.confirm-steps { margin: 0 0 12px; padding: 0; list-style: none; counter-reset: step; }
-.confirm-steps li { position: relative; padding: 5px 0 5px 30px; font-size: 13px; counter-increment: step; }
-.confirm-steps li::before { content: counter(step); position: absolute; top: 4px; left: 0; width: 20px; height: 20px; display: grid; place-items: center; color: var(--deck-muted); border: 1px solid var(--deck-line-strong); border-radius: 50%; font-size: 10.5px; font-weight: 700; }
-.confirm-steps li + li::after { content: ""; position: absolute; top: -6px; left: 10px; width: 1px; height: 10px; background: var(--deck-line-strong); }
-#flightConfirm p.confirm-warn { padding: 9px 11px; color: #ffe2a8; background: rgba(255, 200, 87, 0.08); border-left: 3px solid var(--warn); border-radius: 6px; font-size: 12px; }
-#flightConfirm .confirm-warn b { color: #fff; }
-.dialog-row { align-items: center; }
-#flightConfirm button.hold-btn {
-  position: relative;
-  min-width: 190px;
-  min-height: 56px;
-  padding: 0 22px 0 60px;
-  color: #fff;
-  background: color-mix(in srgb, var(--hold) 22%, #111b24);
-  border: 1px solid color-mix(in srgb, var(--hold) 60%, transparent);
-  border-radius: 99px;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+#flightConfirm::backdrop { background: rgba(6, 10, 14, 0.72); backdrop-filter: blur(8px); }
+.confirm-bar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 12px 0 18px; border-bottom: 1px solid var(--launch-line); }
+.confirm-brand { color: #f7f8f8; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; }
+.confirm-kicker { display: inline-flex; align-items: center; gap: 7px; height: 22px; padding: 0 9px 0 8px; color: #d5e2ee; background: rgba(183, 219, 255, 0.08); border-radius: 999px; font-size: 11px; font-weight: 650; letter-spacing: 0.04em; }
+.confirm-kicker::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #7dcea0; box-shadow: 0 0 0 3px rgba(125, 206, 160, 0.16); }
+#flightConfirm.sim .confirm-kicker { color: #f0d7a4; background: rgba(228, 189, 119, 0.1); }
+#flightConfirm.sim .confirm-kicker::before { background: #e4bd77; box-shadow: 0 0 0 3px rgba(228, 189, 119, 0.16); }
+#flightConfirm #flightCloseLaunch { display: grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; margin-left: auto; color: #9aafc2; background: transparent; border: 0; border-radius: 8px; }
+#flightConfirm #flightCloseLaunch:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+#flightCloseLaunch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.confirm-content { display: grid; grid-template-columns: 268px minmax(0, 1fr); min-height: 392px; }
+.confirm-mission { display: flex; flex-direction: column; min-width: 0; padding: 16px; background: #12181e; border-right: 1px solid var(--launch-line); }
+.confirm-preview { position: relative; width: 100%; height: 196px; overflow: hidden; background: #10161c; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; }
+#confirmMap { width: 100%; height: 100%; background: #10161c; cursor: default; }
+#confirmMap .leaflet-tile-pane { filter: saturate(0.85) brightness(0.92); }
+#confirmMapEmpty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--launch-muted); font-size: 12px; }
+.confirm-map-credit { position: absolute; bottom: 6px; right: 6px; z-index: 500; padding: 1px 5px; color: #fff !important; background: rgba(0, 0, 0, 0.55); border-radius: 4px; font-size: 9px; letter-spacing: 0.04em; text-decoration: none; }
+.confirm-mission-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+#flightConfirm h3 { margin: 14px 0 3px; color: var(--launch-ink); font-size: 15px; font-weight: 640; letter-spacing: -0.02em; }
+#flightConfirm p { margin: 0; color: #b7c6d4; font-size: 13px; line-height: 1.45; }
+#flightConfirm #flightConfirmText { color: var(--launch-muted); font-size: 12px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.confirm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 0; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--launch-line); }
+.confirm-stats > div { display: flex; flex-direction: column-reverse; justify-content: flex-end; min-width: 0; }
+.confirm-stats > div:nth-child(even) { padding-left: 14px; border-left: 1px solid var(--launch-line); }
+.confirm-stats dt { margin-top: 3px; color: var(--launch-muted); font-size: 10px; font-weight: 650; line-height: 1.2; letter-spacing: 0.08em; text-transform: uppercase; }
+.confirm-stats dt svg { display: none; }
+.confirm-stats dd { margin: 0; color: var(--launch-ink); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 20px; font-weight: 520; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.confirm-launch { display: flex; flex-direction: column; min-width: 0; padding: 22px 22px 16px; }
+#flightConfirm h2 { margin: 0; color: var(--launch-ink); font-size: 28px; font-weight: 620; line-height: 1.05; letter-spacing: -0.035em; }
+.confirm-clock { display: flex; align-items: flex-end; gap: 20px; margin-top: 22px; }
+.confirm-schedule { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.schedule-icon { display: none; }
+#confirmScheduleLabel { color: var(--launch-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+#confirmScheduleTime { margin-top: 4px; color: var(--launch-blue); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 28px; font-weight: 520; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#confirmScheduleDate { margin-top: 6px; color: #a9bccb; font-size: 13px; }
+.confirm-countdown { min-width: 0; }
+.countdown-caption { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#countdownValue { color: var(--launch-blue); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 56px; font-weight: 500; line-height: 0.9; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#countdownValue.long { font-size: 36px; }
+#flightConfirm.waiting .confirm-clock { align-items: center; gap: 18px; margin-top: 18px; }
+#flightConfirm.waiting .confirm-schedule { flex: 1; min-width: 120px; padding-left: 16px; border-left: 1px solid var(--launch-line); }
+#flightConfirm.waiting #confirmScheduleTime { margin-top: 4px; font-size: 16px; }
+#flightConfirm.waiting #confirmScheduleDate { margin-top: 4px; font-size: 12px; }
+.confirm-notes { margin: 16px 0 14px; padding-left: 12px; border-left: 2px solid rgba(183, 219, 255, 0.28); }
+#flightConfirm #confirmStatus { display: none; }
+#flightConfirm.waiting #confirmStatus { display: block; margin-bottom: 8px; color: #c5d4e2; font-size: 14px; }
+#flightConfirm p.confirm-warn { color: #d5e1eb; font-size: 13.5px; line-height: 1.45; }
+.confirm-warn > span { display: block; margin-top: 2px; color: #9aafc2; font-size: 13.5px; }
+#flightConfirm button.hold-btn { display: flex; align-items: stretch; width: 100%; min-height: 64px; padding: 0; overflow: hidden; color: #f4f8fc; background: #1a3146; border: 1px solid rgba(183, 219, 255, 0.45); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); touch-action: none; user-select: none; -webkit-user-select: none; transition: background 140ms, border-color 140ms; }
+#flightConfirm button.hold-btn:hover:not(:disabled) { color: #fff; background: #21405a; border-color: #d2ebff; }
+#flightConfirm button.hold-btn:active { transform: none; }
+#flightConfirm button.hold-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.hold-arrow { display: grid; place-items: center; flex: 0 0 56px; color: #102033; background: #9ed0fb; }
+.hold-arrow svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hold-content { display: flex; flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 9px; padding: 12px 16px; }
+.hold-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+#holdLabel { font-size: 16px; font-weight: 620; letter-spacing: -0.02em; white-space: nowrap; }
+.hold-duration { color: #b7cbe0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: 0.04em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#flightConfirm .hold-track { position: relative; display: block; height: 3px; overflow: hidden; background: rgba(0, 0, 0, 0.35); border: 0; border-radius: 99px; }
+.hold-fill { position: absolute; inset: 0; background: #b7dbff; border-radius: inherit; transform: scaleX(0); transform-origin: left; }
+#flightConfirm p.hold-help { margin: 8px 2px 0; color: var(--launch-muted); font-size: 12px; }
+.confirm-details { margin-top: 14px; color: var(--launch-muted); font-size: 12px; }
+.confirm-details summary { cursor: pointer; font-weight: 620; }
+.confirm-details summary > span { display: none; }
+.confirm-steps { margin: 8px 0 6px; padding-left: 18px; color: #c5d4e2; font-size: 12.5px; line-height: 1.7; }
+#flightConfirm .confirm-details p { color: #9aafc2; font-size: 12px; line-height: 1.45; }
+.confirm-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 12px 16px 12px 18px; background: #12181e; border-top: 1px solid var(--launch-line); }
+#flightConfirm .confirm-footer button { min-width: 108px; min-height: 36px; padding: 0 16px; color: #d5e1eb; background: transparent; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 9px; font-size: 13px; font-weight: 620; box-shadow: none; }
+#flightConfirm .confirm-footer button:hover { color: #fff; background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.28); }
+#flightConfirm #flightSkipWait { min-width: 148px; color: #102033; background: #9ed0fb; border-color: #9ed0fb; }
+#flightConfirm #flightSkipWait:hover { color: #102033; background: #b7dbff; border-color: #b7dbff; }
+#flightConfirm button:focus-visible, #flightConfirm summary:focus-visible, #flightConfirm a:focus-visible { outline: 2px solid #b7dbff; outline-offset: 3px; }
+@media (max-width: 680px) and (min-width: 481px) {
+  .confirm-content { grid-template-columns: 210px minmax(0, 1fr); }
+  .confirm-preview { height: 156px; }
+  .confirm-launch { padding: 18px 16px 14px; }
+  #flightConfirm h2 { font-size: 24px; }
+  #confirmScheduleTime { font-size: 22px; }
+  #countdownValue { font-size: 44px; }
+  #countdownValue.long { font-size: 30px; }
+  .hold-arrow { flex-basis: 44px; }
+  #holdLabel { font-size: 15px; }
 }
-#flightConfirm button.hold-btn:hover:not(:disabled) { color: #fff; background: color-mix(in srgb, var(--hold) 32%, #111b24); }
-#flightConfirm button.hold-btn.holding { transform: scale(0.98); box-shadow: 0 0 0 6px color-mix(in srgb, var(--hold) 18%, transparent); }
-#flightConfirm button.hold-btn.done { color: #fff; background: var(--hold); }
-#flightConfirm.sim button.hold-btn.done { color: #0b1117; }
-.hold-ring { position: absolute; top: 50%; left: 8px; width: 44px; height: 44px; transform: translateY(-50%) rotate(-90deg); }
-.hold-ring circle { fill: none; stroke-width: 4; }
-.hold-track { stroke: rgba(255, 255, 255, 0.14); }
-.hold-prog { stroke: var(--hold); stroke-linecap: round; }
-.hold-btn.done .hold-prog { stroke: #fff; }
-#flightConfirm.sim .hold-btn.done .hold-prog { stroke: #0b1117; }
-#flightConfirm p.hold-help { margin: 10px 0 0; color: var(--deck-faint); font-size: 11px; text-align: right; }
+@media (max-width: 480px) {
+  .confirm-bar { padding: 0 10px 0 16px; }
+  .confirm-content { display: block; min-height: 0; }
+  .confirm-mission { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 14px; border-right: 0; border-bottom: 1px solid var(--launch-line); }
+  .confirm-preview { height: 132px; }
+  .confirm-mission-info { display: block; }
+  #flightConfirm h3 { margin-top: 0; font-size: 15px; }
+  .confirm-stats { margin-top: 10px; padding-top: 10px; gap: 8px 0; }
+  .confirm-stats dd { font-size: 16px; }
+  .confirm-launch { padding: 16px 14px 14px; }
+  #flightConfirm h2 { font-size: 24px; }
+  .confirm-clock { margin-top: 14px; }
+  #confirmScheduleTime { font-size: 24px; }
+  .confirm-notes { margin: 14px 0; }
+  #countdownValue { font-size: 48px; }
+  #countdownValue.long { font-size: 32px; }
+  .confirm-footer { padding: 12px 14px; }
+  #flightConfirm .confirm-footer button { min-width: 0; }
+  #flightConfirm #flightSkipWait { min-width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) { #flightConfirm * { transition: none !important; } }
 
 .toast {
   position: fixed;

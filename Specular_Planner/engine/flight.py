@@ -6,6 +6,7 @@ The deterministic demo uses the same mission validation and preflight policy.
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 import math
@@ -35,8 +36,8 @@ ARMING_BITS = {2: "barometer", 4: "compass", 8: "GPS lock", 16: "inertial sensor
                32768: "rangefinder", 65536: "camera"}
 PARAM_ALIASES = {
     # A negative ARMING_CHECK carries the skip bitmask so launch checks can name what is off.
-    "ARMING_SKIPCHK": ("ARMING_CHECK", lambda v: 1 if v == 0 else -v),
-    "ARMING_SKIPCHKS": ("ARMING_CHECK", lambda v: 1 if v == 0 else -v),
+    # ARMING_SKIPCHK -1 skips every check; as an unsigned bitmask that is every bit set.
+    "ARMING_SKIPCHK": ("ARMING_CHECK", lambda v: 1 if v == 0 else -(int(v) & 0xFFFFFFFF)),
     "MAV_GCS_SYSID": ("SYSID_MYGCS", lambda v: v),
     "RTL_ALT_M": ("RTL_ALT", lambda v: v * 100),
 }
@@ -46,10 +47,31 @@ SEARCHING = "Searching USB for a flight controller…"
 # Official ArduPilot (5740) and PX4 (5741) USB ids. This bench board reports 1209:5741 as ArduPilot.
 AUTOPILOT_USB = {(0x1209, 0x5740), (0x1209, 0x5741)}
 FRESH_SECONDS = 5.0
+# Arming moves Home to wherever the aircraft sits unless Home is locked.
+HOME_AFTER_ARM_M = 30
+
+
+def disarmed_on_ground(state) -> bool:
+    """True when the aircraft is disarmed and sitting on the surface.
+
+    An ELRS link often never delivers EXTENDED_SYS_STATE, so the landed flag
+    stays unknown. A fresh altitude near zero is enough while it is disarmed.
+    """
+    if state.get("armed") is not False:
+        return False
+    fresh = state.get("fresh") or {}
+    if state.get("landed") == 1 and fresh.get("landed"):
+        return True
+    alt = state.get("relative_alt")
+    if alt is None or not fresh.get("position"):
+        return False
+    return -5 < alt < 3 and abs(state.get("vertical_speed") or 0) < 1
+
+
 NAV_COMMANDS = {16, 22}
 ALLOWED_COMMANDS = {16, 20, 22, 115, 178, 201}
 # Launch never skips these: without them HERON cannot tell what or where the aircraft will fly.
-REQUIRED_CHECKS = {"link", "vehicle", "landed", "mission", "pad", "verified"}
+REQUIRED_CHECKS = {"link", "vehicle", "mission", "verified"}
 DEFAULT_SKIPPED_CHECKS = {"arming", "fence_circle", "route_radius", "failsafes"}
 # MAV_SEVERITY: 0-3 error, 4 warning, 5-6 info, 7 debug.
 HERON_INFO, HERON_ERROR = 6, 3
@@ -124,12 +146,14 @@ def has_position(item):
 
 
 def onboard_rois(items):
-    """DO_SET_ROI aim points, each tied to the preceding NAV it executes alongside (a 0,0 ROI clears it)."""
+    """DO_SET_ROI aim points, each tied to the waypoint it runs with (a 0,0 ROI clears it)."""
     rois = []
-    for n, it in enumerate(items[1:], 1):
+    for n, it in enumerate(items):
         if it["command"] != 201 or not has_position(it):
             continue
-        wp = next((j["seq"] for j in reversed(items[:n]) if j["command"] in NAV_COMMANDS and has_position(j)), None)
+        wp = next((j["seq"] for j in items[n + 1:] if j["command"] == 16 and has_position(j)), None)
+        if wp is None:
+            wp = next((j["seq"] for j in reversed(items[:n]) if j["command"] == 16 and has_position(j)), None)
         rois.append({"seq": it["seq"], "lat": it["lat"], "lon": it["lon"], "wp": wp})
     return rois
 
@@ -365,8 +389,13 @@ class FlightService:
         fresh = s.get("fresh", {})
         check("link", s.get("connected"), "Aircraft heartbeat is current")
         check("vehicle", s.get("supported"), "ArduPilot Copter detected")
-        check("landed", not s.get("armed", True) and s.get("landed") == 1 and fresh.get("landed"),
-              "Aircraft is disarmed and on the ground")
+        # This only gates launch. Once the mission is airborne it is supposed to be off the ground.
+        flying = bool(s.get("armed")) and (
+            s.get("landed") in (2, 3, 4) or (s.get("relative_alt") or 0) >= 2)
+        if flying:
+            check("landed", True, "Aircraft is in the air")
+        else:
+            check("landed", disarmed_on_ground(s), "Aircraft is disarmed and on the ground")
         check("gps", fresh.get("gps") and s.get("gps_fix", 0) >= 3 and s.get("satellites", 0) >= 6,
               "Fresh 3D GPS fix with at least 6 satellites")
         check("ekf", fresh.get("ekf") and s.get("ekf_ok"), "Navigation estimate is healthy")
@@ -374,10 +403,12 @@ class FlightService:
         check("battery", fresh.get("battery") and s.get("battery_pct", -1) >= 30,
               "Fresh battery reading of at least 30%")
         home, pos = s.get("home"), s.get("position")
-        check("home", fresh.get("home") and fresh.get("position") and home and pos and distance(home, pos) < 30,
-              "Actual Home is within 30 m of the aircraft")
+        check("home", fresh.get("home") and fresh.get("position") and home and pos,
+              "Aircraft has a GPS Home. Arming moves it to where the aircraft sits")
         p = s.get("params", {})
-        check("params", s.get("params_fresh"), "Flight safety parameters have been read recently")
+        unread = s.get("params_missing") or []
+        check("params", s.get("params_fresh"), "Flight safety parameters have been read recently"
+              + (f": aircraft never reported {', '.join(unread)}" if unread else ""))
         arming = p.get("ARMING_CHECK")
         skipped = ", ".join(name for bit, name in ARMING_BITS.items() if int(-arming) & bit) if arming and arming < 0 else ""
         check("arming", arming == 1, "All ArduPilot pre-arm checks are enabled"
@@ -396,23 +427,28 @@ class FlightService:
         except (FlightError, ValueError) as exc:
             check("mission", False, str(exc) if plan_id else "Build a mission before uploading")
         # A mission read from the drone has no pad: row 0 is only a Home placeholder and it takes off where it is.
+        # Informational only: TAKEOFF climbs where the aircraft sits and arming moves Home there.
         if items and not self._from_aircraft(plan_id):
-            check("pad", home and distance(items[0], home) < 30, "Planned launch pad is within 30 m of actual Home")
+            off = distance(items[0], pos) if pos else None
+            check("pad", True, "Takes off where the aircraft sits"
+                  + (f", {off:.0f} m from the planned pad" if off is not None else ""))
         if items:
             margin = max(5, p.get("FENCE_MARGIN", 5))
             radius = p.get("FENCE_RADIUS", 0) - margin
-            ceiling = min(122, p.get("FENCE_ALT_MAX", 0) - margin)
+            ceiling = min(122, p.get("FENCE_ALT_MAX", 0) - margin) if fence_on and fence_type & 1 else 122
             nav = [i for i in items[1:] if i["command"] in NAV_COMMANDS]
             top = max((i["alt"] for i in nav), default=0)
-            far = max((distance(home, i) for i in nav), default=0) if home else 0
+            # The fence centers on Home, which arming moves to the aircraft.
+            origin = pos or home
+            far = max((distance(origin, i) for i in nav), default=0) if origin else 0
             check("route_alt", top <= ceiling and all(2 <= i["alt"] for i in nav),
                   "Route stays below the altitude fence, including margin"
                   + (f": route flies at {top:g} m but the fence allows {ceiling:g} m; lower Above Home on Plan"
                      if top > ceiling else ""))
-            check("route_radius", home and far < radius,
+            check("route_radius", origin and far < radius,
                   "Route stays inside the circular fence, including margin"
-                  + (f": route reaches {far:.0f} m from Home but the fence allows {radius:g} m"
-                     if home and far >= radius else "" if home else ": needs a GPS Home"))
+                  + (f": route reaches {far:.0f} m from the aircraft but the fence allows {radius:g} m"
+                     if origin and far >= radius else "" if origin else ": needs a GPS position"))
             check("rtl_alt", 0 <= p.get("RTL_ALT", -1) / 100 <= ceiling,
                   "Configured return altitude fits below the altitude fence")
         verified = self.verified
@@ -421,18 +457,50 @@ class FlightService:
         return {"ready": all(c["ok"] or not c["enabled"] for c in checks), "checks": checks}
 
     def _target(self, telemetry):
-        """The mission item the aircraft is flying to, when the verified mission is known."""
+        """The waypoint the aircraft is flying toward.
+
+        Copter NAV_TAKEOFF ignores latitude and longitude and climbs wherever
+        the aircraft is. Those coordinates are only the pad from the plan, so
+        highlighting them sticks the pulse on a launch pad the aircraft has left.
+        """
         verified = self.verified
         seq = telemetry.get("mission_current")
         if not verified or seq is None:
             return None
         items = self._items(verified["plan_id"])
-        if not 0 < seq < len(items) or items[seq]["command"] not in NAV_COMMANDS:
+        if seq <= 0 or not items:
             return None
-        it = items[seq]
-        wps = [i["seq"] for i in items if i["command"] == 16 and i["seq"] > 0]
-        return {"seq": seq, "lat": it["lat"], "lon": it["lon"], "alt": it["alt"],
-                "wp": sum(1 for s in wps if s <= seq), "total": len(wps)}
+        if seq >= len(items):
+            wps = [i for i in items if i["command"] == 16 and i["seq"] > 0]
+            return self._returning(telemetry, items, wps, seq)
+        wps = [i for i in items if i["command"] == 16 and i["seq"] > 0]
+        it = items[seq] if seq < len(items) else None
+        if it is None or it["command"] != 16:
+            nxt = next((i for i in items[seq + 1:] if i["command"] == 16 and i["seq"] > 0), None) if it else None
+            if nxt is None:
+                return self._returning(telemetry, items, wps, seq)
+            it = nxt
+            taking_off = not any(i["command"] == 16 and 0 < i["seq"] < seq for i in items)
+        else:
+            taking_off = False
+        wp = next((n for n, w in enumerate(wps, 1) if w["seq"] == it["seq"]), 0)
+        return {"seq": it["seq"], "lat": it["lat"], "lon": it["lon"], "alt": it["alt"],
+                "wp": wp, "total": len(wps), "taking_off": taking_off, "returning": False}
+
+    def _returning(self, telemetry, items, wps, seq):
+        """Past the last waypoint: the aircraft is yawing toward home or flying the return."""
+        if not wps or not any(i["command"] == 16 and 0 < i["seq"] <= seq for i in items):
+            return None
+        last = wps[-1]
+        home = telemetry.get("home") or {}
+        rtl = next((i for i in items if i["command"] == 20 and (i["lat"] or i["lon"])), None)
+        lat = home.get("lat")
+        lon = home.get("lon")
+        if lat is None or lon is None:
+            lat = rtl["lat"] if rtl else last["lat"]
+            lon = rtl["lon"] if rtl else last["lon"]
+        return {"seq": seq, "lat": lat, "lon": lon, "alt": last["alt"],
+                "wp": len(wps), "total": len(wps), "taking_off": False, "returning": True}
 
     def _items(self, plan_id):
         if plan_id not in self.plans:
@@ -463,7 +531,7 @@ class FlightService:
             if home:
                 return dict(mission_summary(items, home, "aircraft"), plan_id=plan_id)
             return dict(entry[1], plan_id=plan_id, home_source="mission" if entry[1]["home"] else None)
-        return dict(entry[1], plan_id=plan_id)
+        return dict(entry[1], plan_id=plan_id, start=self.plan(plan_id)["meta"].get("start"))
 
     def _set_onboard(self, items, plan_id, source):
         """Remember the mission read back from the aircraft, flyable or not."""
@@ -491,7 +559,7 @@ class FlightService:
                     "link": copy.deepcopy(self.link_info), "target": self._target(s),
                     "mission": self._summary(plan_id) if plan_id else None, "onboard": copy.deepcopy(onboard)}
 
-    def submit(self, action, plan_id=None, confirmation=None):
+    def submit(self, action, plan_id=None, confirmation=None, wait_until_start=True):
         if action not in {"refresh", "upload", "launch", "read"}:
             raise FlightError("Unknown flight action.")
         with self.lock:
@@ -503,6 +571,7 @@ class FlightService:
                 self.operation_lock.release()
                 raise FlightError("Confirm launch before arming.")
             self.cancel.clear()
+            self.wait_until_start = bool(wait_until_start)
             self.job = {"state": "running", "action": action, "message": f"Starting {action}…"}
         threading.Thread(target=self._run, args=(action, plan_id), daemon=True, name="flight-operation").start()
         return {"accepted": True}
@@ -530,20 +599,21 @@ class FlightService:
                 self.event(result, severity=HERON_INFO if flyable else 4)
                 return
             self.phase("Reading aircraft status and safety parameters…")
-            # Upload works before GPS Home exists; launch re-checks the pad against Home.
-            link.refresh(self.cancel, need_home=action == "launch")
+            # Upload works before GPS Home exists; launch needs it.
+            unread = link.refresh(self.cancel, need_home=action == "launch")
+            if unread:
+                self.event(f"Aircraft never reported {', '.join(unread)}. Launch checks that use them fail "
+                           "until you switch them off.", severity=4)
             if action in {"upload", "launch"}:
                 items = flight_items(self.plan(plan_id)["wpl"])
                 s = link.snapshot()
-                if s.get("armed") or s.get("landed") != 1 or not s.get("fresh", {}).get("landed"):
+                require_ground = "landed" not in self.skipped
+                if require_ground and not disarmed_on_ground(s):
                     raise FlightError("Mission changes require a disarmed aircraft on the ground.")
-                if not self._from_aircraft(plan_id) and (s.get("home") or action == "launch") and (
-                        not s.get("home") or distance(items[0], s["home"]) >= 30):
-                    raise FlightError("Mission launch pad does not match actual aircraft Home. Rebuild at this field.")
             if action == "upload":
                 self.verified = None
                 self.phase("Uploading mission…")
-                link.upload(items, self.cancel)
+                link.upload(items, self.cancel, require_ground="landed" not in self.skipped)
                 self.phase("Reading mission back from aircraft…")
                 readback = link.download(self.cancel)
                 compare_items(items, readback)
@@ -562,11 +632,15 @@ class FlightService:
                     raise
                 link.refresh(self.cancel)
                 self._require_ready(plan_id)
+                self._wait_for_planned_takeoff(plan_id)
+                self._require_ready(plan_id)
                 self.phase("Selecting GUIDED mode…")
                 link.mode(4, self.cancel)
                 self._require_ready(plan_id)
                 self.phase("Arming aircraft…")
                 link.arm(self.cancel)
+                self.phase("Confirming Home moved to the aircraft…")
+                self._confirm_home(link)
                 self._require_ready(plan_id, allow_armed=True)
                 if link.snapshot().get("mode_id") != 4:
                     raise FlightError("Flight mode changed during arming; launch stopped.")
@@ -609,7 +683,18 @@ class FlightService:
             wpl = items_wpl(items)
             checked = flight_items(wpl)
             compare_items(checked, items)
-            plan_id = self.register_plan(wpl, {"source": "aircraft"})
+            # A read-back of the mission we uploaded keeps its plan metadata,
+            # including the scheduled takeoff. Changed missions get a fresh ID.
+            with self.lock:
+                known_id = (self.onboard or {}).get("plan_id") or (self.verified or {}).get("plan_id")
+            if known_id and known_id in self.plans:
+                try:
+                    compare_items(self._items(known_id), items)
+                    plan_id = known_id
+                except (FlightError, ValueError):
+                    pass
+            if not plan_id:
+                plan_id = self.register_plan(wpl, {"source": "aircraft"})
         except (FlightError, ValueError) as exc:
             error = f"HERON can show this mission but will not fly it: {exc}"
         with self.lock:
@@ -622,13 +707,56 @@ class FlightService:
         n = len(onboard["path"])
         return error or f"Read {len(items) - 1} mission items from the aircraft ({n} waypoints). Ready to fly after launch checks."
 
+    def _wait_for_planned_takeoff(self, plan_id):
+        """Stay disarmed until the plan's UTC takeoff, so the sky matches the preview.
+
+        Arming early would trip DISARM_DELAY. Return home cancels the wait.
+        """
+        raw = (self.plan(plan_id).get("meta") or {}).get("start")
+        if not raw:
+            return
+        start = datetime.fromisoformat(str(raw))
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        start = start.astimezone(timezone.utc)
+        if not self.wait_until_start:
+            self.event("Planned takeoff time skipped. Reflections follow the clock from now.")
+            return
+        while True:
+            self.guard()
+            remaining = (start - datetime.now(timezone.utc)).total_seconds()
+            if remaining <= 0:
+                if remaining < -1:
+                    self.event("Planned takeoff time has passed. Launching now; the reflection has moved.")
+                return
+            self.phase(f"Waiting for planned takeoff {start.strftime('%H:%M:%S')} UTC ({int(remaining)} s). "
+                       "Motors stay disarmed.")
+            time.sleep(min(1.0, remaining))
+
+    def _confirm_home(self, link):
+        """RTL and the fence use Home. ArduPilot resets it at arming unless Home is locked."""
+        link.request_home(self.cancel)
+        s = link.snapshot()
+        home, pos = s.get("home"), s.get("position")
+        if home and pos and distance(home, pos) < HOME_AFTER_ARM_M:
+            return
+        away = f"{distance(home, pos):.0f} m" if home and pos else "an unknown distance"
+        try:
+            link.disarm(self.cancel)
+            done = "Disarmed."
+        except FlightError as exc:
+            done = f"Disarm was not confirmed ({exc}). Disarm with the RC."
+        raise FlightError(f"Home is {away} from the aircraft after arming, so RTL would not come back here. {done} "
+                          "Check for a locked Home (DO_SET_HOME) in Mission Planner.")
+
     def _require_ready(self, plan_id, allow_armed=False):
         self.guard()
         failed = [c["message"] for c in self.preflight(plan_id)["checks"] if not c["ok"] and c["enabled"]
                   and not (allow_armed and c["key"] == "landed")]
-        if allow_armed:
+        if allow_armed and "landed" not in self.skipped:
             s = self.link.snapshot()
-            if not s.get("armed") or s.get("landed") != 1 or not s.get("fresh", {}).get("landed"):
+            grounded = dict(s, armed=False)
+            if not s.get("armed") or not disarmed_on_ground(grounded):
                 failed.append("Aircraft must remain armed and on the ground before starting AUTO")
         if failed:
             raise FlightError("Launch blocked: " + "; ".join(failed))
@@ -644,7 +772,12 @@ class FlightService:
 
 class DemoLink:
     """UI simulator only: no serial ports, sockets, or MAVLink commands."""
-    SPEED = 20  # Accelerated demonstration, clearly marked in UI.
+    # ArduCopter defaults: WPNAV_SPD, WPNAV_SPD_UP, WPNAV_SPD_DN, LAND_SPD_MS below LAND_ALT_LOW.
+    WP_SPEED = 10.0
+    CLIMB = 2.5
+    DESCEND = 1.5
+    LAND = 0.5
+    LAND_LOW_M = 10.0
 
     def __init__(self, event, home=None):
         self.event = event
@@ -654,6 +787,7 @@ class DemoLink:
         self.armed = False
         self.mode_id = 0
         self.current = 0
+        self.reached = None
         self.home = {"lat": 40.086045, "lon": -105.233634, "alt_msl": 1625}
         try:
             lat, lon = float(home["lat"]), float(home["lon"])
@@ -671,6 +805,7 @@ class DemoLink:
         self.roll = 0.0
         self.pitch = 0.0
         self.ground_speed = 0.0
+        self.speed = self.WP_SPEED
         self.battery = 96.0
         self.step_lock = threading.Lock()
         self.say("ArduCopter V4.7.0 (simulated)")
@@ -689,15 +824,19 @@ class DemoLink:
             error = (want - self.heading + 540) % 360 - 180
             turn = max(-120 * dt, min(120 * dt, error))
             self.heading = (self.heading + turn) % 360
-        f = min(1, self.SPEED * dt / max(d, 0.001))
+        f = min(1, self.speed * dt / max(d, 0.001))
         for key in ("lat", "lon"):
             self.position[key] += (target[key] - self.position[key]) * f
-        self.ground_speed = min(self.SPEED, d / dt) if dt > 0 and d > 0.5 else 0
+        self.ground_speed = min(self.speed, d / dt) if dt > 0 and d > 0.5 else 0
         rate = turn / dt if dt > 0 else 0
         k = min(1, dt * 3)
         self.roll += (max(-25, min(25, rate * 0.3)) - self.roll) * k
-        self.pitch += (-8 * self.ground_speed / self.SPEED - self.pitch) * k
+        self.pitch += (-8 * self.ground_speed / self.WP_SPEED - self.pitch) * k
         return d
+
+    def _climb_to(self, alt, dt):
+        rate = self.CLIMB if alt > self.alt else self.LAND if self.alt <= self.LAND_LOW_M else self.DESCEND
+        self.alt += max(-rate * dt, min(rate * dt, alt - self.alt))
 
     def snapshot(self):
         with self.step_lock:
@@ -712,25 +851,43 @@ class DemoLink:
             self.battery = max(0, self.battery - dt * 0.05)
             it = self.items[self.current] if self.current < len(self.items) else {"command": 20}
             if self.mode_id == 6 or it["command"] == 20:
+                if self.mode_id != 6:
+                    self.speed = self.WP_SPEED  # RTL flies at WPNAV_SPD, not the mission's speed change.
                 self.mode_id = 6
                 d = self._fly_to(self.home, dt)
                 if d < 2:
-                    self.alt = max(0, self.alt - dt * 15)
+                    self._climb_to(0, dt)
                     if self.alt == 0:
                         self.armed = False
                         self.flying = False
                         self.say("Disarming motors")
                         self.event("Demo aircraft landed and disarmed.")
+            elif it["command"] == 22:
+                # Copter climbs in place. The takeoff lat/lon is the planned pad and is not flown.
+                self._climb_to(it["alt"], dt)
+                self.ground_speed = 0
+                k = min(1, dt * 3)
+                self.roll += (0 - self.roll) * k
+                self.pitch += (0 - self.pitch) * k
+                if abs(self.alt - it["alt"]) < 1:
+                    self.reached = self.current
+                    self.say(f"Reached command #{self.current}")
+                    self.current += 1
+                    self.dwell = 0
             elif it["command"] in NAV_COMMANDS:
-                self.alt += max(-15 * dt, min(15 * dt, it["alt"] - self.alt))
+                self._climb_to(it["alt"], dt)
                 d = self._fly_to(it, dt)
                 if d < 2 and abs(self.alt - it["alt"]) < 1:
                     self.dwell += dt
-                    if self.dwell >= min(3, it["p1"]):
+                    if self.dwell >= it["p1"]:
+                        self.reached = self.current
                         self.say(f"Reached command #{self.current}")
                         self.current += 1
                         self.dwell = 0
             else:
+                # DO_CHANGE_SPEED types 0 and 1 set horizontal speed; 2 and 3 are climb and descent.
+                if it["command"] == 178 and it["p2"] > 0 and int(it["p1"]) in (0, 1):
+                    self.speed = it["p2"]
                 self.current += 1
         else:
             self.ground_speed = 0
@@ -739,10 +896,12 @@ class DemoLink:
         if dt > 0.001:
             self.vertical_speed = (self.alt - previous_alt) / dt
         fresh = {k: self.connected for k in ("landed", "gps", "ekf", "health", "battery", "home", "position", "attitude")}
+        current = self.items[self.current]["command"] if self.current < len(self.items) else None
+        landed = 1 if self.alt <= 0 else 4 if self.mode_id == 6 and self.vertical_speed < 0 else 3 if current == 22 else 2
         return {"connected": self.connected, "transport": "demo", "supported": True, "system_id": 1,
                 "generation": self.generation, "armed": self.armed, "mode_id": self.mode_id,
                 "mode": {0: "STABILIZE", 3: "AUTO", 4: "GUIDED", 6: "RTL"}.get(self.mode_id),
-                "landed": 2 if self.alt > 0 else 1, "gps_fix": 3, "satellites": 16,
+                "landed": landed, "gps_fix": 3, "satellites": 16,
                 "ekf_ok": True, "sensors_ok": True, "battery_pct": round(self.battery),
                 "battery_voltage": 21.0 + 4.2 * self.battery / 100,
                 "battery_current": round(0.4 if not self.armed else 6.0 + abs(self.vertical_speed), 1),
@@ -750,17 +909,18 @@ class DemoLink:
                 "speed": self.ground_speed, "heading": self.heading, "roll": self.roll, "pitch": self.pitch,
                 "course": self.heading if self.ground_speed >= 0.5 else None,
                 "vertical_speed": self.vertical_speed,
-                "mission_current": self.current, "params": dict(DEMO_PARAMS), "params_fresh": True,
-                "fresh": fresh, "heartbeat_age": 0, "status_text": "SIMULATED AIRCRAFT · accelerated demonstration"}
+                "mission_current": self.current, "mission_reached": self.reached, "params": dict(DEMO_PARAMS), "params_fresh": True,
+                "fresh": fresh, "heartbeat_age": 0, "status_text": "SIMULATED AIRCRAFT"}
 
     def refresh(self, cancel, need_home=True):
         self._check(cancel)
+        return []
 
     def _check(self, cancel):
         if cancel and cancel.is_set():
             raise FlightError("Demo operation canceled.")
 
-    def upload(self, items, cancel):
+    def upload(self, items, cancel, require_ground=True):
         self._check(cancel)
         self.items = copy.deepcopy(items)
         self.say(f"Mission: {len(items) - 1} commands received")
@@ -778,7 +938,18 @@ class DemoLink:
     def arm(self, cancel):
         self._check(cancel)
         self.armed = True
+        self.home = dict(self.position)
+        self.speed = self.WP_SPEED
         self.say("Arming motors")
+
+    def disarm(self, cancel):
+        self._check(cancel)
+        self.armed = False
+        self.flying = False
+        self.say("Disarming motors")
+
+    def request_home(self, cancel):
+        self._check(cancel)
 
     def set_current(self, seq, cancel):
         self._check(cancel)
@@ -816,6 +987,7 @@ class MavlinkLink:
         self.cv = threading.Condition(threading.RLock())
         self.tx = threading.RLock()
         self.inbox = deque(maxlen=4096)
+        self.payload_frames = deque(maxlen=512)
         self.counter = 0
         self.legacy_coordinates = False
         self.closed = threading.Event()
@@ -888,7 +1060,16 @@ class MavlinkLink:
                 msg = self.conn.recv_match(blocking=True, timeout=0.2)
                 if msg is None or msg.get_type() == "BAD_DATA":
                     continue
-                if msg.get_srcSystem() != self.system or msg.get_srcComponent() != self.component:
+                if msg.get_srcSystem() != self.system:
+                    continue
+                if msg.get_srcComponent() == 191:
+                    if getattr(msg, "target_system", 0) in (0, 255) and getattr(msg, "target_component", 0) in (0, 190):
+                        with self.cv:
+                            self.payload_frames.append(msg)
+                        if msg.get_type() == "STATUSTEXT":
+                            self.event(msg.text, "heron-payload", msg.severity)
+                    continue
+                if msg.get_srcComponent() != self.component:
                     continue
                 kind = msg.get_type()
                 # Do not consume another GCS's transaction messages.
@@ -956,6 +1137,7 @@ class MavlinkLink:
             s["status_text"] = m.text
             self.event(m.text, "ardupilot", m.severity)
         elif kind == "PARAM_VALUE":
+            self.stamps["param"] = now
             key = m.param_id.decode() if isinstance(m.param_id, bytes) else m.param_id
             key = key.rstrip("\x00")
             value = m.param_value
@@ -975,7 +1157,8 @@ class MavlinkLink:
                      heartbeat_age=round(age, 1), generation=self.s["generation"],
                      fresh={k: now - self.stamps.get(k, -100) < (60 if k == "home" else FRESH_SECONDS)
                             for k in ("landed", "position", "home", "gps", "ekf", "battery", "health", "attitude")},
-                     params_fresh=all(now - self.param_times.get(k, -100) < 60 for k in PARAMETERS))
+                     params_fresh=all(now - self.param_times.get(k, -100) < 60 for k in PARAMETERS),
+                     params_missing=[k for k in PARAMETERS if k not in self.param_times])
             return s
 
     def _mark(self):
@@ -1018,30 +1201,49 @@ class MavlinkLink:
                        msg_id, interval, 0, 0, 0, 0, 0)
 
     def refresh(self, cancel, need_home=True):
+        """Read the safety parameters and Home. Returns parameter names the aircraft never reported."""
         started = time.monotonic()
+
+        def missing():
+            return [k for k in PARAMETERS if self.param_times.get(k, 0) < started]
+
+        def home_ok():
+            return not need_home or self.stamps.get("home", 0) >= started
+
         for attempt in range(3):
-            for key in PARAMETERS:
-                if self.param_times.get(key, 0) < started:
-                    self._send("param_request_read_send", self.system, self.component, key.encode(), -1, cancel=cancel)
+            for key in missing():
+                self._send("param_request_read_send", self.system, self.component, key.encode(), -1, cancel=cancel)
             for alias, (key, _) in PARAM_ALIASES.items():
-                if self.param_times.get(key, 0) < started:
+                if key in missing():
                     self._send("param_request_read_send", self.system, self.component, alias.encode(), -1, cancel=cancel)
             self._send("command_long_send", self.system, self.component, 512, 0, 242, 0, 0, 0, 0, 0, 0, cancel=cancel)
             deadline = time.monotonic() + 3
             while time.monotonic() < deadline:
                 if cancel.is_set():
                     raise FlightError("Operation canceled.")
-                if all(self.param_times.get(k, 0) >= started for k in PARAMETERS) and (
-                        not need_home or self.stamps.get("home", 0) >= started):
-                    return
+                if not missing() and home_ok():
+                    return []
                 time.sleep(0.1)
-        missing = [k for k in PARAMETERS if self.param_times.get(k, 0) < started]
-        if missing:
-            raise FlightError("Aircraft did not provide fresh parameters: " + ", ".join(missing))
-        raise FlightError("Aircraft has no GPS Home position yet. Wait for a 3D GPS fix outdoors, then try again.")
+        if missing():
+            # Some links drop single-name reads. The full list carries every parameter under its real name.
+            self.event("Asking the aircraft for its full parameter list…")
+            listed = time.monotonic()
+            self._send("param_request_list_send", self.system, self.component, cancel=cancel)
+            deadline = listed + 90
+            while missing() and time.monotonic() < deadline:
+                if cancel.is_set():
+                    raise FlightError("Operation canceled.")
+                last = self.stamps.get("param", 0)
+                if time.monotonic() - max(last, listed) > (10 if last < listed else 3):
+                    break
+                time.sleep(0.1)
+        if not home_ok():
+            raise FlightError("Aircraft has no GPS Home position yet. Wait for a 3D GPS fix outdoors, then try again.")
+        return missing()
 
-    def upload(self, items, cancel):
+    def upload(self, items, cancel, require_ground=True):
         self.legacy_coordinates = False
+        self.require_ground = require_ground
         cursor = self._mark()
         self._send("mission_count_send", self.system, self.component, len(items), 0, cancel=cancel)
         sent, last_item, retries = set(), None, 0
@@ -1068,14 +1270,16 @@ class MavlinkLink:
                 return
             if not 0 <= msg.seq < len(items):
                 raise FlightError("Aircraft requested an invalid mission sequence.")
-            last_item = (msg.seq, msg.get_type() == "MISSION_REQUEST_INT")
+            # ArduPilot asks with legacy MISSION_REQUEST but takes MISSION_ITEM_INT, which keeps
+            # centimeter coordinates; float MISSION_ITEM rounds latitude to about half a meter.
+            last_item = (msg.seq, True)
             self._send_item(items[msg.seq], last_item[1], cancel)
             sent.add(msg.seq)
         raise FlightError("Mission upload exceeded its deadline.")
 
     def _send_item(self, it, use_int, cancel):
         state = self.snapshot()
-        if state.get("armed") or state.get("landed") != 1 or not state.get("fresh", {}).get("landed"):
+        if getattr(self, "require_ground", True) and not disarmed_on_ground(state):
             raise FlightError("Aircraft state changed during upload. Upload stopped; verify the mission again before flight.")
         x, y = it["lat"], it["lon"]
         if use_int:
@@ -1140,6 +1344,23 @@ class MavlinkLink:
         self.command(400, [1, 0], cancel)  # Never force-arm.
         self._wait_state(lambda s: s.get("connected") and s.get("armed"), cancel, 6, "arming")
 
+    def disarm(self, cancel):
+        self.command(400, [0, 0], cancel)  # Never force-disarm; ArduPilot refuses in flight.
+        self._wait_state(lambda s: s.get("connected") and not s.get("armed"), cancel, 6, "disarming")
+
+    def request_home(self, cancel):
+        started = time.monotonic()
+        for _ in range(3):
+            self._send("command_long_send", self.system, self.component, 512, 0, 242, 0, 0, 0, 0, 0, 0, cancel=cancel)
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                if cancel and cancel.is_set():
+                    raise FlightError("Operation interrupted by Return home.")
+                if self.stamps.get("home", 0) >= started:
+                    return
+                time.sleep(0.05)
+        raise FlightError("Aircraft did not report Home after arming.")
+
     def set_current(self, seq, cancel):
         cursor = self._mark()
         self._send("mission_set_current_send", self.system, self.component, seq, cancel=cancel)
@@ -1151,9 +1372,12 @@ class MavlinkLink:
         self.command(300, [], cancel)
 
     def wait_airborne(self, cancel):
-        self._wait_state(lambda s: s.get("connected") and s.get("fresh", {}).get("landed")
-                         and s.get("fresh", {}).get("position") and s.get("landed") == 2
-                         and s.get("relative_alt", 0) >= 2, cancel, 25, "takeoff")
+        # Copter reports TAKEOFF (3) for the whole climb to mission altitude, then IN_AIR (2).
+        # Altitude counts when the landed-state message never arrives on the radio link.
+        self._wait_state(lambda s: s.get("connected") and s.get("fresh", {}).get("position")
+                         and (s.get("relative_alt") or 0) >= 2
+                         and (not s.get("fresh", {}).get("landed") or s.get("landed") in (2, 3, 4)),
+                         cancel, 25, "takeoff")
 
     def close(self):
         self.closed.set()

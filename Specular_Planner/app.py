@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 import time
 from datetime import datetime, timezone
@@ -12,7 +13,18 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
-from engine.export import qgc_wpl, run_card, validate_wpl
+from engine.export import (
+    annotate_wpl,
+    heron_meta_from_wpl,
+    normalize_wpl,
+    plan_route_line,
+    qgc_wpl,
+    route_from_wpl,
+    run_card,
+    takeoff_from_name,
+    takeoff_from_wpl,
+    validate_wpl,
+)
 from engine.flight import DEFAULT_SKIPPED_CHECKS, LIVE_TRANSPORTS, FlightService
 from engine.flight_api import flight_api
 from engine.planner import (
@@ -27,6 +39,7 @@ from engine.planner import (
     default_window,
     load_lake,
     plan,
+    reflections_at,
     sky_snapshot,
 )
 from engine.catalog import (
@@ -46,11 +59,14 @@ DATA = ROOT / "data"
 STATIC = ROOT / "static"
 OUTPUT = ROOT / "output"
 
+from engine.payload import payload_api
+
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
 flight = FlightService(LIVE_TRANSPORTS, DATA / "launch_checks_fly.json", DEFAULT_SKIPPED_CHECKS)
 sim = FlightService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_CHECKS)
 app.register_blueprint(flight_api(flight))
 app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
+app.register_blueprint(payload_api(flight, sim))
 
 _SATS = None
 _LAKE = None
@@ -81,6 +97,15 @@ def lake():
 @app.get("/")
 def index():
     return send_from_directory(STATIC, "index.html")
+
+
+@app.get("/tiles/<int:z>/<int:y>/<int:x>.jpg")
+def map_tile(z: int, y: int, x: int):
+    """Satellite picture saved around Boulder Reservoir. Missing tiles 404 so the map can try the network."""
+    path = DATA / "map_tiles" / str(z) / str(y) / f"{x}.jpg"
+    if not path.is_file():
+        return ("", 404)
+    return send_file(path, mimetype="image/jpeg", max_age=86400)
 
 
 @app.get("/api/defaults")
@@ -146,6 +171,34 @@ def api_sky():
     )
 
 
+@app.post("/api/reflections")
+def api_reflections():
+    """Specular points at the live aircraft, using the current UTC time.
+
+    The planned takeoff time is ignored. A late launch still sees the sky as it is now.
+    """
+    body = request.get_json(force=True) or {}
+    try:
+        lat = float(body["lat"])
+        lon = float(body["lon"])
+        alt = float(body["alt"])
+        mask = float(body.get("mask", DEFAULT_MASK))
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "Need the aircraft latitude, longitude, and altitude."}), 400
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180 and math.isfinite(alt) and 0 <= mask <= 90):
+        return jsonify({"error": "Aircraft position is out of range."}), 400
+    dt = datetime.now(timezone.utc)
+    consts = body.get("constellations") or ["G", "E", "C"]
+    if isinstance(consts, str):
+        consts = [c.strip().upper() for c in consts.split(",") if c.strip()]
+    targets = body.get("targets") if isinstance(body.get("targets"), list) and body.get("targets") else None
+    aim = body.get("aim") or None
+    chosen = filter_sats(sats(), consts)
+    specs = reflections_at(chosen, lake(), dt, lat, lon, alt, mask, targets, aim)
+    sky = sky_snapshot(chosen, dt, lat, lon, WATER_H + max(alt, 0.0), mask)
+    return jsonify({"time": dt.isoformat(), "speculars": specs, "sats": sky})
+
+
 @app.post("/api/plan")
 def api_plan():
     body = request.get_json(force=True) or {}
@@ -200,6 +253,8 @@ def api_plan():
             roi_mode=body.get("roi_mode", "per_point"),
             antenna_offset_deg=float(body.get("antenna_offset_deg", 0)),
             coverage_pct=float(body.get("coverage_pct", 100)),
+            survey_pattern=body.get("survey_pattern", "fill"),
+            edge=body.get("edge"),
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -210,17 +265,111 @@ def api_plan():
     wp_name = f"HERON_{stamp}.waypoints"
     card_name = f"HERON_{stamp}_runcard.txt"
     wpl = qgc_wpl(result)
+    result["route_line"] = plan_route_line(result)
     check = validate_wpl(wpl, result)
     result["flight_plan_id"] = flight.register_plan(wpl, result["meta"])
     sim.register_plan(wpl, result["meta"], result["flight_plan_id"])
     # Explicit UTF-8 bytes: Windows text mode is cp1252 (no arrows) and rewrites \n, breaking upload verification.
-    (OUTPUT / wp_name).write_bytes(wpl.encode("utf-8"))
+    (OUTPUT / wp_name).write_bytes(annotate_wpl(wpl, result["meta"].get("start"), result).encode("utf-8"))
     (OUTPUT / card_name).write_bytes(run_card(result).encode("utf-8"))
     (OUTPUT / f"HERON_{stamp}.json").write_bytes(json.dumps(result["meta"], indent=2).encode("utf-8"))
     result["exports"] = {
         "waypoints": f"/api/export/{wp_name}",
         "runcard": f"/api/export/{card_name}",
         "filename": wp_name,
+        "mission": check,
+    }
+    result["stamp"] = stamp
+    return jsonify(result)
+
+
+@app.post("/api/plan/import")
+def api_plan_import():
+    """Load a Mission Planner .waypoints file and rebuild the playback for it."""
+    body = request.get_json(force=True) or {}
+    raw = body.get("wpl")
+    if not isinstance(raw, str) or not raw.strip():
+        return jsonify({"error": "Choose a .waypoints file."}), 400
+    try:
+        saved_start = takeoff_from_wpl(raw) or takeoff_from_name(body.get("filename"))
+        saved_meta = heron_meta_from_wpl(raw)
+        wpl = normalize_wpl(raw)
+        route = route_from_wpl(wpl, lead_in=bool(saved_meta.get("lead_in")))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    start_raw = body.get("start")
+    if saved_start is not None:
+        start = saved_start
+    elif not start_raw:
+        start, _ = default_window()
+    else:
+        try:
+            start = datetime.fromisoformat(start_raw)
+        except ValueError:
+            return jsonify({"error": "Takeoff time is not a valid date."}), 400
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+    consts = body.get("constellations")
+    if consts is None:
+        consts = ["G", "E", "C"]
+    track = saved_meta.get("track") or []
+    if isinstance(track, str):
+        track = [track] * len(route["waypoints"])
+    if isinstance(track, list):
+        for i, sid in enumerate(track):
+            if i < len(route["waypoints"]) and sid:
+                route["waypoints"][i]["prn"] = str(sid)
+    areas = []
+    for i, area in enumerate(saved_meta.get("areas") or []):
+        ring = area.get("ring") if isinstance(area, dict) else None
+        if isinstance(ring, list) and len(ring) >= 3:
+            areas.append({"name": area.get("name") or f"area {i + 1}", "coordinates": ring})
+    try:
+        result = plan(
+            sats(),
+            lake(),
+            start=start,
+            duration_min=int(body.get("duration_min", 40)),
+            pad=route["pad"],
+            h_agl=route["h_agl"],
+            speed_mps=route["speed_mps"],
+            loiter_s=route["loiter_s"],
+            elev_mask=float(body.get("elev_mask", DEFAULT_MASK)),
+            constellations=consts,
+            step_s=5,
+            mode="file",
+            waypoints=route["waypoints"],
+            roi_mode=route["roi_mode"],
+            pad_hold_s=route["hold_s"],
+            targets=areas or None,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    name = str(body.get("filename") or "waypoints").replace("\\", "/").split("/")[-1]
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name).strip("._") or "waypoints"
+    if not safe.lower().endswith(".waypoints"):
+        safe += ".waypoints"
+    result["meta"]["source_file"] = safe
+    result["meta"]["loiter_mixed"] = bool(route["loiter_mixed"])
+    # The imported file flies as-is; record and draw whether it has a lead-in.
+    result["meta"]["lead_in"] = bool(route["lead_in"])
+    result["route_line"] = plan_route_line(result, route["lead_in"] or False)
+    OUTPUT.mkdir(exist_ok=True)
+    stamp = start.strftime("%Y%m%d_%H%M%S")
+    wp_name = f"HERON_import_{stamp}.waypoints"
+    card_name = f"HERON_import_{stamp}_runcard.txt"
+    check = validate_wpl(wpl, result)
+    result["flight_plan_id"] = flight.register_plan(wpl, result["meta"])
+    sim.register_plan(wpl, result["meta"], result["flight_plan_id"])
+    (OUTPUT / wp_name).write_bytes(annotate_wpl(wpl, result["meta"].get("start"), result).encode("utf-8"))
+    (OUTPUT / card_name).write_bytes(run_card(result).encode("utf-8"))
+    result["import_warnings"] = route["warnings"]
+    result["exports"] = {
+        "waypoints": f"/api/export/{wp_name}",
+        "runcard": f"/api/export/{card_name}",
+        "filename": safe,
         "mission": check,
     }
     result["stamp"] = stamp

@@ -9,6 +9,8 @@ from pathlib import Path
 from engine.gnss import DEFAULT_CONSTELLATIONS, almanac_age_days, filter_sats
 from engine.coverage import swept_coverage
 from engine.survey import (
+    build_edge_cross_survey,
+    build_edge_survey,
     build_survey,
     clip_centerline,
     feat_key,
@@ -101,6 +103,40 @@ def _visible(sats, dt, lat, lon, h_ell, mask):
         rows.append((sat, xyz, az, el))
     rows.sort(key=lambda r: r[3], reverse=True)
     return rows
+
+
+def reflections_at(sats, lake, dt, lat, lon, alt, mask=DEFAULT_MASK, targets=None, aim_sid=None):
+    """Specular points for where the aircraft actually is, at one UTC time.
+
+    That time is the real clock, not the takeoff time typed into the plan.
+    """
+    alt = float(alt)
+    if alt < 5.0:
+        return []
+    areas = _normalize_targets(targets) if targets else []
+    specs = []
+    for sat, xyz, az, el in _visible(sats, dt, float(lat), float(lon), WATER_H + alt, float(mask)):
+        slat, slon, extra, samples = specular_point(xyz, lat, lon, WATER_H, alt)
+        on_water = point_in_polygon(slon, slat, lake)
+        along, across = fresnel_axes(alt, el)
+        in_targets = [tgt["name"] for tgt in areas if point_in_ring(slon, slat, tgt["coordinates"])]
+        specs.append({
+            "prn": sat.sid,
+            "constellation": sat.constellation,
+            "az": round(az, 1),
+            "el": round(el, 1),
+            "lat": round(slat, 6),
+            "lon": round(slon, 6),
+            "on_water": on_water,
+            "in_target": bool(in_targets),
+            "aimed": bool(aim_sid) and sat.sid == aim_sid,
+            "targets": in_targets,
+            "extra_m": None if extra != extra else round(extra, 1),
+            "samples": None if samples != samples else round(samples, 1),
+            "fresnel_along_m": round(along, 1),
+            "fresnel_across_m": round(across, 1),
+        })
+    return specs
 
 
 def _choose_sat(vis, track_sid=None, target_el=None):
@@ -409,7 +445,7 @@ def _sample_times(segs, total_s: float, step_s: float = 8.0) -> list[float]:
     return sorted(x for x in times if 0.0 <= x <= total_s + 1e-9)
 
 
-def _timeline(pad, hovers, h_agl, speed, loiter_s, min_leg_s=15.0):
+def _timeline(pad, hovers, h_agl, speed, loiter_s, min_leg_s=15.0, pad_hold_s=None):
     """Hold on the pad until the first sat geometry is reachable, then WP loiters."""
     climb = max(20.0, h_agl / 2.5)
     segs = [(0.0, climb, "climb", pad["lat"], pad["lon"])]
@@ -420,8 +456,11 @@ def _timeline(pad, hovers, h_agl, speed, loiter_s, min_leg_s=15.0):
             min_leg_s,
             haversine_m(cur_lat, cur_lon, hovers[0]["lat"], hovers[0]["lon"]) / max(speed, 1.0),
         )
-        want = hovers[0].get("t_in_window") or 0
-        hold = max(0.0, want - (t + first_fly))
+        if pad_hold_s is None:
+            want = hovers[0].get("t_in_window") or 0
+            hold = max(0.0, want - (t + first_fly))
+        else:
+            hold = max(0.0, float(pad_hold_s))
         if hold >= 8:
             segs.append((t, t + hold, "hold", pad["lat"], pad["lon"]))
             t += hold
@@ -543,6 +582,43 @@ def _heading_to_aim(lat, lon, phase, pad, hovers, last_hdg: float) -> float:
     return look if look is not None else last_hdg
 
 
+def _match_saved_headings(sats, hovers, start, h_agl, mask, offset):
+    """A saved area file stores the heading, not the satellite. Pair each yaw with the sky at arrival."""
+    for hov in hovers:
+        if hov.get("prn") or hov.get("yaw_deg") is None:
+            continue
+        when = start + timedelta(seconds=float(hov.get("arrive_s") or 0))
+        visible = _visible(sats, when, hov["lat"], hov["lon"], WATER_H + h_agl, mask)
+        want = (float(hov["yaw_deg"]) + float(offset or 0)) % 360
+        best = None
+        for row in visible:
+            err = abs((row[2] - want + 180) % 360 - 180)
+            if best is None or err < best[0]:
+                best = (err, row)
+        if best is None or best[0] > 12:
+            continue
+        sat, _xyz, az, el = best[1]
+        hov["prn"] = sat.sid
+        hov["az"] = az
+        hov["el"] = el
+
+
+def _fill_saved_elevation(sats, hovers, start, h_agl, mask):
+    """A saved track name has no elevation. Look it up at arrival when the satellite is up."""
+    for hov in hovers:
+        if not hov.get("prn") or hov.get("el") is not None:
+            continue
+        when = start + timedelta(seconds=float(hov.get("arrive_s") or 0))
+        visible = _visible(sats, when, hov["lat"], hov["lon"], WATER_H + h_agl, mask)
+        chosen = next((row for row in visible if row[0].sid == hov["prn"]), None)
+        if chosen is None:
+            continue
+        _sat, _xyz, az, el = chosen
+        if hov.get("az") is None:
+            hov["az"] = az
+        hov["el"] = el
+
+
 def plan(
     sats,
     lake: dict,
@@ -574,6 +650,9 @@ def plan(
     roi_mode: str = "per_point",
     antenna_offset_deg: float = 0.0,
     coverage_pct: float = 100.0,
+    pad_hold_s: float | None = None,
+    survey_pattern: str = "fill",
+    edge: dict | None = None,
 ) -> dict:
     if survey_style not in ("continuous", "hover") or roi_mode not in ("none", "per_point", "body_yaw"):
         raise ValueError("Invalid survey or pointing mode.")
@@ -599,7 +678,49 @@ def plan(
 
     survey_info = None
     survey_line = None
-    if mode in ("click", "manual"):
+    if mode == "file":
+        hovers = []
+        for i, w in enumerate(waypoints or []):
+            lat = float(w["lat"])
+            lon = float(w["lon"])
+            hov = {
+                "lat": lat,
+                "lon": lon,
+                "name": w.get("name") or f"WP{i+1}",
+                "prn": None,
+                "el": None,
+                "az": None,
+                "t_in_window": 0,
+                "drone_on_water": point_in_polygon(lon, lat, lake),
+                "score": 0,
+                "fallback": False,
+                "loiter_s": float(w["loiter_s"]) if w.get("loiter_s") is not None else loiter_s,
+            }
+            if w.get("splash_lat") is not None and w.get("splash_lon") is not None:
+                hov["splash_lat"] = float(w["splash_lat"])
+                hov["splash_lon"] = float(w["splash_lon"])
+            if w.get("yaw_deg") is not None:
+                yaw = float(w["yaw_deg"])
+                if not math.isfinite(yaw):
+                    raise ValueError("Invalid antenna heading in the waypoint file.")
+                hov["yaw_deg"] = yaw % 360.0
+            if w.get("prn"):
+                hov["prn"] = str(w["prn"])
+            hovers.append(hov)
+        if not hovers:
+            raise ValueError("That waypoint file has no fly-to points.")
+        target_list = []
+        for i, tgt in enumerate(targets or []):
+            ring = [list(p) for p in (tgt.get("coordinates") or [])]
+            if len(ring) < 3:
+                continue
+            if ring[0] != ring[-1]:
+                ring.append(list(ring[0]))
+            target_list.append({"name": tgt.get("name") or f"area {i + 1}", "coordinates": ring})
+        segs, total_s = _timeline(
+            pad, hovers, h_agl, speed_mps, loiter_s, min_leg_s=0.8, pad_hold_s=pad_hold_s or 0
+        )
+    elif mode in ("click", "manual"):
         hovers = []
         for i, w in enumerate(waypoints or []):
             lat = float(w["lat"])
@@ -637,19 +758,58 @@ def plan(
                 raise ValueError("Start and end need to be on the same river.")
             line, _stretch_m = clip_centerline(line, click_lon, click_lat, click_lon2, click_lat2)
         survey_line = line
-        hovers, survey_info = build_survey(
-            poly,
-            h_agl=h_agl,
-            az=0.0,
-            el=0.0,
-            prn=None,
-            loiter_s=survey_loiter,
-            spacing_m=tile_m,
-            max_wp=max(20, min(int(max_wp), 400)),
-            centerline=line,
-            sweep_bearing=sweep_bearing, survey_style=survey_style, max_leg_m=max_leg_m,
-            coverage_pct=coverage_pct,
-        )
+        if survey_pattern == "edge":
+            if line is not None:
+                raise ValueError("Shoreline edge works on lakes and ponds. Use Fill for rivers.")
+            e = edge or {}
+            picks = e.get("picks") or []
+            a = (float(picks[0]["lat"]), float(picks[0]["lon"])) if len(picks) >= 2 else None
+            b = (float(picks[1]["lat"]), float(picks[1]["lon"])) if len(picks) >= 2 else None
+            _az0, el0, _sid0 = _peek_sat(sats, start, click_lat, click_lon, h_agl, elev_mask, target_el)
+            if e.get("style") == "across":
+                hovers, survey_info = build_edge_cross_survey(
+                    poly,
+                    h_agl=h_agl,
+                    el=el0,
+                    loiter_s=survey_loiter,
+                    pass_m=float(e.get("pass_m") or 25),
+                    land_m=float(e.get("land_m") or 40),
+                    water_m=float(e.get("water_m") or 40),
+                    a=a,
+                    b=b,
+                    long_way=bool(e.get("long_way")),
+                    survey_style=survey_style,
+                    max_wp=max(20, min(int(max_wp), 400)),
+                )
+            else:
+                hovers, survey_info = build_edge_survey(
+                    poly,
+                    h_agl=h_agl,
+                    el=el0,
+                    loiter_s=survey_loiter,
+                    lanes=int(e.get("lanes") or 2),
+                    lane_m=float(e.get("lane_m") or 15),
+                    a=a,
+                    b=b,
+                    long_way=bool(e.get("long_way")),
+                    survey_style=survey_style,
+                    max_wp=max(20, min(int(max_wp), 400)),
+                    max_leg_m=max_leg_m,
+                )
+        else:
+            hovers, survey_info = build_survey(
+                poly,
+                h_agl=h_agl,
+                az=0.0,
+                el=0.0,
+                prn=None,
+                loiter_s=survey_loiter,
+                spacing_m=tile_m,
+                max_wp=max(20, min(int(max_wp), 400)),
+                centerline=line,
+                sweep_bearing=sweep_bearing, survey_style=survey_style, max_leg_m=max_leg_m,
+                coverage_pct=coverage_pct,
+            )
         if not hovers:
             raise ValueError("No water cells on that feature at this spacing.")
         sids = _offset_survey_hovers(
@@ -687,6 +847,10 @@ def plan(
         wname = ((feat or {}).get("properties") or {}).get("name") or "waterbody"
         _attach_survey_aim(survey_info, hovers, wname)
         target_list = [{"name": wname, "coordinates": [list(p) for p in use.exterior.coords]}]
+        if survey_pattern == "edge":
+            # Score each cross-shore strip, not the whole lake.
+            target_list = survey_info.pop("strips")
+            survey_info["name"] = f"{wname} shoreline"
         segs, total_s = _timeline(pad, hovers, h_agl, speed_mps, survey_loiter, min_leg_s=0.8)
         loiter_s = survey_loiter
     else:
@@ -758,6 +922,8 @@ def plan(
 
     for i, hov in enumerate(hovers):
         if roi_mode == "body_yaw":
+            if hov.get("yaw_deg") is not None:
+                continue
             if hov.get("az") is None:
                 raise ValueError("Cannot command antenna heading: a survey waypoint has no visible tracking satellite.")
             # Aim at the satellite/reflection azimuth near the middle of the inbound leg.
@@ -769,6 +935,12 @@ def plan(
             visible = _visible(sats, start + timedelta(seconds=mid_t), lat, lon, WATER_H+h_agl, elev_mask)
             chosen = next((s for s in visible if s[0].sid == hov["prn"]), None)
             hov["yaw_deg"] = ((chosen[2] if chosen else hov["az"]) - antenna_offset_deg) % 360
+
+    if mode == "file":
+        _match_saved_headings(sats, hovers, start, h_agl, elev_mask, antenna_offset_deg)
+        _fill_saved_elevation(sats, hovers, start, h_agl, elev_mask)
+        if any(h.get("prn") for h in hovers):
+            survey_info = _attach_survey_aim(survey_info or {}, hovers, "Loaded mission")
 
     transit_m = 0.0
     prev = pad
@@ -832,7 +1004,7 @@ def plan(
                         in_targets.append(tgt["name"])
                         if measuring:
                             target_hits[tgt["name"]] += 1
-                if on_water and measuring:
+                if on_water and (measuring or mode == "file"):
                     best_prns[sat.sid] = max(best_prns.get(sat.sid, 0), el)
                 aimed = bool(aim_sid) and sat.sid == aim_sid
                 specs.append(

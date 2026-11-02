@@ -74,6 +74,8 @@ def flight_api(service, name="flight", prefix="/api/flight"):
     @bp.post("/<action>")
     def action(action):
         data = request.get_json() or {}
-        return jsonify(service.submit(action, data.get("plan_id"), data.get("confirmation"))), 202
+        return jsonify(service.submit(
+            action, data.get("plan_id"), data.get("confirmation"), data.get("wait_until_start", True),
+        )), 202
 
     return bp

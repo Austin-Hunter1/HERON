@@ -345,10 +345,39 @@ button.mode.on span { color: #4d7772; }
 .selection-count { margin-right: auto; color: #4f6262; font-size: 10px; font-weight: 650; }
 body.click-wps .leaflet-container { cursor: crosshair; }
 
+.mission-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.file-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 14px;
+  color: var(--teal-dark);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.file-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+.file-btn:hover { color: var(--teal-dark); background: var(--teal-soft); border-color: rgba(11, 112, 104, 0.45); }
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 #go {
   width: 100%;
   min-height: 48px;
-  margin-top: 4px;
+  margin-top: 0;
   padding: 11px 16px;
   display: flex;
   align-items: center;
@@ -639,7 +668,8 @@ body.survey .leaflet-container { cursor: pointer; }
 .wp-label { box-shadow: 0 2px 8px rgba(9, 35, 37, 0.18); }
 .seg-lab { padding: 3px 6px; color: #fff; background: var(--coral); border: 0; border-radius: 5px; font: 700 9px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .prn-lab { padding: 2px 5px; color: #dff8f3; background: var(--forest); border: 1px solid #71cbbb; border-radius: 5px; font: 700 9px/1.1 var(--mono); white-space: nowrap; }
-.prn-lab.hit { color: #fff; background: var(--coral); border-color: #f4a17f; }
+.prn-lab.hit { color: #3a2a00; background: #ffe66a; border-color: #f0d56a; }
+.prn-lab.aim { color: #2a1c00; background: #ffb000; border-color: #ffe08a; }
 .spec-tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px 3px 5px; color: #fff; background: rgba(13, 30, 32, 0.86); border-left: 3px solid var(--c); border-radius: 5px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); font: 600 10px/1.2 var(--mono); white-space: nowrap; pointer-events: none; }
 .spec-tag b { color: var(--c); font-weight: 800; }
 .spec-tag span { opacity: 0.85; }
@@ -698,6 +728,10 @@ body.sidebar-collapsed #fileSheet { left: 22px; }
 .sat-mark.low { opacity: 0.56; }
 .sat-mark.used span { color: #ffe1bc; border-color: #f39a70; }
 .sat-mark.used .sat-svg { color: #f3a47f; }
+.sat-mark.water span { color: #3a2a00; background: #ffe66a; border-color: #f0d56a; }
+.sat-mark.water .sat-svg { color: #ffe66a; }
+.sat-mark.aim span { color: #2a1c00; background: #ffb000; border-color: #ffe08a; }
+.sat-mark.aim .sat-svg { color: #ffb000; }
 .sat-mark.live span { color: #fff; background: var(--coral); border-color: #ffd5c2; }
 .sat-mark.live .sat-svg { color: #ffb38f; }
 .sat-tip { color: #eaf5f2 !important; background: rgba(18, 59, 60, 0.96) !important; border: 1px solid rgba(255, 255, 255, 0.18) !important; border-radius: 7px !important; font: 10px/1.4 var(--mono); }

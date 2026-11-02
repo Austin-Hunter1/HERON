@@ -83,7 +83,8 @@ python app.py
 5. Click **Launch mission**, review the mission, then **Confirm launch**.
 6. Watch the live marker and mission item advance. Try **Return home**.
 
-The demo uses accelerated flight and dwell times. It is an interface simulator,
+The demo flies at the mission's DO_CHANGE_SPEED, climbs and descends at
+ArduCopter's default rates, and holds each waypoint for its full delay. It is an interface simulator,
 not ArduPilot SITL and not a flight-dynamics or radio-link test. No hardware is
 opened in demo mode.
 
@@ -94,7 +95,18 @@ opened in demo mode.
 | Flight-controller USB | USB / ELRS serial, detected port, usually 115200 baud | Bench development; remove propellers for command testing. |
 | External ELRS module USB | USB / ELRS serial, detected port, 460800 baud | Requires compatible hardware and native ELRS MAVLink configuration. |
 | ELRS TX Backpack Wi-Fi | ELRS Wi-Fi / UDP, listen 0.0.0.0:14550 | Join the Backpack network on this computer first. |
-| ArduPilot Copter SITL | SITL / TCP, 127.0.0.1:5760 | Start SITL separately. Set its Home to your planned field or rebuild at SITL Home. |
+| ArduPilot Copter SITL | SITL / TCP, 127.0.0.1:5760 | Start with `scripts/sitl.py` (below). |
+
+For a flight-accurate test, run real ArduCopter firmware (SITL), the same thing
+Mission Planner's simulator runs. Build it once (see the top of
+`scripts/sitl.py`), then:
+
+    .venv/bin/python scripts/sitl.py --params ~/Downloads/AURELIADRONE.param --mission output/HERON_....waypoints
+
+It flies a hexa X from the mission's pad with the aircraft's mission, speed, yaw,
+RTL, land and failsafe settings copied from the parameter file. Attitude, rate,
+motor and battery-voltage settings stay at SITL's 3S hexa: the Aurelia X6 is a
+heavy 6S airframe, and those numbers make the simulator overpowered and twitchy.
 
 Choose the actual aircraft system ID (default 1). The service uses ground-station
 system 255 / component 190 and accepts the selected autopilot component 1 only.
@@ -117,17 +129,23 @@ ArduPilot's downloaded Home row is synthesized from actual Home and is checked
 separately. Uploading a WPL Home row **does not set the real RTL origin**.
 
 Launch repeats the download comparison, rereads safety parameters and Home, checks
-readiness, selects GUIDED, arms with normal pre-arm checks, resets the current
-mission item to TAKEOFF, selects AUTO, sends MISSION_START, and waits for airborne
-telemetry. Acknowledgment alone is not treated as completed takeoff. Duplicate
+readiness, selects GUIDED, arms with normal pre-arm checks, confirms Home moved to
+the aircraft, resets the current mission item to TAKEOFF, selects AUTO, sends
+MISSION_START, and waits for airborne telemetry (Copter reports TAKEOFF for the
+whole climb). Acknowledgment alone is not treated as completed takeoff. Duplicate
 operations are blocked. Return home cancels pending launch steps and requests RTL;
 its success message means RTL mode was confirmed, not that landing finished.
 
 Launch requires current heartbeat, position, GPS, estimator, sensor, landed-state
 and battery data; at least 30% reported battery; all pre-arm checks enabled;
 configured battery/RC/GCS failsafe actions; enabled altitude and circular fences;
-and an actual Home within 30 m of both the aircraft and planned pad. The route must
-fit inside the circle and altitude limits with at least 5 m margin. This first
+and a GPS Home. The aircraft can be any distance from the planned pad: ArduPilot
+resets Home to the aircraft when it arms and TAKEOFF climbs in place, so the pad
+only sets the first leg. Safety parameters the aircraft never reports by name are
+fetched from its full parameter list; any still missing fail only the checks that
+use them. If Home is still more than 30 m away after arming (a locked Home), launch
+disarms and stops before AUTO. The route must fit inside the circle, measured from
+the aircraft, and the altitude limits with at least 5 m margin. This first
 version requires a circular fence; additional polygon/exclusion
 fences, terrain, obstacles, airspace and battery endurance are not validated by
 the planner. Aircraft checks and failsafes still apply.

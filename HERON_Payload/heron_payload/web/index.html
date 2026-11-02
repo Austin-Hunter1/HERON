@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HERON Payload Setup</title>
+  <link rel="icon" href="/static/heron-logo.avif" />
+  <link rel="stylesheet" href="/static/setup.css?v=4" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img class="mark" src="/static/heron-logo.avif" alt="Project HERON" width="40" height="40" />
+      <div><b>HERON payload</b><span id="host">connecting…</span></div>
+    </div>
+    <div class="vitals" aria-live="polite">
+      <div class="vital"><span>Payload</span><b id="vState">—</b></div>
+      <div class="vital"><span>Running setup</span><b id="vSetup">—</b></div>
+      <div class="vital"><span>Flight controller</span><b id="vCube">—</b></div>
+      <div class="vital"><span>Data disk</span><b id="vDisk">—</b></div>
+    </div>
+  </header>
+
+  <div id="lockBanner" class="banner hidden" role="status"></div>
+
+  <main class="layout">
+    <section class="editor" aria-labelledby="setupHeading">
+      <div class="setup-bar">
+        <h1 id="setupHeading" class="visually-hidden">Setup</h1>
+        <label class="setup-pick"><span>Setup</span>
+          <select id="setupSelect"></select>
+        </label>
+        <input id="setupName" class="setup-name" maxlength="60" aria-label="Setup name" />
+        <div class="setup-actions">
+          <button id="saveSetup" type="button" class="btn">Save</button>
+          <button id="deleteSetup" type="button" class="btn quiet">Delete</button>
+        </div>
+      </div>
+
+      <div id="radios"></div>
+      <div class="radio-add">
+        <button id="addB210" type="button" class="btn quiet">Add B210</button>
+        <button id="addB200" type="button" class="btn quiet">Add B200</button>
+        <button id="findRadios" type="button" class="btn quiet">Find radios on USB</button>
+        <span id="foundNote" class="note"></span>
+      </div>
+
+      <section class="panel-group" aria-labelledby="recHeading">
+        <h2 id="recHeading">Recording</h2>
+        <div class="fields">
+          <label><span>Sample format</span>
+            <select data-k="file_format"><option value="sc8">8-bit (half the disk)</option><option value="sc16">16-bit</option></select></label>
+          <label data-show="sc8"><span>8-bit full scale</span>
+            <select data-k="sc8_peak"><option value="0.125">1/8 of 16-bit range</option><option value="0.25">1/4 of 16-bit range (SURGE)</option><option value="0.5">1/2 of 16-bit range</option><option value="1">Full 16-bit range</option></select></label>
+          <label><span>Reference clock</span>
+            <select data-k="clock"><option value="internal">Internal (one radio)</option><option value="external">External 10 MHz + PPS</option></select></label>
+          <label><span>File length</span><span class="unit"><input data-k="storage.segment_seconds" type="number" min="1" max="3600" /><i>s</i></span></label>
+          <label><span>Keep free on disk</span><span class="unit"><input data-k="storage.reserve_gb" type="number" min="1" max="10000" /><i>GB</i></span></label>
+          <label class="wide"><span>Save recordings in</span><input data-k="storage.path" spellcheck="false" /></label>
+        </div>
+      </section>
+
+      <section class="panel-group" aria-labelledby="flightHeading">
+        <h2 id="flightHeading">In flight</h2>
+        <div class="toggles">
+          <label class="tog"><input type="checkbox" data-k="behavior.stop_on_exit_auto" /><span>Stop an auto-recording when the drone leaves AUTO</span></label>
+          <label class="tog"><input type="checkbox" data-k="behavior.stop_on_disarm" /><span>Stop recording when the drone disarms</span></label>
+          <label class="tog"><input type="checkbox" data-k="behavior.fallback" /><span>Start recording on its own if no ground station answers within
+            <input data-k="behavior.grace_seconds" type="number" min="10" max="3600" class="inline-num" /> s of boot</span></label>
+          <label class="tog sel"><span>If the flight controller link drops</span>
+            <select data-k="behavior.cube_loss"><option value="continue">keep recording</option><option value="stop">stop recording</option></select></label>
+        </div>
+      </section>
+    </section>
+
+    <aside class="side">
+      <section class="load" aria-labelledby="loadHeading">
+        <h2 id="loadHeading" class="visually-hidden">Load onto payload</h2>
+        <dl class="budget">
+          <div><dt>Written to disk</dt><dd><b id="bDisk">—</b> MB/s</dd></div>
+          <div><dt>Per minute</dt><dd><b id="bMin">—</b> GB</dd></div>
+          <div><dt>Fits on this disk</dt><dd><b id="bFits">—</b></dd></div>
+          <div><dt>Over USB</dt><dd><b id="bUsb">—</b> MB/s</dd></div>
+        </dl>
+        <p id="budgetWarn" class="warn hidden"></p>
+        <button id="applySetup" type="button" class="btn primary big">Load onto payload</button>
+        <p id="applyNote" class="note"></p>
+      </section>
+
+      <section class="check" aria-labelledby="checkHeading">
+        <div class="check-head">
+          <h2 id="checkHeading">Signal check</h2>
+          <div class="check-run">
+            <select id="testSeconds" aria-label="Test length"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
+            <button id="runTest" type="button" class="btn">Record test</button>
+          </div>
+        </div>
+        <p class="note">Records a short clip with the loaded setup and shows how the 8-bit samples fill the range. Aim for a wide bell with nothing piled at the edges.</p>
+        <div id="testResult"></div>
+      </section>
+
+      <section class="sessions" aria-labelledby="sessHeading">
+        <h2 id="sessHeading">Recent recordings</h2>
+        <ol id="sessionList"></ol>
+      </section>
+
+      <section class="sessions" aria-labelledby="logHeading">
+        <h2 id="logHeading">Payload messages</h2>
+        <ol id="eventList"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <template id="radioTpl">
+    <article class="radio">
+      <header class="radio-head">
+        <label class="switch" title="Use this radio"><input type="checkbox" data-r="enabled" /><i></i></label>
+        <input class="radio-name" data-r="name" maxlength="60" aria-label="Radio name" />
+        <select class="model" data-r="model" aria-label="Model"><option value="b210">B210 (2 channels)</option><option value="b200">B200 (1 channel)</option></select>
+        <label class="serial"><span>Serial</span><input data-r="serial" list="serials" spellcheck="false" placeholder="find or type" /></label>
+        <button type="button" class="icon-btn remove" aria-label="Remove radio" title="Remove radio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="tune">
+        <div class="bands" role="group" aria-label="GNSS band"></div>
+        <label class="freq"><span>Centre</span><span class="unit"><input data-r="frequency_mhz" type="number" step="0.01" /><i>MHz</i></span></label>
+        <label><span>Sample rate</span><span class="unit"><input data-r="sample_rate_msps" type="number" step="0.01" /><i>MS/s</i></span></label>
+        <label><span>Filter</span><span class="unit"><input data-r="bandwidth_mhz" type="number" step="0.001" /><i>MHz</i></span></label>
+      </div>
+      <div class="chans"></div>
+    </article>
+  </template>
+
+  <template id="chanTpl">
+    <div class="chan">
+      <label class="switch small"><input type="checkbox" data-c="enabled" /><i></i></label>
+      <span class="port-name"></span>
+      <input class="chan-label" data-c="label" maxlength="60" aria-label="Antenna" />
+      <select data-c="port" aria-label="SMA input"><option value="RX2">RX2</option><option value="TX/RX">TX/RX</option></select>
+      <div class="gain">
+        <input type="range" min="0" max="76" step="1" data-c="gain_db" aria-label="Gain" />
+        <span class="unit"><input type="number" min="0" max="76" step="0.5" data-c="gain_db" aria-label="Gain dB" /><i>dB</i></span>
+      </div>
+    </div>
+  </template>
+  <datalist id="serials"></datalist>
+
+  <script src="/static/setup.js?v=5"></script>
+</body>
+</html>

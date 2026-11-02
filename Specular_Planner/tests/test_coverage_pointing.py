@@ -40,11 +40,14 @@ class CoveragePointingTests(unittest.TestCase):
               'hovers':[dict(lat=40.001,lon=-105,loiter_s=0,yaw_deg=55),
                         dict(lat=40.002,lon=-105,loiter_s=0,yaw_deg=56)]}
         items=flight_items(qgc_wpl(plan))
-        for i,item in enumerate(items):
-            if item['command']==115:
-                self.assertEqual(items[i-1]['command'],16)
-                self.assertEqual(item['p4'],0)
-        self.assertEqual(sum(i['command']==115 for i in items),2)
+        yaws=[i for i,item in enumerate(items) if item['command']==115]
+        self.assertEqual(len(yaws),3)
+        for i in yaws[:-1]:
+            self.assertEqual(items[i+1]['command'],16)
+            self.assertEqual(items[i]['p4'],0)
+        rtl=next(i for i,item in enumerate(items) if item['command']==20)
+        self.assertEqual(rtl, yaws[-1]+1)
+        self.assertAlmostEqual(items[yaws[-1]]['p1'], 180, places=0)
         rois=[i for i in items if i['command']==201]
         self.assertEqual(len(rois),1)
         self.assertEqual((rois[0]['lat'],rois[0]['lon']),(0,0))
@@ -57,7 +60,7 @@ class CoveragePointingTests(unittest.TestCase):
         plan={'meta':{'h_agl':120,'roi_mode':'per_point'},'pad':{'lat':40,'lon':-105},
               'hovers':[dict(lat=40.001,lon=-105,loiter_s=0,splash_lat=40.002,splash_lon=-105)]}
         items=parse_wpl(qgc_wpl(plan))
-        roi=next(i for i,x in enumerate(items) if x['command']==201)
-        self.assertEqual(items[roi-1]['command'],16)
+        roi=next(i for i,x in enumerate(items) if x['command']==201 and (x['lat'] or x['lon']))
+        self.assertEqual(items[roi+1]['command'],16)
 
 if __name__=='__main__':unittest.main()
