@@ -57,16 +57,40 @@ check_interval_s = 2
 recorder_binary = "/usr/local/bin/heron_recorder"
 segment_seconds = 30
 cpu_format = "sc8"        # File format (D-009).
-wire_format = "sc16"      # USB format. sc16 avoids FPGA quantisation; sc8 halves USB load.
-wire_peak = 0.25          # Used only with wire_format = "sc8".
+# Sample path and write method of the collect wizard (D-078).
+wire_format = "sc8"       # USB format. sc8 = the wizard method; sc16 doubles USB load.
+wire_peak = 1.0           # UHD sc8 scale (wizard value). Used only with wire_format = "sc8".
+int_n = true              # Integer-N LO tuning (wizard --int-n).
+write_mode = "direct"     # direct = recv then write in one loop (wizard); threaded = writer thread.
+spb = 10000               # Samples per recv() call (wizard --spb). Tune with buffer-test.
+file_buffer_bytes = 0     # stdio buffer per file; 0 = C library default (wizard).
+fsync_segments = true     # fsync each closed segment (O16). Blocks the loop in direct mode.
 sync_lead_s = 6           # Seconds from launch to the common PPS sync epoch.
 start_lead_s = 3          # Seconds from the sync epoch to the first sample.
-buffer_seconds = 4
+buffer_seconds = 4        # Chunk pool length, threaded write mode only.
 status_interval_s = 1
 lock_timeout_s = 10
 ready_timeout_s = 60
 stop_timeout_s = 15
 file_extension = "sc8"
+
+# NUC buffer-size test: `heron-onboard buffer-test --config FILE`.
+# It records `duration_s` with every combination of the lists below on
+# one SDR, then writes a CSV of overflows, drops and write rate.
+# An empty device-args list keeps the SDR's own device_args value.
+[buffer_test]
+sdr_id = "b210_1"
+duration_s = 30
+settle_s = 5
+outdir = "/media/DataStore/iq/buffer_test"
+results_csv = "/media/DataStore/iq/buffer_test/results.csv"
+keep_files = false
+# 2 x 3 x 3 x 2 x 2 = 72 trials, about 45 min. `--dry-run` lists them.
+write_modes = ["direct", "threaded"]
+spb = [2000, 10000, 50000]
+num_recv_frames = [32, 256, 1024]
+recv_frame_size = [8000, 16000]
+file_buffer_bytes = [0, 4194304]
 
 [health]
 temp_labels = ["coretemp", "nvme", "acpitz"]
@@ -77,6 +101,9 @@ L1 = 1575.42e6
 L5 = 1176.45e6
 
 # ---- SDR units (D-008, D-020, D-024). Signal plan is placeholder (Q-001). ----
+# bandwidth_hz is the operator's value for each channel (D-078). The
+# collect wizard offers: L5 and L1 = 15 MHz at 15 Msps, L1CA = 5 MHz at
+# 5 Msps. Keep bandwidth_hz <= sample_rate_hz.
 # clock_source: 10 MHz reference input. All four units take the GPSDO 10 MHz.
 # time_source:  PPS input. The B210 and the B200 both have separate REF and PPS
 #               inputs, and all four take the GPSDO PPS: "external" (D-024).
@@ -97,7 +124,7 @@ time_source = "external"
   band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
-  bandwidth_hz = 20.322e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A1 up RHCP"
 
@@ -107,7 +134,7 @@ time_source = "external"
   band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
-  bandwidth_hz = 20.322e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A2 down LHCP"
 
@@ -126,7 +153,7 @@ time_source = "external"
   band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
-  bandwidth_hz = 20e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A1 up RHCP"
 
@@ -136,7 +163,7 @@ time_source = "external"
   band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
-  bandwidth_hz = 20e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A2 down LHCP"
 
@@ -155,7 +182,7 @@ time_source = "external"
   band = "L5"
   center_freq_hz = 1176.45e6
   gain_db = 45
-  bandwidth_hz = 20.322e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A3 down RHCP"
 
@@ -174,6 +201,6 @@ time_source = "external"
   band = "L1"
   center_freq_hz = 1575.42e6
   gain_db = 45
-  bandwidth_hz = 20e6
+  bandwidth_hz = 15e6
   antenna = "RX2"
   antenna_label = "A3 down RHCP"

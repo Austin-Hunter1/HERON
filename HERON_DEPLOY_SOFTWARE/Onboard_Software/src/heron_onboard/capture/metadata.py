@@ -66,6 +66,11 @@ def build_metadata(
         "format": {
             "cpu_format": config.capture.cpu_format,
             "wire_format": config.capture.wire_format,
+            # The sc8 scale and the write path change the data, so each flight records them.
+            "wire_peak": config.capture.wire_peak,
+            "write_mode": config.capture.write_mode,
+            "spb": config.capture.spb,
+            "int_n": config.capture.int_n,
             "bytes_per_sample": 2 if config.capture.cpu_format == "sc8" else 4,
             "sample_layout": "interleaved I,Q per sample, little-endian, one file per channel",
             "segment_seconds": config.capture.segment_seconds,

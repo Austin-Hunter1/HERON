@@ -155,26 +155,91 @@ class SdrConfig(BaseModel):
         return self.sample_rate_hz * 2 * len(self.channels)
 
 
+WriteMode = Literal["direct", "threaded"]
+
+
+def _both_write_modes() -> list[WriteMode]:
+    """Default for the buffer test: compare both write modes."""
+    return ["direct", "threaded"]
+
+
 class CaptureConfig(BaseModel):
-    """Recorder process settings shared by all SDRs (O2, O3, O16)."""
+    """Recorder process settings shared by all SDRs (O2, O3, O16).
+
+    The defaults follow the collect wizard's recording method (D-078):
+    sc8 on the USB wire with ``wire_peak`` 1.0, integer-N tuning, and
+    the ``direct`` write mode (receive one buffer of ``spb`` samples,
+    write it, receive the next). ``threaded`` keeps the older receive
+    thread plus writer thread, so the NUC buffer test can compare both.
+    """
 
     recorder_binary: Path = Path("/usr/local/bin/heron_recorder")
     segment_seconds: float = Field(default=30.0, gt=0)
     cpu_format: Literal["sc8", "sc16"] = "sc8"
-    wire_format: Literal["sc8", "sc16"] = "sc16"
-    wire_peak: float = Field(default=0.25, gt=0, le=1, description="Only for sc8 wire format")
+    wire_format: Literal["sc8", "sc16"] = "sc8"
+    wire_peak: float = Field(default=1.0, gt=0, le=1, description="Only for sc8 wire format")
+    write_mode: WriteMode = Field(
+        default="direct", description="direct = collect wizard method; threaded = writer thread"
+    )
+    spb: int = Field(default=10000, ge=64, le=10_000_000, description="Samples per recv() call")
+    file_buffer_bytes: int = Field(
+        default=0, ge=0, le=1 << 30, description="stdio buffer per file; 0 = C library default"
+    )
+    int_n: bool = Field(default=True, description="Integer-N LO tuning (mode_n=integer)")
+    fsync_segments: bool = Field(
+        default=True, description="fsync each closed segment (O16); blocks receive in direct mode"
+    )
     sync_lead_s: float = Field(
         default=6.0, ge=3, description="Seconds from launch to the common PPS sync epoch"
     )
     start_lead_s: float = Field(
         default=3.0, ge=2, description="Seconds from the sync epoch to the first sample"
     )
-    buffer_seconds: float = Field(default=4.0, gt=0, description="Host ring buffer per recorder")
+    buffer_seconds: float = Field(
+        default=4.0, gt=0, description="Chunk pool per recorder (threaded write mode only)"
+    )
     status_interval_s: float = Field(default=1.0, gt=0)
     lock_timeout_s: float = Field(default=10.0, gt=0, description="Wait for ref/LO lock")
     ready_timeout_s: float = Field(default=60.0, gt=0, description="Recorder must report ready")
     stop_timeout_s: float = Field(default=15.0, gt=0, description="Recorder must exit after stop")
     file_extension: str = Field(default="sc8", pattern=r"^[A-Za-z0-9]+$")
+
+
+class BufferTestConfig(BaseModel):
+    """The NUC buffer-size test (``heron-onboard buffer-test``).
+
+    The test records ``duration_s`` on one SDR for every combination of
+    the lists below and writes one CSV row per trial. Use it on the NUC
+    to find the buffer settings that give no overflows and no drops.
+    An empty ``num_recv_frames`` or ``recv_frame_size`` list keeps the
+    value in the SDR's own ``device_args``.
+    """
+
+    sdr_id: str = Field(default="", description="SDR to test; empty = the first [[sdr]]")
+    duration_s: float = Field(default=30.0, gt=0, description="Streaming time per trial")
+    settle_s: float = Field(default=5.0, ge=0, description="Pause between trials (disk flush)")
+    outdir: Path = Path("/media/DataStore/iq/buffer_test")
+    results_csv: Path = Path("/media/DataStore/iq/buffer_test/results.csv")
+    keep_files: bool = Field(default=False, description="Keep the IQ files of each trial")
+    write_modes: list[WriteMode] = Field(default_factory=_both_write_modes, min_length=1)
+    spb: list[int] = Field(default_factory=lambda: [2000, 10000, 50000], min_length=1)
+    num_recv_frames: list[int] = Field(default_factory=list)
+    recv_frame_size: list[int] = Field(default_factory=list)
+    file_buffer_bytes: list[int] = Field(default_factory=lambda: [0], min_length=1)
+
+    @field_validator("spb", "num_recv_frames", "recv_frame_size", "file_buffer_bytes")
+    @classmethod
+    def _non_negative(cls, values: list[int]) -> list[int]:
+        if any(v < 0 for v in values):
+            raise ValueError("values must be >= 0")
+        return values
+
+    @field_validator("spb")
+    @classmethod
+    def _spb_min(cls, values: list[int]) -> list[int]:
+        if any(v < 64 for v in values):
+            raise ValueError("spb values must be >= 64")
+        return values
 
 
 class HealthConfig(BaseModel):
@@ -196,6 +261,7 @@ class OnboardConfig(BaseModel):
     disk: DiskConfig = Field(default_factory=DiskConfig)
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
+    buffer_test: BufferTestConfig = Field(default_factory=BufferTestConfig)
     bands: dict[str, float] = Field(
         default_factory=dict,
         description="GNSS band name -> carrier centre frequency in Hz, e.g. L5 = 1176.45e6",
@@ -210,6 +276,8 @@ class OnboardConfig(BaseModel):
             raise ValueError("sdr ids must be unique")
         if len(set(serials)) != len(serials):
             raise ValueError("sdr serial numbers must be unique")
+        if self.buffer_test.sdr_id and self.buffer_test.sdr_id not in ids:
+            raise ValueError(f"buffer_test.sdr_id {self.buffer_test.sdr_id!r} is not an [[sdr]] id")
         # A channel's band must exist in [bands]. Channels that share a
         # band must share a centre frequency, because metadata.yml keeps
         # one intermediate frequency per band (D-022).

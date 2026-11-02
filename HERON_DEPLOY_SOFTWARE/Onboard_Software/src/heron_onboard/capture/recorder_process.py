@@ -44,6 +44,8 @@ def build_recorder_command(
     file_prefix: str,
     sync_epoch: float,
     start_time: float,
+    duration_s: float = 0.0,
+    uhd_args: str | None = None,
 ) -> list[str]:
     """Build the argv for one recorder process.
 
@@ -51,11 +53,15 @@ def build_recorder_command(
     recorder aligns its device clock to the PPS edge. ``start_time`` is
     the common UNIX second of the first sample. Both are 0 when
     ``time_source`` is ``none`` (then each recorder starts on its own).
+
+    ``duration_s`` > 0 makes the recorder stop by itself after that many
+    seconds of streaming. ``uhd_args`` replaces ``sdr.uhd_args``; the
+    buffer test uses both to run short trials with other USB buffers.
     """
     argv = [
         str(binary),
         "--args",
-        sdr.uhd_args,
+        sdr.uhd_args if uhd_args is None else uhd_args,
         "--rate",
         repr(sdr.sample_rate_hz),
         "--clock-source",
@@ -74,6 +80,16 @@ def build_recorder_command(
         capture.wire_format,
         "--wire-peak",
         repr(capture.wire_peak),
+        "--write-mode",
+        capture.write_mode,
+        "--spb",
+        str(capture.spb),
+        "--file-buffer-bytes",
+        str(capture.file_buffer_bytes),
+        "--int-n",
+        "1" if capture.int_n else "0",
+        "--fsync",
+        "1" if capture.fsync_segments else "0",
         "--buffer-seconds",
         repr(capture.buffer_seconds),
         "--status-interval",
@@ -89,6 +105,8 @@ def build_recorder_command(
         "--sdr-id",
         sdr.id,
     ]
+    if duration_s > 0:
+        argv += ["--duration", repr(duration_s)]
     for ch in sdr.channels:
         spec = (
             f"index={ch.index},id={ch.id},freq={ch.center_freq_hz!r},gain={ch.gain_db!r},"

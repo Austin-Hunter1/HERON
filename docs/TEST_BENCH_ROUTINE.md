@@ -33,7 +33,11 @@ any software, config, OS, or hardware change. Run the short check
 1. Start a manual 60-second recording with the flight config:
    `uv run heron-onboard record --config Onboard_Software/config/onboard.toml --seconds 60`
    (stop the service first: `sudo systemctl stop heron-onboard`).
-2. Watch the console/log for overflow indications. Zero overflows is
+2. Before the first capture on a new NUC or SSD, run the buffer test
+   and copy the best clean settings into `[capture]` and `device_args`:
+   `heron-onboard buffer-test --config onboard.toml` (list the trials
+   first with `--dry-run`). See `Onboard_Software/recorder/README.md`.
+   Then watch the console/log for overflow indications. Zero overflows is
    the pass condition.
 3. Confirm files appear in the data path with the expected segment
    interval and sizes (rate × time).
