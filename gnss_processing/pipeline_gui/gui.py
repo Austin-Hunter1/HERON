@@ -29,7 +29,13 @@ from .pipeline import (
     outputs_root,
     run_and_report,
 )
-from .plan import RunRequest, default_track_duration_ms, parse_reference_geo
+from .plan import (
+    RunRequest,
+    default_track_duration_ms,
+    parse_p_fa_total,
+    parse_reference_geo,
+    parse_threshold_db,
+)
 
 POLL_MS = 200
 
@@ -52,6 +58,10 @@ class PipelineWindow:
         self.cfg = cfg
         self.channels: list = []
         self.signal_vars: dict[str, tk.BooleanVar] = {}
+        # Threshold fields, one pair per signal name.  Kept across channel changes,
+        # so a value typed for GpsL1CA is still there after another L1 row is clicked.
+        self.p_fa_vars: dict[str, tk.StringVar] = {}
+        self.threshold_db_vars: dict[str, tk.StringVar] = {}
         self.available = available_signals(
             [name for names in cfg.signals.values() for name in names]
         )
@@ -106,10 +116,15 @@ class PipelineWindow:
         self.notebook_vars = {nb: tk.BooleanVar(value=True) for nb in ("00", "01", "02")}
         for nb, var in self.notebook_vars.items():
             ttk.Checkbutton(row, text=nb, variable=var).pack(side="left", padx=4)
+        # Stops notebook 01 after its acquisition plots and skips notebook 02, so a
+        # threshold can be tried in about a minute (D-079).
+        self.acquisition_only_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row, text="Acquisition only (no tracking, no notebook 02)",
+                        variable=self.acquisition_only_var).pack(side="left", padx=(24, 4))
 
         row = ttk.Frame(opts)
         row.pack(fill="x", **pad)
-        ttk.Label(row, text="Signals:", width=16).pack(side="left")
+        ttk.Label(row, text="Signals:", width=16).pack(side="left", anchor="n")
         self.signals_frame = ttk.Frame(row)
         self.signals_frame.pack(side="left", fill="x")
         ttk.Label(self.signals_frame, text="(select a channel)").pack(side="left")
@@ -221,16 +236,31 @@ class PipelineWindow:
         names = self.cfg.signals.get(channel.band_id, [])
         if not names:
             ttk.Label(self.signals_frame,
-                      text=f"no signals for band {channel.band_id} in the config").pack(side="left")
-        for name in names:
+                      text=f"no signals for band {channel.band_id} in the config").grid(row=0, column=0)
+            return
+        # One row per signal: the checkbox, then the two acquisition threshold
+        # fields of notebook 01 (D-079).  Empty fields keep the notebook default.
+        frame = self.signals_frame
+        ttk.Label(frame, text="acq. p_fa total").grid(row=0, column=1, padx=4)
+        ttk.Label(frame, text="acq. threshold [dB]").grid(row=0, column=2, padx=4)
+        ttk.Label(frame, text="empty = notebook default; dB wins when both are set",
+                  foreground="gray").grid(row=0, column=3, padx=4, sticky="w")
+        for r, name in enumerate(names, start=1):
             usable = name in self.available
             var = tk.BooleanVar(value=usable and name not in self.cfg.signals_off_by_default)
             self.signal_vars[name] = var
             text = name if usable else f"{name} (not available)"
-            box = ttk.Checkbutton(self.signals_frame, text=text, variable=var)
+            box = ttk.Checkbutton(frame, text=text, variable=var)
             if not usable:
                 box.state(["disabled"])
-            box.pack(side="left", padx=4)
+            box.grid(row=r, column=0, sticky="w", padx=4)
+            p_fa = self.p_fa_vars.setdefault(name, tk.StringVar())
+            db = self.threshold_db_vars.setdefault(name, tk.StringVar())
+            for column, field_var in ((1, p_fa), (2, db)):
+                entry = ttk.Entry(frame, textvariable=field_var, width=12)
+                if not usable:
+                    entry.state(["disabled"])
+                entry.grid(row=r, column=column, padx=4, pady=1)
         try:
             default_s = default_track_duration_ms(channel.duration_s, float(self.offset_var.get() or 0)) / 1e3
             self.duration_hint.configure(text=f"empty = {default_s:,.0f} s (to the end of the collect)")
@@ -253,14 +283,29 @@ class PipelineWindow:
                 raise ValueError("the track duration must be a number of seconds.") from None
         else:
             duration_ms = default_track_duration_ms(channel.duration_s, offset_ms)
+        signals = tuple(n for n, v in self.signal_vars.items() if v.get())
+        p_fa, threshold_db = {}, {}
+        for name in signals:
+            try:
+                value = parse_p_fa_total(self.p_fa_vars[name].get())
+                if value is not None:
+                    p_fa[name] = value
+                value = parse_threshold_db(self.threshold_db_vars[name].get())
+                if value is not None:
+                    threshold_db[name] = value
+            except ValueError as exc:
+                raise ValueError(f"{name}: {exc}") from None
         return RunRequest(
             experiment_index=channel.experiment_index,
             channel_index=channel.channel_index,
-            signals=tuple(n for n, v in self.signal_vars.items() if v.get()),
+            signals=signals,
             notebooks=tuple(nb for nb, v in self.notebook_vars.items() if v.get()),
             start_offset_ms=offset_ms,
             track_duration_ms=duration_ms,
             reference_geo=parse_reference_geo(self.reference_var.get()),
+            acq_p_fa_total=p_fa,
+            acq_threshold_db=threshold_db,
+            acquisition_only=self.acquisition_only_var.get(),
         )
 
     def start_run(self) -> None:

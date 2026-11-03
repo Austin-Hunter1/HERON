@@ -52,6 +52,7 @@ class PipelineConfig:
     signals: dict[str, list[str]]
     signals_off_by_default: list[str]
     navigation_unsupported: list[str]
+    acquisition_only_stop_heading: str
     report: ReportConfig
 
 
@@ -171,6 +172,13 @@ def parse_config(data: Any) -> PipelineConfig:
         if unknown:
             raise ConfigError(f"'{key}' names {unknown}, which are not in 'signals'.")
 
+    stop_heading = _require(data, "acquisition_only_stop_heading")
+    if not isinstance(stop_heading, str) or not stop_heading.lstrip().startswith("#"):
+        raise ConfigError(
+            "'acquisition_only_stop_heading' must be a markdown heading, "
+            f"for example \"## 6. Tracking\", got {stop_heading!r}."
+        )
+
     subdir = _require(data, "reports_subdir")
     if not isinstance(subdir, str) or not subdir.strip():
         raise ConfigError(f"'reports_subdir' must be a folder name, got {subdir!r}.")
@@ -189,6 +197,7 @@ def parse_config(data: Any) -> PipelineConfig:
         signals=signals,
         signals_off_by_default=off,
         navigation_unsupported=no_nav,
+        acquisition_only_stop_heading=stop_heading,
         report=_parse_report(_require(data, "report")),
     )
 

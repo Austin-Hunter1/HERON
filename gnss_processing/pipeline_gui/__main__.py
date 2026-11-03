@@ -15,7 +15,26 @@ import sys
 from pathlib import Path
 
 from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
-from .plan import RunRequest, default_track_duration_ms, parse_reference_geo
+from .plan import (
+    RunRequest,
+    default_track_duration_ms,
+    parse_p_fa_total,
+    parse_reference_geo,
+    parse_threshold_db,
+)
+
+
+def _per_signal(items: list[str], parse, option: str) -> dict[str, float]:
+    """Read repeated `SIGNAL=VALUE` options into a dictionary."""
+    values: dict[str, float] = {}
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"{option} expects SIGNAL=VALUE, got {item!r}.")
+        signal, text = (part.strip() for part in item.split("=", 1))
+        value = parse(text)
+        if value is not None:
+            values[signal] = value
+    return values
 
 
 def _cli(args: argparse.Namespace, cfg) -> int:
@@ -54,6 +73,9 @@ def _cli(args: argparse.Namespace, cfg) -> int:
         start_offset_ms=offset_ms,
         track_duration_ms=duration_ms,
         reference_geo=parse_reference_geo(args.reference or ""),
+        acq_p_fa_total=_per_signal(args.p_fa, parse_p_fa_total, "--p-fa"),
+        acq_threshold_db=_per_signal(args.threshold_db, parse_threshold_db, "--threshold-db"),
+        acquisition_only=args.acquisition_only,
     )
     outcome = run_and_report(cfg, collects_dir, channel, request)
     for r in outcome.results:
@@ -74,6 +96,13 @@ def main() -> int:
     parser.add_argument("--start-offset-ms", type=float)
     parser.add_argument("--track-duration-s", type=float, help="Default: to the end of the collect")
     parser.add_argument("--reference", help='"lat, lon, height" for notebook 02')
+    parser.add_argument("--acquisition-only", action="store_true",
+                        help="Run notebook 01 up to its acquisition plots only; no tracking, no notebook 02")
+    parser.add_argument("--p-fa", action="append", default=[], metavar="SIGNAL=VALUE",
+                        help="Acquisition false-alarm total for one signal, e.g. GpsL1CA=1e-3. Repeatable.")
+    parser.add_argument("--threshold-db", action="append", default=[], metavar="SIGNAL=DB",
+                        help="Acquisition threshold in dB above noise, e.g. BdsB1C=8.5. "
+                             "Wins over --p-fa. Repeatable.")
     args = parser.parse_args()
 
     try:

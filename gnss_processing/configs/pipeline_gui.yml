@@ -43,6 +43,11 @@ signals_off_by_default: [GpsL1C]
 # runs notebook 01 for them and skips notebook 02.
 navigation_unsupported: [GpsL1C]
 
+# "Acquisition only" in the window runs notebook 01 up to this heading and does
+# not run notebook 02 (D-079).  The heading must be the first line of a markdown
+# cell of notebook 01, exactly.
+acquisition_only_stop_heading: "## 6. Tracking"
+
 report:
   # Page size in inches (width, height).
   page_size_in: [8.5, 11.0]
@@ -60,7 +65,7 @@ report:
   # heading of the same or higher level is copied.
   excerpts:
     "00": []
-    "01": ["## 8. Save the tracking results"]
+    "01": ["## 4. Acquisition", "## 8. Save the tracking results"]
     "02": ["## 8. Position solution", "### 9.3 Residuals with the position held"]
   # Maximum lines of text from one section.
   max_excerpt_lines: 40

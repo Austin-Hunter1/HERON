@@ -206,6 +206,8 @@ def build_command(step: Step, ctx: RunContext, out_path: Path) -> list[str]:
     for key, value in step.overrides.items():
         cmd += ["--set", f"{key}={value}"]
     cmd += ["--timeout", str(ctx.timeout_s), "--out", str(out_path)]
+    if step.stop_before:
+        cmd += ["--stop-before", step.stop_before]
     if ctx.python:
         cmd += ["--python", ctx.python]
     if ctx.kernel:

@@ -125,6 +125,14 @@ values first to read it, same as notebook 00. This is the slow notebook (it
 walks the acquisition search grid then tracks to the end of the file); give it
 a generous `--timeout` for a full-length collect.
 
+To run acquisition only (a minute, no tracking file), add
+`--stop-before "## 6. Tracking"`. To change the detection threshold of the first
+acquisition, add `--set ACQ_THRESHOLD_DB=8.5` (dB above noise) or
+`--set ACQ_P_FA_TOTAL=1e-3`; the dB value wins (D-079). Figures
+`02b_acquisition_peak_snr_all_prns.png` and
+`02c_acquisition_code_phase_slices_all_prns.png` show every PRN searched against the
+threshold.
+
 ## Notebook 02 · navigation
 
 Reads one or more tracking runs notebook 01 produced and computes a position

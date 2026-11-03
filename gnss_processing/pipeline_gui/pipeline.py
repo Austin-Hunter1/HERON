@@ -87,6 +87,17 @@ def make_report_dir(reports_root: Path, experiment_name: str, collect_id: str, b
     return folder
 
 
+def _threshold_text(request: RunRequest) -> str:
+    """The acquisition threshold of each signal, as the summary page shows it (D-079)."""
+    parts = []
+    for signal in request.signals:
+        if signal in request.acq_threshold_db:
+            parts.append(f"{signal} {request.acq_threshold_db[signal]:g} dB")
+        elif signal in request.acq_p_fa_total:
+            parts.append(f"{signal} p_fa {request.acq_p_fa_total[signal]:g}")
+    return ", ".join(parts) if parts else "notebook 01 defaults"
+
+
 def _channel_fields(channel, collects_dir: Path, request: RunRequest) -> list[tuple[str, str]]:
     """The collect and settings lines of the summary page."""
     from utils import catalog
@@ -105,6 +116,9 @@ def _channel_fields(channel, collects_dir: Path, request: RunRequest) -> list[tu
         ("duration", f"{channel.duration_s:,.1f} s ({channel.size_bytes / 1e9:.2f} GB)"),
         ("notebooks", ", ".join(request.notebooks)),
         ("signals", ", ".join(request.signals) or "-"),
+        ("acq. threshold", _threshold_text(request)),
+        ("mode", "acquisition only (no tracking, no notebook 02)"
+         if request.acquisition_only else "full"),
         ("start offset", f"{request.start_offset_ms:,.0f} ms"),
         ("track duration", f"{request.track_duration_ms / 1e3:,.0f} s"),
         ("reference position", reference),
@@ -126,7 +140,7 @@ def run_and_report(
     The report is written also when steps fail or the user stops the run: a
     report that shows the failure is more useful than no report.
     """
-    steps = build_steps(request, cfg.navigation_unsupported)
+    steps = build_steps(request, cfg.navigation_unsupported, cfg.acquisition_only_stop_heading)
     reports_root = outputs_root(cfg) / cfg.reports_subdir
     report_dir = make_report_dir(reports_root, channel.experiment_name, channel.collect_id, channel.band_id)
     log(f"Report folder: {report_dir}")

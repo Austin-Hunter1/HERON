@@ -295,6 +295,47 @@ def plot_acquisition_peak_values(
     return ax
 
 
+def plot_acquisition_peak_snr(
+    fig: Figure | SubFigure,
+    acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
+    title: str = "Acquisition peak of every PRN searched",
+) -> Axes:
+    """
+    Peak SNR of every PRN searched, as bars, with the detection threshold (D-079).
+
+    The scale is dB above the expected noise level -- the scale of the acquisition
+    table and of `plot_acquisition_code_phase_slices` -- so a bar just under the
+    dashed line is a candidate for a lower threshold, and the line's value is the
+    number to type into `ACQ_THRESHOLD_DB`.  Acquired PRNs are filled, the others
+    are grey.  For a PRN that a fine search refined, the bar is the coarse peak,
+    because detection is decided on the coarse grid.
+    """
+    ax = fig.add_subplot(1, 1, 1)
+    if not acq_results:
+        ax.set_title("No PRNs searched")
+        return ax
+    signal_ids = sorted(acq_results)
+    snr_db = np.array([acq_results[sid].peak_snr_db for sid in signal_ids])
+    detected = np.array([acq_results[sid].signal_detected for sid in signal_ids])
+    threshold_db = acq_results[signal_ids[0]].detection_threshold_db
+    x = np.arange(len(signal_ids))
+
+    ax.bar(x[detected], snr_db[detected], color="tab:green", label="acquired")
+    ax.bar(x[~detected], snr_db[~detected], color="0.65", label="below threshold")
+    ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
+               label=f"detection threshold ({threshold_db:.2f} dB)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(signal_ids, rotation=90, fontsize=7 if len(x) > 40 else 8)
+    ax.set_xlim(-0.75, len(x) - 0.25)
+    ax.set_ylim(0.0, max(float(snr_db.max()), threshold_db) * 1.1)
+    ax.set_xlabel("PRN")
+    ax.set_ylabel("Peak power [dB above noise]")
+    ax.set_title(f"{title}: {int(detected.sum())} of {len(x)} acquired")
+    ax.grid(True, axis="y")
+    place_legend(ax, fontsize=8)
+    return ax
+
+
 def plot_acquisition_doppler_slices(
     fig: Figure | SubFigure,
     acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
@@ -584,6 +625,7 @@ def plot_acquisition_code_phase_slices(
     acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
     signal_ids: Optional[Sequence[str]] = None,
     window_chips: float = 3.0,
+    title: str = "Acquisition correlation vs code delay",
 ) -> Axes:
     """
     Correlation power against code delay, one curve per signal, each taken at its
@@ -636,6 +678,11 @@ def plot_acquisition_code_phase_slices(
 
     Signals are taken from `acq_results` by default only where `signal_detected` is
     set; elsewhere the "peak" is a noise maximum whose neighbourhood means nothing.
+
+    Pass `signal_ids=sorted(acq_results)` to draw every PRN searched (D-079).  A PRN
+    below the threshold is then drawn dotted, about its own highest cell.  A real but
+    weak signal shows the same narrow triangle as an acquired one, only lower; noise
+    shows no shape.  That is the check before a threshold is lowered.
     """
     if signal_ids is None:
         signal_ids = sorted(sid for sid, r in acq_results.items() if r.signal_detected)
@@ -666,10 +713,12 @@ def plot_acquisition_code_phase_slices(
         order = np.argsort(delay_chips[keep])
         return delay_chips[keep][order], power_db[keep][order]
 
-    any_fine = False
+    # tab10 repeats after ten curves; an all-PRN plot has up to 63.
+    palette = plt.get_cmap("tab10" if len(signal_ids) <= 10 else "tab20")
+    any_fine = any_below = False
     for index, signal_id in enumerate(signal_ids):
         result = acq_results[signal_id]
-        colour = f"C{index}"
+        colour = palette(index % palette.N)
         fine = result.fine_correlation_result
 
         # Both curves are referenced to the FINE peak, so the coarse curve's own
@@ -704,9 +753,15 @@ def plot_acquisition_code_phase_slices(
             )
 
         x, y = _slice(result, result.correlation_result, coarse_row, reference_seconds)
-        # Faded, same colour and marker: the eye should read the pair as one signal
-        # measured two ways, not as two signals.
-        ax.plot(x, y, ".-", color=colour, alpha=0.35, markersize=6, lw=1.2)
+        if not result.signal_detected:
+            # Dotted and thin: the eye should find the acquired curves first.
+            any_below = True
+            ax.plot(x, y, ":", color=colour, alpha=0.8, lw=1.0)
+        else:
+            # Faded when a fine curve follows, same colour and marker: the eye should
+            # read the pair as one signal measured two ways, not as two signals.
+            ax.plot(x, y, ".-", color=colour, alpha=0.35 if fine is not None else 1.0,
+                    markersize=6, lw=1.2)
 
         if fine is not None:
             any_fine = True
@@ -726,7 +781,10 @@ def plot_acquisition_code_phase_slices(
         label = f"{signal_id}  {snr:.1f} dB"
         if fine_snr is not None:
             label = f"{signal_id}  {snr:.1f} => {fine_snr:.1f} dB"
-        ax.plot([], [], ".-", color=colour, markersize=6, label=label)
+        if result.signal_detected:
+            ax.plot([], [], ".-", color=colour, markersize=6, label=label)
+        else:
+            ax.plot([], [], ":", color=colour, lw=1.5, label=label)
 
     threshold_db = acq_results[signal_ids[0]].detection_threshold_db
     ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
@@ -734,6 +792,8 @@ def plot_acquisition_code_phase_slices(
     if any_fine:
         ax.plot([], [], ".-", color="0.4", alpha=0.35, markersize=6, label="faded: coarse")
         ax.plot([], [], ".-", color="0.4", alpha=1.0, markersize=6, label="solid: fine")
+    if any_below:
+        ax.plot([], [], ":", color="0.4", lw=1.5, label="dotted: below threshold")
 
     # Noise cells scatter several dB below the 0 dB mean, so clamp the floor rather
     # than letting one deep null squash every curve.
@@ -744,7 +804,7 @@ def plot_acquisition_code_phase_slices(
     # sign of this axis is the one thing about the figure that cannot be read off
     # it.  Above the frame, so they never collide with the legend or the curves,
     # with the title padded up to make room.
-    ax.set_title("Acquisition correlation vs code delay", pad=18)
+    ax.set_title(title, pad=18)
     for x, ha, text in (
         (0.0, "left", "\u2190 early: replica ahead, shorter delay"),
         (1.0, "right", "late: replica behind, longer delay (multipath) \u2192"),
@@ -752,7 +812,9 @@ def plot_acquisition_code_phase_slices(
         ax.text(x, 1.01, text, transform=ax.transAxes, ha=ha, va="bottom",
                 fontsize=7.5, color="0.35")
     ax.grid(True)
-    place_legend(ax, fontsize=8, ncol=1)
+    # One column holds about 22 entries at this size; a 63-PRN sweep needs three.
+    many = len(signal_ids) > 22
+    place_legend(ax, fontsize=7 if many else 8, ncol=1 + len(signal_ids) // 23)
     return ax
 
 

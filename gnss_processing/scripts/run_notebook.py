@@ -112,6 +112,8 @@ def inject_sys_path_cell(nb: dict) -> None:
     """
     setup_cell = {
         "cell_type": "code",
+        # nbformat 4.5 wants an id on every cell; without one it warns on each run.
+        "id": "heron-sys-path",
         "execution_count": None,
         "metadata": {},
         "outputs": [],
@@ -121,6 +123,27 @@ def inject_sys_path_cell(nb: dict) -> None:
         ],
     }
     nb["cells"].insert(0, setup_cell)
+
+
+def truncate_before(nb: dict, heading: str) -> int:
+    """
+    Remove the cells from the markdown heading `heading` to the end, and return how
+    many were removed.
+
+    Why: a run can stop after one section, for example notebook 01 after its
+    acquisition plots, with no tracking (`--stop-before "## 6. Tracking"`, D-079).
+    The heading is matched on the first line of a markdown cell, exactly.  A heading
+    that is not found is an error, because a silent full run is the wrong result.
+    """
+    for index, cell in enumerate(nb["cells"]):
+        if cell["cell_type"] != "markdown":
+            continue
+        lines = "".join(cell["source"]).strip().splitlines()
+        if lines and lines[0].strip() == heading.strip():
+            removed = len(nb["cells"]) - index
+            del nb["cells"][index:]
+            return removed
+    raise ValueError(f"heading {heading!r} not found in any markdown cell of the notebook")
 
 
 def patch_notebook(nb: dict, overrides: dict[str, str]) -> set[str]:
@@ -162,6 +185,10 @@ def main() -> int:
         "--python", default=default_python,
         help=f"Path to the python executable that runs nbconvert (default: {default_python})",
     )
+    parser.add_argument(
+        "--stop-before", default=None, metavar="HEADING",
+        help='Run only the cells before this markdown heading, e.g. "## 6. Tracking"',
+    )
     parser.add_argument("--out", default=None, help="Output .ipynb path (default: local-data/notebook_runs/<name>_<notebook>.ipynb)")
     args = parser.parse_args()
 
@@ -176,6 +203,12 @@ def main() -> int:
     nb = json.loads(src_path.read_text(encoding="utf-8"))
 
     inject_sys_path_cell(nb)
+    if args.stop_before:
+        try:
+            removed = truncate_before(nb, args.stop_before)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(f"Stopping before {args.stop_before!r}: {removed} cell(s) not run.")
     applied = patch_notebook(nb, overrides)
     missing = set(overrides) - applied
     if missing:

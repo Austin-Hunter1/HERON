@@ -36,6 +36,14 @@ class RunRequest:
     start_offset_ms: float = 0.0
     track_duration_ms: int = 120_000
     reference_geo: tuple[float, float, float] | None = None
+    acq_p_fa_total: dict[str, float] = field(default_factory=dict)
+    """SIGNAL_ID -> false-alarm total of the first acquisition.  A missing signal
+    keeps the notebook's ACQ_SETTINGS value (D-079)."""
+    acq_threshold_db: dict[str, float] = field(default_factory=dict)
+    """SIGNAL_ID -> detection threshold in dB above noise.  Wins over
+    `acq_p_fa_total` in the notebook when both are given (D-079)."""
+    acquisition_only: bool = False
+    """Run notebook 01 up to its acquisition plots only, and no notebook 02 (D-079)."""
 
 
 @dataclass(frozen=True)
@@ -47,6 +55,8 @@ class Step:
     overrides: dict[str, str] = field(default_factory=dict)
     depends_on: str | None = None
     """Label of a step that must pass first (notebook 02 needs notebook 01's file)."""
+    stop_before: str | None = None
+    """Markdown heading where the run stops; None runs the whole notebook."""
 
     @property
     def label(self) -> str:
@@ -56,7 +66,7 @@ class Step:
     @property
     def title(self) -> str:
         """Heading for the log and the report."""
-        name = NOTEBOOK_TITLES[self.notebook]
+        name = "Acquisition only" if self.stop_before and self.notebook == "01" else NOTEBOOK_TITLES[self.notebook]
         return f"Notebook {self.notebook}: {name}" + (f" ({self.signal})" if self.signal else "")
 
 
@@ -97,7 +107,46 @@ def parse_reference_geo(text: str) -> tuple[float, float, float] | None:
     return lat, lon, height
 
 
-def build_steps(request: RunRequest, navigation_unsupported: list[str] | tuple[str, ...] = ()) -> list[Step]:
+def parse_p_fa_total(text: str) -> float | None:
+    """
+    Read a false-alarm total from a window field.  Empty gives `None` (the notebook
+    default).  The value must be in (0, 1), as `run_acquisition` requires.
+    """
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        raise ValueError(f"the p_fa value {text!r} is not a number (for example 1e-3).") from None
+    if not 0.0 < value < 1.0:
+        raise ValueError(f"the p_fa value {text!r} must be more than 0 and less than 1.")
+    return value
+
+
+def parse_threshold_db(text: str) -> float | None:
+    """
+    Read a detection threshold in dB above noise from a window field.  Empty gives
+    `None`.  The value must be more than 0 dB: 0 dB is the mean noise level, so a
+    lower threshold would declare noise cells as signals.
+    """
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        raise ValueError(f"the threshold {text!r} is not a number of dB.") from None
+    if not math.isfinite(value) or value <= 0.0:
+        raise ValueError(f"the threshold {text!r} must be more than 0 dB above noise.")
+    return value
+
+
+def build_steps(
+    request: RunRequest,
+    navigation_unsupported: list[str] | tuple[str, ...] = (),
+    acquisition_stop_heading: str = "## 6. Tracking",
+) -> list[Step]:
     """
     Make the ordered steps for one request.
 
@@ -106,12 +155,18 @@ def build_steps(request: RunRequest, navigation_unsupported: list[str] | tuple[s
     are in the request; when only 02 is requested, it reads a tracking file that
     an earlier run made.  Notebook 02 is not planned for a signal in
     `navigation_unsupported`.
+
+    With `request.acquisition_only`, notebook 01 stops at
+    `acquisition_stop_heading` and notebook 02 is not planned: there is no
+    tracking file for it to read.
     """
     unknown = set(request.notebooks) - set(NOTEBOOK_TITLES)
     if unknown:
         raise ValueError(f"unknown notebook ids {sorted(unknown)}.")
     if not request.notebooks:
         raise ValueError("select at least one notebook.")
+    if request.acquisition_only and "01" not in request.notebooks:
+        raise ValueError("'acquisition only' needs notebook 01.")
     if {"01", "02"} & set(request.notebooks) and not request.signals:
         raise ValueError("select at least one signal for notebooks 01 and 02.")
     if request.start_offset_ms < 0:
@@ -139,10 +194,22 @@ def build_steps(request: RunRequest, navigation_unsupported: list[str] | tuple[s
     for signal in request.signals:
         tracking_label = None
         if "01" in request.notebooks:
-            step = Step("01", signal, {"SIGNAL_ID": signal, **channel, **span})
+            overrides = {"SIGNAL_ID": signal, **channel, **span}
+            # Only a value the user gave is sent, so the notebook keeps its own
+            # default for every other signal.
+            if signal in request.acq_p_fa_total:
+                overrides["ACQ_P_FA_TOTAL"] = repr(float(request.acq_p_fa_total[signal]))
+            if signal in request.acq_threshold_db:
+                overrides["ACQ_THRESHOLD_DB"] = repr(float(request.acq_threshold_db[signal]))
+            stop = acquisition_stop_heading if request.acquisition_only else None
+            step = Step("01", signal, overrides, stop_before=stop)
             steps.append(step)
             tracking_label = step.label
-        if "02" in request.notebooks and signal not in navigation_unsupported:
+        if (
+            "02" in request.notebooks
+            and not request.acquisition_only
+            and signal not in navigation_unsupported
+        ):
             overrides = {"SIGNAL_ID": signal, **channel, **span}
             if request.reference_geo is not None:
                 overrides["RECEIVER_REFERENCE_GEO"] = repr(tuple(request.reference_geo))

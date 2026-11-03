@@ -133,6 +133,20 @@ signal fails. The defaults (signals per band, time limit, report layout, the tex
 the report copies) are in `configs/pipeline_gui.yml`. With no window:
 `python -m pipeline_gui --experiment 9 --channel 0 --signals GpsL1CA`.
 
+To examine a weak acquisition (D-079):
+
+1. Select **Acquisition only**. Notebook 01 stops after its acquisition plots, and
+   notebook 02 does not run. A run takes about a minute.
+2. Open the report. Figure `02b_...all_prns` shows the peak of every PRN against the
+   threshold line. Figure `02c_...all_prns` shows the correlation against code delay
+   for every PRN; a PRN below the line is dotted.
+3. When a dotted curve has the narrow triangle of a real signal, type a lower value in
+   the **acq. threshold [dB]** field of that signal (or a larger **p_fa total**), and
+   run again. The dB value wins when both fields are set.
+
+On the command line: `--acquisition-only`, `--threshold-db GpsL1CA=8.5`,
+`--p-fa BdsB1C=1e-3`.
+
 ---
 
 # GNSS Processing Package

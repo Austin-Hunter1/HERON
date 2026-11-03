@@ -19,7 +19,9 @@ from pipeline_gui.plan import (
     RunRequest,
     build_steps,
     default_track_duration_ms,
+    parse_p_fa_total,
     parse_reference_geo,
+    parse_threshold_db,
 )
 from pipeline_gui.report import ReportInfo, build_report, split_figures, summary_lines
 from pipeline_gui.runner import (
@@ -62,6 +64,7 @@ def test_the_shipped_config_loads():
         (("report", "per_satellite_pattern"), "([", "regular expression"),
         (("report", "excerpts"), {"03": []}, "03"),
         (("track_duration_s",), -5, "track_duration_s"),
+        (("acquisition_only_stop_heading",), "6. Tracking", "markdown heading"),
     ],
 )
 def test_a_bad_value_names_its_key(raw_config, path, value, message):
@@ -128,11 +131,36 @@ def test_the_reference_position_goes_to_notebook_02_only():
     assert "RECEIVER_REFERENCE_GEO" not in steps[1].overrides
 
 
+def test_thresholds_go_to_notebook_01_of_their_signal_only():
+    steps = build_steps(_request(acq_p_fa_total={"GpsL5": 1e-3}, acq_threshold_db={"BdsB2a": 8.5}))
+    by_label = {s.label: s.overrides for s in steps}
+    assert by_label["01_GpsL5"]["ACQ_P_FA_TOTAL"] == "0.001"
+    assert "ACQ_THRESHOLD_DB" not in by_label["01_GpsL5"]
+    assert by_label["01_BdsB2a"]["ACQ_THRESHOLD_DB"] == "8.5"
+    assert "ACQ_P_FA_TOTAL" not in by_label["01_BdsB2a"]
+    for label in ("00_raw", "02_GpsL5", "02_BdsB2a"):
+        assert not {"ACQ_P_FA_TOTAL", "ACQ_THRESHOLD_DB"} & set(by_label[label])
+
+
+def test_threshold_field_text():
+    assert parse_p_fa_total("") is None and parse_threshold_db("  ") is None
+    assert parse_p_fa_total("1e-3") == 1e-3
+    assert parse_threshold_db("8.5") == 8.5
+    for bad in ("0", "1", "-1e-3", "x"):
+        with pytest.raises(ValueError):
+            parse_p_fa_total(bad)
+    for bad in ("0", "-2", "nan", "x"):
+        with pytest.raises(ValueError):
+            parse_threshold_db(bad)
+
+
 def test_overrides_patch_the_real_notebooks():
     """Every key the plan sets must exist in the notebook, or run_notebook.py ignores it."""
     from tests.test_run_notebook import _notebook, runner
 
-    for step in build_steps(_request(reference_geo=(1.0, 2.0, 3.0))):
+    request = _request(reference_geo=(1.0, 2.0, 3.0),
+                       acq_p_fa_total={"GpsL5": 1e-3}, acq_threshold_db={"GpsL5": 9.0})
+    for step in build_steps(request):
         applied = runner.patch_notebook(_notebook(step.notebook), dict(step.overrides))
         assert applied == set(step.overrides), step.label
 
@@ -237,6 +265,48 @@ def test_the_command_and_environment(tmp_path):
     assert cmd[cmd.index("--timeout") + 1] == "99" and cmd[cmd.index("--kernel") + 1] == "k"
     assert "--python" not in cmd
     assert child_environment(tmp_path)["COLLECTS_PATH"] == str(tmp_path)
+
+
+def test_acquisition_only_stops_01_and_plans_no_02():
+    steps = build_steps(_request(acquisition_only=True), acquisition_stop_heading="## 6. Tracking")
+    assert [s.label for s in steps] == ["00_raw", "01_GpsL5", "01_BdsB2a"]
+    assert steps[0].stop_before is None
+    assert all(s.stop_before == "## 6. Tracking" for s in steps[1:])
+    assert steps[1].title == "Notebook 01: Acquisition only (GpsL5)"
+
+
+def test_acquisition_only_needs_notebook_01():
+    with pytest.raises(ValueError, match="notebook 01"):
+        build_steps(_request(acquisition_only=True, notebooks=("00", "02")))
+
+
+def test_the_stop_heading_reaches_the_command(tmp_path):
+    step = build_steps(_request(acquisition_only=True), acquisition_stop_heading="## 6. Tracking")[1]
+    ctx = RunContext(tmp_path, tmp_path, tmp_path, 9, {}, 5)
+    cmd = build_command(step, ctx, tmp_path / "x.ipynb")
+    assert cmd[cmd.index("--stop-before") + 1] == "## 6. Tracking"
+    full = build_steps(_request())[1]
+    assert "--stop-before" not in build_command(full, ctx, tmp_path / "x.ipynb")
+
+
+def test_the_shipped_stop_heading_keeps_acquisition_and_cuts_tracking():
+    """The real notebook 01 must have the heading, with the acquisition plots before it."""
+    from tests.test_run_notebook import _notebook, runner
+
+    cfg = config_mod.load_config()
+    nb = _notebook("01")
+    removed = runner.truncate_before(nb, cfg.acquisition_only_stop_heading)
+    code = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
+    assert removed > 0
+    assert "run_acquisition(" in code and "02c_acquisition_code_phase_slices_all_prns" in code
+    assert "save_tracking_results" not in code and "TrackingLoopParameters" not in code
+
+
+def test_a_missing_stop_heading_is_an_error():
+    from tests.test_run_notebook import _notebook, runner
+
+    with pytest.raises(ValueError, match="not found"):
+        runner.truncate_before(_notebook("01"), "## 99. Nothing")
 
 
 def test_02_is_skipped_when_01_fails(tmp_path, monkeypatch):
