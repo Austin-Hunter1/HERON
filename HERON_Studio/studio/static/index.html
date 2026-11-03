@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HERON Studio</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+<script type="importmap">{"imports": {"three": "/static/vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#/" aria-label="HERON Studio home">
+    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 17c4-1 6-6 9-10 2 3 3 6 9 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="1.6" fill="currentColor"/></svg></span>
+    <span><b>HERON</b><small>Studio</small></span>
+  </a>
+  <nav class="tabs" id="tabs" aria-label="Flight" hidden></nav>
+  <div class="bar-right" id="barRight"></div>
+</header>
+<main id="view" tabindex="-1"></main>
+<div class="drop-veil" id="dropVeil" hidden><div>Drop video, flight log, mission or lake outline</div></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<input type="file" id="filePick" multiple hidden>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

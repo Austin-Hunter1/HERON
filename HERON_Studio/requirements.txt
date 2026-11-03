@@ -1,0 +1,15 @@
+# HERON Studio (Python 3.10+)
+flask>=3.0
+numpy>=1.26
+scipy>=1.11
+pandas>=2.0
+opencv-contrib-python>=4.9    # engine: cv2.ximgproc
+pillow>=10
+matplotlib>=3.8
+pycolmap>=3.11                # camera solve
+sgp4>=2.23                    # BeiDou / QZSS orbits
+pymavlink>=2.4                # ArduPilot .bin logs
+rasterio>=1.3                 # GeoTIFF exports
+shapely>=2.0                  # water polygons
+pyshp>=2.3                    # shapefile export
+# plus ffmpeg + ffprobe on PATH (brew install ffmpeg)

@@ -1,0 +1,32 @@
+{
+  "name": "heron-studio",
+  "productName": "HERON Studio",
+  "version": "0.1.0",
+  "description": "Post-flight review for HERON GNSS-R flights: camera solve, water map, 3D shore, exports for the Specular Planner.",
+  "main": "main.js",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "backend": "cd .. && pyinstaller packaging/heron_studio.spec --noconfirm --distpath electron/backend-dist",
+    "dist:mac": "npm run backend && electron-builder --mac",
+    "dist:win": "npm run backend && electron-builder --win"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "edu.colorado.heron.studio",
+    "productName": "HERON Studio",
+    "files": ["main.js", "preload.js", "splash.html", "build/icon.png", "package.json"],
+    "asarUnpack": ["node_modules/ffmpeg-static/**", "node_modules/ffprobe-static/**"],
+    "extraResources": [{ "from": "backend-dist/heron-studio", "to": "backend" }],
+    "mac": { "category": "public.app-category.developer-tools", "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }], "icon": "build/icon.png" },
+    "win": { "target": "nsis", "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

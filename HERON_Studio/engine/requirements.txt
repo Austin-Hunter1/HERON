@@ -1,0 +1,9 @@
+# Python 3.10+
+numpy>=1.26
+scipy>=1.11
+pandas>=2.0
+opencv-contrib-python>=4.9   # contrib is required (cv2.ximgproc.guidedFilter)
+pillow>=10
+matplotlib>=3.8             # figures only
+pycolmap>=3.11              # SfM (tested with 4.2.1)
+sgp4>=2.23                  # BeiDou / QZSS orbits from TLE

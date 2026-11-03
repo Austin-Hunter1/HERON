@@ -1,0 +1,1 @@
+Vendored from heron-ar 6bbbab5 on 2026-11-03. Engine for HERON Studio; update by re-copying heron_ar/ and heron.py.

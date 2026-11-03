@@ -1,0 +1,141 @@
+{
+ "id": "boulder-reservoir-2026-10-19",
+ "name": "Boulder Reservoir \u00b7 test flight",
+ "site": "Boulder Reservoir",
+ "date": "2026-10-19",
+ "sample": true,
+ "status": "done",
+ "created": "2026-10-19T17:00:00+00:00",
+ "files": [
+  {
+   "name": "[flight].bin",
+   "kind": "log",
+   "linked": false,
+   "info": {
+    "format": "ArduPilot DataFlash"
+   }
+  },
+  {
+   "name": "GoPro1.MP4 (survey clip)",
+   "kind": "video",
+   "linked": false,
+   "info": {}
+  }
+ ],
+ "video": {
+  "name": "GoPro1 survey clip",
+  "width": 1920,
+  "height": 1080,
+  "fps": 23.976,
+  "duration_s": 174.7,
+  "codec": "hevc",
+  "resolution_label": "1080p",
+  "aspect": "16:9",
+  "camera_model": "HERO7 Black"
+ },
+ "lens": {
+  "id": "HERON/GoPro_HERO7 Black_Wide_HS EIS_4k_16by9_3840x2160-29.97fps.json",
+  "name": "GoPro_HERO7 Black_Wide_HS EIS_4k_16by9_3840x2160-29.97fps",
+  "notes": [
+   "Focal length refined by COLMAP (\u00d70.936)."
+  ]
+ },
+ "checklist": {
+  "video": true,
+  "log": true,
+  "camera_gyro": true,
+  "mission": true,
+  "outline": true
+ },
+ "ready": true,
+ "settings": {
+  "solve": "full",
+  "render_size": "1080p",
+  "make": {
+   "ar_video": true,
+   "water": true,
+   "model3d": true,
+   "report": true
+  }
+ },
+ "job": {
+  "state": "done",
+  "progress": 100,
+  "steps": [],
+  "done": []
+ },
+ "results": {
+  "sync": {
+   "rate": -0.0007314449644493668,
+   "offset": -47.819487302887275,
+   "residual_ms": 35
+  },
+  "solve": {
+   "frames": 2925,
+   "frames_total": 2925,
+   "points": 129119,
+   "reprojection_px": 0.47,
+   "gps_fit_m": 0.95,
+   "note": "Every frame solved by COLMAP for passes 2\u20133 (0\u2013122 s of the clip)."
+  },
+  "glint": {
+   "median_px": 2.6,
+   "survey_solve_px": 4.0
+  },
+  "lake": {
+   "outline_above_water_m": 1.1,
+   "exposed_lakebed_ha": 6.0,
+   "ripple_tilt_deg": 2.1,
+   "wind_ms": 1.7,
+   "wind_from": "NE",
+   "sigma2": 0.0013071006311796518,
+   "water_edge_flatness_m": 0.42
+  },
+  "reflections": {
+   "samples": 5250,
+   "step_s": 0.5,
+   "outline_water": 945,
+   "measured_water": 46,
+   "outline_but_dry": 899
+  },
+  "ar_video_note": "AR video covers passes 2\u20133.",
+  "water": {
+   "flight": "Boulder Reservoir \u00b7 test flight",
+   "site": "Boulder Reservoir",
+   "date": "2026-10-19",
+   "made": "2026-11-03T04:06:35+00:00",
+   "source": "HERON Studio \u00b7 camera water segmentation voted onto the ground",
+   "cell_m": 0.7,
+   "water_area_m2": 976695.4,
+   "polygons": 4,
+   "origin": {
+    "lat": 40.0859711,
+    "lon": -105.2328258
+   },
+   "crs": "+proj=tmerc +lat_0=40.0859711 +lon_0=-105.2328258 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs=True",
+   "outline_above_water_m": {
+    "median": 1.1,
+    "p25": 0.7,
+    "p75": 1.93,
+    "samples": 1005
+   },
+   "reflections": {
+    "samples": 5250,
+    "step_s": 0.5,
+    "outline_water": 945,
+    "measured_water": 46,
+    "outline_but_dry": 899
+   },
+   "files": [
+    "dem.tif",
+    "reflections.csv",
+    "shoreline.geojson",
+    "water.geojson",
+    "water.kml",
+    "water_mask.tif",
+    "water_probability.tif"
+   ]
+  },
+  "site_package": "HERON_site_Boulder_Reservoir_2026-10-19.heronsite"
+ }
+}
