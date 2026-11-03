@@ -667,8 +667,10 @@ def plot_acquisition_code_phase_slices(
     property of the sweep rather than of any signal.
 
     A healthy dwell is a sharp peak at delay zero, far above the line, falling to a
-    flat floor within about a chip either side.  A false acquisition is a low,
-    shapeless bump that barely clears it.
+    flat floor within about a chip either side.  A false acquisition is a noise
+    maximum that barely clears it -- and it has the same shape, because the
+    correlation of noise has the shape of the code's own autocorrelation: nearby
+    code delays share most of their chips.  Only the height tells them apart.
 
     Resolution is set by the sample rate, and it is coarse: at 22 Msps against a
     10.23 Mcps code there are only 2.15 samples per chip -- one sample is 45.5 ns,
@@ -689,9 +691,13 @@ def plot_acquisition_code_phase_slices(
     set; elsewhere the "peak" is a noise maximum whose neighbourhood means nothing.
 
     Pass `signal_ids=sorted(acq_results)` to draw every PRN searched (D-079).  A PRN
-    below the threshold is then drawn dotted, about its own highest cell.  A real but
-    weak signal shows the same narrow triangle as an acquired one, only lower; noise
-    shows no shape.  That is the check before a threshold is lowered.
+    below the threshold is then drawn dotted, about its own highest cell.  The shape
+    of a dotted curve does not show whether it is a signal: every noise maximum is a
+    triangle too (the BOC shape for B1C).  The dotted curves of PRNs that are not
+    there show the band where noise maxima sit.  A peak just under the line is worth
+    a lower threshold only when it stands clearly above that band, repeats at the
+    same code phase and Doppler in a later dwell, or (assisted acquisition) agrees
+    with the predicted Doppler plus the clock offset.
     """
     if signal_ids is None:
         signal_ids = sorted(sid for sid, r in acq_results.items() if r.signal_detected)

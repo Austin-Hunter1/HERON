@@ -140,9 +140,14 @@ To examine a weak acquisition (D-079):
 2. Open the report. Figure `02b_...all_prns` shows the peak of every PRN against the
    threshold line. Figure `02c_...all_prns` shows the correlation against code delay
    for every PRN; a PRN below the line is dotted.
-3. When a dotted curve has the narrow triangle of a real signal, type a lower value in
-   the **acq. threshold [dB]** field of that signal (or a larger **p_fa total**), and
-   run again. The dB value wins when both fields are set.
+3. Do not judge a dotted curve by its shape: every noise maximum is also a triangle
+   (the BOC shape for B1C), because nearby code delays share most of their chips.
+   The dotted curves of PRNs that are not there show the noise band. Lower the
+   threshold only for a peak that stands clearly above that band, and that repeats at
+   the same code phase and Doppler with a larger **Start offset**, or that agrees with
+   the predicted Doppler of assisted acquisition. Then type the value in the
+   **acq. threshold [dB]** field of that signal (or a larger **p_fa total**), and run
+   again. The dB value wins when both fields are set.
 
 On the command line: `--acquisition-only`, `--threshold-db GpsL1CA=8.5`,
 `--p-fa BdsB1C=1e-3`.
