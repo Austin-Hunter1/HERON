@@ -13,13 +13,12 @@ Subframes 2 and 3 are then block-interleaved together as one 1748-symbol unit
 (38 rows x 46 columns) before transmission, so neither can be read without
 de-interleaving both.
 
-**What this module does today is time.**  Subframe 1 is decoded fully -- and
-subframe 1 is where the clock lives, so this is enough for a navigation solution
-to use L1C.  Subframes 2 and 3 are de-interleaved and handed back as symbol
-blocks, but not LDPC-decoded; `decode_subframe_2` raises rather than returning a
-half-trustworthy ephemeris.  Adding the two belief-propagation decoders from
-IS-GPS-800J's prototype matrices is the natural next step and nothing else has to
-change when it lands.
+**What this module does.**  Subframe 1 (the TOI) is decoded fully.  Subframes 2
+and 3 are de-interleaved, then read as systematic codewords: hard decisions on
+the information symbols, accepted only if CRC-24Q passes (`read_subframe`).  That
+needs no parity-check matrices, but it has no error correction: one wrong symbol
+loses the frame.  The LDPC decoder (IS-GPS-800 tables 6.2-2 to 6.2-13) is still to
+be added; `read_subframe` is the one function it replaces.
 
 Frame synchronisation has a shortcut worth knowing about.  L1C's pilot carries the
 L1CO overlay, 1800 chips at one per 10 ms code period -- exactly one frame.  So a
@@ -264,30 +263,233 @@ def toi_is_consistent(frames: list[Cnav2Frame]) -> bool:
     return True
 
 
-def decode_subframe_2(frame: Cnav2Frame):
+# ---------------------------------------------------------------------------
+# Subframes 2 and 3 -- systematic read plus CRC
+#
+# Both LDPC codes are systematic: the broadcast word is (s; p1; p2), so the first
+# 600 (or 274) symbols ARE the information bits, and the rest is parity (ICD
+# 3.2.3.4).  A receiver without the parity-check matrices can therefore take hard
+# decisions on those symbols and let the CRC-24Q say whether every bit is right.
+# This is what the CU Multi-GNSS SDR does for BeiDou B1C ("No LDPC decoding is
+# performed temporarily"), and it is safe for the reason in `read_subframe`.
+# When the LDPC decoder lands, `read_subframe` is the one place to change.
+# ---------------------------------------------------------------------------
+
+SUBFRAME_2_PARITY_FIELD = 24
+SUBFRAME_3_PARITY_FIELD = 24
+
+
+@dataclass(frozen=True)
+class SubframeRead:
+    """The information bits of one subframe and whether its CRC-24Q passed."""
+
+    bits: np.ndarray
+    crc_ok: bool
+    inverted: bool
+    """True when the symbol polarity had to be flipped for the CRC to pass."""
+
+
+def read_subframe(soft_symbols: np.ndarray, information_bits: int) -> SubframeRead | None:
     """
-    Not implemented: subframe 2 needs the LDPC(1200,600) decoder.
+    Hard-decide the first `information_bits` symbols and check the CRC, in both polarities.
 
-    Deliberately a hard failure rather than a best-effort hard-decision read.  The
-    600 information bits carry the ephemeris, and an ephemeris that is wrong in one
-    bit is not a slightly worse ephemeris -- it puts the satellite kilometres from
-    where it is, silently.  Until the belief-propagation decoder and IS-GPS-800J's
-    parity-check matrices are in place, `frame.subframe_2_symbols` holds the
-    de-interleaved soft symbols and the caller can take them elsewhere.
+    Why both polarities: the data axis sign follows the carrier loop, which has a
+    half-cycle ambiguity until something fixes it.  The CRC can tell the two
+    apart on its own, because a wrong-polarity block is the complement of a valid
+    block and fails the check with probability 1 - 2^-24.
+
+    Why this is safe without error correction: a block that passes CRC-24Q is
+    wrong with probability about 2^-24 (6e-8).  So a wrong ephemeris is not
+    returned; a block with any bit error is returned as None.  The price is that
+    one bit error costs the whole 18 s frame, where LDPC would repair it.  At
+    100 symbols/s the symbol Es/N0 is C/N0 - 20 dB, so this is rarely a problem
+    above about 30 dB-Hz.
+
+    Returns None when neither polarity passes.
     """
-    raise NotImplementedError(
-        "CNAV-2 subframe 2 carries the ephemeris behind an LDPC(1200,600) code, "
-        "which is not implemented yet. Subframe 1 (time) decodes fully -- see "
-        "Cnav2Frame.toi. The de-interleaved subframe 2 symbols are available as "
-        "frame.subframe_2_symbols."
-    )
+    symbols = np.asarray(soft_symbols, dtype=float)[:information_bits]
+    if len(symbols) != information_bits:
+        raise ValueError(f"need {information_bits} symbols, got {len(symbols)}")
+    bits = prim.hard_decision(symbols)
+    if prim.crc24q_check(bits):
+        return SubframeRead(bits=bits, crc_ok=True, inverted=False)
+    flipped = 1 - bits
+    if prim.crc24q_check(flipped):
+        return SubframeRead(bits=flipped, crc_ok=True, inverted=True)
+    return None
 
 
-def decode_subframe_3(frame: Cnav2Frame):
-    """Not implemented: subframe 3 needs the LDPC(548,274) decoder.  See
-    `decode_subframe_2`."""
-    raise NotImplementedError(
-        "CNAV-2 subframe 3 is protected by an LDPC(548,274) code, which is not "
-        "implemented yet. The de-interleaved symbols are available as "
-        "frame.subframe_3_symbols."
+# Subframe 2 layout: (start bit, width, signed, scale), exactly as IS-GPS-800 Figure
+# 3.5-1 and Table 3.5-1 state them, with 1-based bit numbers as `prim.unpack_field`
+# reads them.  Bits 1-49 and 471-574 are the layout of the project note
+# `docs/icd/L1C_E5A_TRACKING_NOTES.md`.  Bits 50-470 (the orbit) are the CNAV
+# element widths and scales, in the order of Table 3.5-1; the widths add up to the
+# note's anchors (toe ends at bit 49, a_f0 begins at bit 471), which is the only
+# check made so far.  Compare with the ICD table before relying on the orbit.
+SUBFRAME_2_FIELDS: dict[str, tuple[int, int, bool, float]] = {
+    "wn": (1, 13, False, 1.0),
+    "itow": (14, 8, False, 1.0),
+    "top": (22, 11, False, 300.0),
+    "health_l1c": (33, 1, False, 1.0),
+    "ura_ed_index": (34, 5, True, 1.0),
+    "toe": (39, 11, False, 300.0),
+    "delta_a": (50, 26, True, 2.0**-9),
+    "a_dot": (76, 25, True, 2.0**-21),
+    "delta_n0": (101, 17, True, 2.0**-44),
+    "delta_n0_dot": (118, 23, True, 2.0**-57),
+    "M0": (141, 33, True, 2.0**-32),
+    "e": (174, 33, False, 2.0**-34),
+    "omega": (207, 33, True, 2.0**-32),
+    "Omega0": (240, 33, True, 2.0**-32),
+    "i0": (273, 33, True, 2.0**-32),
+    "delta_Omega_dot": (306, 17, True, 2.0**-44),
+    "i_dot": (323, 15, True, 2.0**-44),
+    "Cis": (338, 16, True, 2.0**-30),
+    "Cic": (354, 16, True, 2.0**-30),
+    "Crs": (370, 24, True, 2.0**-8),
+    "Crc": (394, 24, True, 2.0**-8),
+    "Cus": (418, 21, True, 2.0**-30),
+    "Cuc": (439, 21, True, 2.0**-30),
+    "ura_ned0_index": (460, 5, True, 1.0),
+    "ura_ned1_index": (465, 3, False, 1.0),
+    "ura_ned2_index": (468, 3, False, 1.0),
+    "af0": (471, 26, True, 2.0**-35),
+    "af1": (497, 20, True, 2.0**-48),
+    "af2": (517, 10, True, 2.0**-60),
+    "tgd": (527, 13, True, 2.0**-35),
+    "isc_l1cp": (540, 13, True, 2.0**-35),
+    "isc_l1cd": (553, 13, True, 2.0**-35),
+    "integrity_status_flag": (566, 1, False, 1.0),
+    "wn_op": (567, 8, False, 1.0),
+}
+
+
+def parse_subframe_2(bits: np.ndarray) -> dict[str, float]:
+    """Every named field of a 600-bit subframe 2, scaled.  The CRC is not checked here."""
+    if len(bits) != SUBFRAME_2_BITS:
+        raise ValueError(f"subframe 2 is {SUBFRAME_2_BITS} bits, got {len(bits)}")
+    return {
+        name: prim.unpack_field(bits, start, width, signed=signed, scale=scale)
+        for name, (start, width, signed, scale) in SUBFRAME_2_FIELDS.items()
+    }
+
+
+def build_subframe_2(values: dict[str, float]) -> np.ndarray:
+    """
+    The 600 information bits for `values`, CRC included: the encoder side, for tests.
+
+    Reads the same `SUBFRAME_2_FIELDS` table as the parser, so a test cannot pass
+    by agreeing with a second, separate copy of the layout.  Fields not given are
+    zero.  A value is divided by the scale and rounded to the nearest integer.
+    """
+    bits = np.zeros(SUBFRAME_2_BITS - SUBFRAME_2_PARITY_FIELD, dtype=np.uint8)
+    for name, value in values.items():
+        start, width, signed, scale = SUBFRAME_2_FIELDS[name]
+        raw = int(round(value / scale))
+        low, high = (-(1 << (width - 1)), (1 << (width - 1)) - 1) if signed else (0, (1 << width) - 1)
+        if not low <= raw <= high:
+            raise ValueError(f"{name}={value} does not fit in {width} bits")
+        bits[start - 1 : start - 1 + width] = prim.bits_from_int(raw & ((1 << width) - 1), width)
+    return prim.crc24q_append(bits)
+
+
+@dataclass(frozen=True)
+class Subframe2:
+    """Subframe 2 of one frame, CRC-checked: time of week epoch, clock and ephemeris."""
+
+    fields: dict[str, float]
+    bits: np.ndarray
+    inverted: bool
+
+    def __getitem__(self, name: str) -> float:
+        return self.fields[name]
+
+
+def decode_subframe_2(frame: Cnav2Frame) -> Subframe2 | None:
+    """
+    Subframe 2 of `frame`, or None when its CRC does not pass.
+
+    None, never a best guess: an ephemeris with one wrong bit puts the satellite
+    kilometres away without any sign of it.  See `read_subframe`.
+    """
+    read = read_subframe(frame.subframe_2_symbols, SUBFRAME_2_BITS)
+    if read is None:
+        return None
+    return Subframe2(fields=parse_subframe_2(read.bits), bits=read.bits, inverted=read.inverted)
+
+
+@dataclass(frozen=True)
+class Subframe3:
+    """Subframe 3 of one frame, CRC-checked.  The page content is not parsed yet."""
+
+    bits: np.ndarray
+    inverted: bool
+
+
+def decode_subframe_3(frame: Cnav2Frame) -> Subframe3 | None:
+    """
+    Subframe 3 of `frame`, or None when its CRC does not pass.
+
+    The bits are returned as they are: the project note names the page number and
+    says the page order is not fixed, but gives no bit positions.
+    """
+    read = read_subframe(frame.subframe_3_symbols, SUBFRAME_3_BITS)
+    if read is None:
+        return None
+    return Subframe3(bits=read.bits, inverted=read.inverted)
+
+
+def frame_start_tow_s(previous: Cnav2Frame, subframe_2_of_this: Subframe2) -> float:
+    """
+    Time of week at the first symbol of a frame.
+
+    The TOI of the PREVIOUS frame counts 18 s epochs to the start of this one, and
+    this frame's own subframe 2 gives the two-hour count (ITOW).  Using the same
+    frame for both is an 18 s error.  This is the reading in the project note
+    (section 1.6); check it on real data.
+    """
+    return previous.tow_at_next_frame_start_s(int(subframe_2_of_this["itow"]))
+
+
+def assemble_ephemeris(subframe_2: Subframe2, sat_id: str):
+    """
+    A `CnavEphemeris` from one CRC-checked subframe 2.
+
+    Subframe 2 holds the orbit and the clock together, so one frame is enough (CNAV
+    needs three messages).  `toc` is set to `toe`: subframe 2 has no separate clock
+    reference time.  That is this code's reading of the ICD, not yet checked in it.
+    """
+    from .ephemeris import CnavEphemeris
+
+    f = subframe_2.fields
+    return CnavEphemeris(
+        sat_id=sat_id,
+        week=int(f["wn"]),
+        toe=f["toe"],
+        top=f["top"],
+        delta_a=f["delta_a"],
+        a_dot=f["a_dot"],
+        delta_n0=f["delta_n0"],
+        delta_n0_dot=f["delta_n0_dot"],
+        M0=f["M0"],
+        e=f["e"],
+        omega=f["omega"],
+        Omega0=f["Omega0"],
+        delta_Omega_dot=f["delta_Omega_dot"],
+        i0=f["i0"],
+        i_dot=f["i_dot"],
+        Cis=f["Cis"],
+        Cic=f["Cic"],
+        Crs=f["Crs"],
+        Crc=f["Crc"],
+        Cus=f["Cus"],
+        Cuc=f["Cuc"],
+        toc=f["toe"],
+        af0=f["af0"],
+        af1=f["af1"],
+        af2=f["af2"],
+        tgd=f["tgd"],
+        isc_l1cp=f["isc_l1cp"],
+        isc_l1cd=f["isc_l1cd"],
+        health_l1=int(f["health_l1c"]),
     )

@@ -329,6 +329,9 @@ class CnavEphemeris:
     isc_l5q5: float | None = None
     isc_l1ca: float | None = None
     isc_l2c: float | None = None
+    # CNAV-2 (L1C) inter-signal corrections, pilot and data (IS-GPS-800 3.5.3.9).
+    isc_l1cp: float | None = None
+    isc_l1cd: float | None = None
     health_l1: int = 0
     health_l2: int = 0
     health_l5: int = 0
