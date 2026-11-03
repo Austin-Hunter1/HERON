@@ -147,6 +147,25 @@ To examine a weak acquisition (D-079):
 On the command line: `--acquisition-only`, `--threshold-db GpsL1CA=8.5`,
 `--p-fa BdsB1C=1e-3`.
 
+For a weak sky (indoors, under a roof, behind a wall), use **Assisted acquisition**
+(D-080):
+
+1. Type the **Reference position** (lat, lon, height). It is required.
+2. Select **Use assisted acquisition**. The time comes from the collect name; type
+   a UTC time only when the name has none. The sky mask starts as the entire sky.
+   To describe a barrier, set a minimum elevation, or type blocked sectors as
+   `az_from-az_to:up_to_elevation`, for example `300-60:60; 120-180:30`.
+3. Run (with **Acquisition only** for a quick look). Notebook 01 downloads the
+   broadcast ephemeris from CDDIS and predicts the visible satellites and their
+   Doppler. It measures the receiver clock offset on the highest few satellites,
+   then searches the others in narrow windows with a 10x longer dwell.
+4. The report shows the prediction table (section 4) and a sky plot
+   (`02d_assisted_acquisition_skyplot.png`).
+
+In notebook 01 itself, set `ASSISTED_ACQUISITION = True` and `ASSIST_POSITION_GEO`
+in section 2. On the command line: `--assisted --reference "lat, lon, h"` and the
+`--assist-*` options (`python -m pipeline_gui --help`).
+
 ---
 
 # GNSS Processing Package

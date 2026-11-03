@@ -98,6 +98,20 @@ def _threshold_text(request: RunRequest) -> str:
     return ", ".join(parts) if parts else "notebook 01 defaults"
 
 
+def _assist_text(request: RunRequest) -> str:
+    """The acquisition mode line of the summary page (D-080)."""
+    a = request.assist
+    if a is None:
+        return "normal (every PRN, full Doppler range)"
+    sky = "entire sky" if a.min_elevation_deg <= 0 and not a.blocked_sectors else (
+        f"elevation >= {a.min_elevation_deg:g} deg"
+        + "".join(f"; blocked az {s[0]:g}-{s[1]:g} up to {s[2]:g} deg" for s in a.blocked_sectors)
+    )
+    when = a.time_utc or "from the collect name"
+    return (f"assisted: time {when}, sky {sky}, dwell x{a.dwell_multiplier}, "
+            f"stage 1 {a.stage1_satellites} sats, stage 2 +/-{a.doppler_halfwidth_hz:g} Hz")
+
+
 def _channel_fields(channel, collects_dir: Path, request: RunRequest) -> list[tuple[str, str]]:
     """The collect and settings lines of the summary page."""
     from utils import catalog
@@ -119,6 +133,7 @@ def _channel_fields(channel, collects_dir: Path, request: RunRequest) -> list[tu
         ("acq. threshold", _threshold_text(request)),
         ("mode", "acquisition only (no tracking, no notebook 02)"
          if request.acquisition_only else "full"),
+        ("acquisition", _assist_text(request)),
         ("start offset", f"{request.start_offset_ms:,.0f} ms"),
         ("track duration", f"{request.track_duration_ms / 1e3:,.0f} s"),
         ("reference position", reference),

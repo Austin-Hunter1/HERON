@@ -44,6 +44,41 @@ class RunRequest:
     `acq_p_fa_total` in the notebook when both are given (D-079)."""
     acquisition_only: bool = False
     """Run notebook 01 up to its acquisition plots only, and no notebook 02 (D-079)."""
+    assist: AssistRequest | None = None
+    """Assisted acquisition in notebook 01 (D-080); None is the normal search."""
+
+
+@dataclass(frozen=True)
+class AssistRequest:
+    """
+    The assisted-acquisition values of notebook 01 (D-080).  The receiver position
+    is `RunRequest.reference_geo`, the same field notebook 02 uses.
+
+    `blocked_sectors` holds `(az_from_deg, az_to_deg, up_to_elevation_deg)` tuples,
+    already checked (`utils.assisted_acquisition.parse_blocked_sectors`).  An empty
+    tuple and 0 deg is the entire sky.
+    """
+
+    time_utc: str | None = None
+    """'YYYY-MM-DD HH:MM:SS' at the first sample of the file; None: from the collect id."""
+    min_elevation_deg: float = 0.0
+    blocked_sectors: tuple[tuple[float, float, float], ...] = ()
+    dwell_multiplier: int = 10
+    stage1_satellites: int = 4
+    doppler_halfwidth_hz: float = 250.0
+
+    def overrides(self, reference_geo: tuple[float, float, float]) -> dict[str, str]:
+        """The `--set` values for notebook 01, as Python source text."""
+        return {
+            "ASSISTED_ACQUISITION": "True",
+            "ASSIST_POSITION_GEO": repr(tuple(float(v) for v in reference_geo)),
+            "ASSIST_TIME_UTC": repr(self.time_utc) if self.time_utc else "None",
+            "ASSIST_MIN_ELEVATION_DEG": repr(float(self.min_elevation_deg)),
+            "ASSIST_BLOCKED_SECTORS": repr([tuple(float(v) for v in s) for s in self.blocked_sectors]),
+            "ASSIST_DWELL_MULTIPLIER": str(int(self.dwell_multiplier)),
+            "ASSIST_STAGE1_SATELLITES": str(int(self.stage1_satellites)),
+            "ASSIST_DOPPLER_HALFWIDTH_HZ": repr(float(self.doppler_halfwidth_hz)),
+        }
 
 
 @dataclass(frozen=True)
@@ -142,6 +177,57 @@ def parse_threshold_db(text: str) -> float | None:
     return value
 
 
+def assist_request_from_text(
+    *,
+    time_utc: str,
+    min_elevation: str,
+    sectors: str,
+    dwell_multiplier: str,
+    stage1_satellites: str,
+    doppler_halfwidth: str,
+) -> AssistRequest:
+    """
+    Read and check the assisted-acquisition fields of the window (or the command
+    line).  A bad field raises ValueError with the reason.
+
+    The time and sector parsers live in `utils.assisted_acquisition`, so the window
+    and notebook 01 accept the same text.  They are imported here, not at the top,
+    because they pull in numpy and the orbit code.
+    """
+    from utils import assisted_acquisition
+
+    time_text = time_utc.strip() or None
+    if time_text is not None:
+        time_text = assisted_acquisition.parse_utc(time_text).isoformat(sep=" ")
+
+    def number(text: str, name: str) -> float:
+        try:
+            return float(text.strip())
+        except ValueError:
+            raise ValueError(f"the {name} {text!r} is not a number.") from None
+
+    def whole(text: str, name: str) -> int:
+        value = number(text, name)
+        if value < 1 or int(value) != value:
+            raise ValueError(f"the {name} must be a whole number of at least 1, got {text!r}.")
+        return int(value)
+
+    min_el = number(min_elevation or "0", "minimum elevation")
+    if not 0.0 <= min_el < 90.0:
+        raise ValueError(f"the minimum elevation must be from 0 to 90 deg, got {min_elevation!r}.")
+    halfwidth = number(doppler_halfwidth, "stage 2 window")
+    if halfwidth <= 0:
+        raise ValueError("the stage 2 window must be more than 0 Hz.")
+    return AssistRequest(
+        time_utc=time_text,
+        min_elevation_deg=min_el,
+        blocked_sectors=tuple(assisted_acquisition.parse_blocked_sectors(sectors)),
+        dwell_multiplier=whole(dwell_multiplier, "dwell multiplier"),
+        stage1_satellites=whole(stage1_satellites, "number of stage 1 satellites"),
+        doppler_halfwidth_hz=halfwidth,
+    )
+
+
 def build_steps(
     request: RunRequest,
     navigation_unsupported: list[str] | tuple[str, ...] = (),
@@ -167,6 +253,13 @@ def build_steps(
         raise ValueError("select at least one notebook.")
     if request.acquisition_only and "01" not in request.notebooks:
         raise ValueError("'acquisition only' needs notebook 01.")
+    if request.assist is not None:
+        if "01" not in request.notebooks:
+            raise ValueError("assisted acquisition needs notebook 01.")
+        if request.reference_geo is None:
+            raise ValueError(
+                "assisted acquisition needs the reference position (lat, lon, height)."
+            )
     if {"01", "02"} & set(request.notebooks) and not request.signals:
         raise ValueError("select at least one signal for notebooks 01 and 02.")
     if request.start_offset_ms < 0:
@@ -201,6 +294,8 @@ def build_steps(
                 overrides["ACQ_P_FA_TOTAL"] = repr(float(request.acq_p_fa_total[signal]))
             if signal in request.acq_threshold_db:
                 overrides["ACQ_THRESHOLD_DB"] = repr(float(request.acq_threshold_db[signal]))
+            if request.assist is not None:
+                overrides.update(request.assist.overrides(request.reference_geo))
             stop = acquisition_stop_heading if request.acquisition_only else None
             step = Step("01", signal, overrides, stop_before=stop)
             steps.append(step)

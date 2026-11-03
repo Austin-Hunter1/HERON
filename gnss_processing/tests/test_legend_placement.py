@@ -22,6 +22,7 @@ NOTEBOOK_01_PLOTS = [
     plotting.plot_acquisition_dwell_layout,
     plotting.plot_acquisition_code_phase_slices,
     plotting.plot_acquisition_peak_snr,
+    plotting.plot_assisted_skyplot,
     plotting.plot_prompt_components,
     plotting.plot_code_delay_and_doppler,
     plotting.plot_prompt_circ_length,

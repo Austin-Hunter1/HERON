@@ -16,7 +16,9 @@ import pytest
 import yaml
 from pipeline_gui import config as config_mod
 from pipeline_gui.plan import (
+    AssistRequest,
     RunRequest,
+    assist_request_from_text,
     build_steps,
     default_track_duration_ms,
     parse_p_fa_total,
@@ -159,10 +161,50 @@ def test_overrides_patch_the_real_notebooks():
     from tests.test_run_notebook import _notebook, runner
 
     request = _request(reference_geo=(1.0, 2.0, 3.0),
-                       acq_p_fa_total={"GpsL5": 1e-3}, acq_threshold_db={"GpsL5": 9.0})
+                       acq_p_fa_total={"GpsL5": 1e-3}, acq_threshold_db={"GpsL5": 9.0},
+                       assist=AssistRequest(blocked_sectors=((300.0, 60.0, 60.0),)))
     for step in build_steps(request):
         applied = runner.patch_notebook(_notebook(step.notebook), dict(step.overrides))
         assert applied == set(step.overrides), step.label
+
+
+def test_assisted_values_go_to_notebook_01_only_and_are_valid_python():
+    import ast
+
+    assist = AssistRequest(time_utc="2026-10-14 01:17:45", min_elevation_deg=10.0,
+                           blocked_sectors=((300.0, 60.0, 60.0),), dwell_multiplier=20)
+    steps = build_steps(_request(reference_geo=(40.0, -105.2, 1589.1), assist=assist))
+    by_label = {s.label: s.overrides for s in steps}
+    o = by_label["01_GpsL5"]
+    assert o["ASSISTED_ACQUISITION"] == "True"
+    assert ast.literal_eval(o["ASSIST_POSITION_GEO"]) == (40.0, -105.2, 1589.1)
+    assert ast.literal_eval(o["ASSIST_TIME_UTC"]) == "2026-10-14 01:17:45"
+    assert ast.literal_eval(o["ASSIST_BLOCKED_SECTORS"]) == [(300.0, 60.0, 60.0)]
+    assert o["ASSIST_DWELL_MULTIPLIER"] == "20"
+    assert not any(k.startswith("ASSIST") for k in by_label["02_GpsL5"])
+    assert not any(k.startswith("ASSIST") for k in by_label["00_raw"])
+    empty = build_steps(_request(reference_geo=(1.0, 2.0, 3.0), assist=AssistRequest()))[1].overrides
+    assert empty["ASSIST_TIME_UTC"] == "None" and empty["ASSIST_BLOCKED_SECTORS"] == "[]"
+
+
+def test_assisted_acquisition_needs_a_position_and_notebook_01():
+    with pytest.raises(ValueError, match="reference position"):
+        build_steps(_request(assist=AssistRequest()))
+    with pytest.raises(ValueError, match="notebook 01"):
+        build_steps(_request(reference_geo=(1.0, 2.0, 3.0), assist=AssistRequest(), notebooks=("00",)))
+
+
+def test_assisted_field_text():
+    fields = dict(time_utc="", min_elevation="0", sectors="", dwell_multiplier="10",
+                  stage1_satellites="4", doppler_halfwidth="250")
+    a = assist_request_from_text(**fields)
+    assert a.time_utc is None and a.blocked_sectors == () and a.dwell_multiplier == 10
+    a = assist_request_from_text(**{**fields, "time_utc": "2026-10-14T01:17:45", "sectors": "300-60:60"})
+    assert a.time_utc == "2026-10-14 01:17:45" and a.blocked_sectors == ((300.0, 60.0, 60.0),)
+    for key, bad in (("time_utc", "noon"), ("min_elevation", "95"), ("sectors", "300-60"),
+                     ("dwell_multiplier", "2.5"), ("stage1_satellites", "0"), ("doppler_halfwidth", "-1")):
+        with pytest.raises(ValueError):
+            assist_request_from_text(**{**fields, key: bad})
 
 
 @pytest.mark.parametrize("kw, message", [

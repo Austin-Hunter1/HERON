@@ -38,6 +38,16 @@ class ReportConfig:
 
 
 @dataclass(frozen=True)
+class AssistDefaults:
+    """Default values of the assisted-acquisition fields of the window (D-080)."""
+
+    min_elevation_deg: float
+    dwell_multiplier: int
+    stage1_satellites: int
+    doppler_halfwidth_hz: float
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """All settings of the pipeline window.  See `configs/pipeline_gui.yml`."""
 
@@ -53,6 +63,7 @@ class PipelineConfig:
     signals_off_by_default: list[str]
     navigation_unsupported: list[str]
     acquisition_only_stop_heading: str
+    assisted: AssistDefaults
     report: ReportConfig
 
 
@@ -110,6 +121,30 @@ def _optional_text(value: Any, key: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"'{key}' must be text or null, got {value!r}.")
     return value
+
+
+def _whole(value: Any, key: str) -> int:
+    """Check a whole number of at least 1."""
+    number = _number(value, key, positive=True)
+    if int(number) != number:
+        raise ConfigError(f"'{key}' must be a whole number, got {value!r}.")
+    return int(number)
+
+
+def _parse_assisted(data: Any) -> AssistDefaults:
+    """Check the `assisted:` block."""
+    w = "assisted."
+    min_el = _require(data, "min_elevation_deg", w)
+    if isinstance(min_el, bool) or not isinstance(min_el, (int, float)) or not 0.0 <= min_el < 90.0:
+        raise ConfigError(f"'assisted.min_elevation_deg' must be from 0 to 90, got {min_el!r}.")
+    return AssistDefaults(
+        min_elevation_deg=float(min_el),
+        dwell_multiplier=_whole(_require(data, "dwell_multiplier", w), "assisted.dwell_multiplier"),
+        stage1_satellites=_whole(_require(data, "stage1_satellites", w), "assisted.stage1_satellites"),
+        doppler_halfwidth_hz=float(_number(
+            _require(data, "doppler_halfwidth_hz", w), "assisted.doppler_halfwidth_hz", positive=True
+        )),
+    )
 
 
 def _parse_report(data: Any) -> ReportConfig:
@@ -198,6 +233,7 @@ def parse_config(data: Any) -> PipelineConfig:
         signals_off_by_default=off,
         navigation_unsupported=no_nav,
         acquisition_only_stop_heading=stop_heading,
+        assisted=_parse_assisted(_require(data, "assisted")),
         report=_parse_report(_require(data, "report")),
     )
 

@@ -48,6 +48,21 @@ navigation_unsupported: [GpsL1C]
 # cell of notebook 01, exactly.
 acquisition_only_stop_heading: "## 6. Tracking"
 
+# Default values of the "Assisted acquisition" fields of the window (D-080).
+# Notebook 01 predicts the visible satellites and their Doppler from the time,
+# the reference position and the CDDIS broadcast ephemeris.  Stage 1 searches the
+# highest few wide to measure the clock offset; stage 2 searches the rest in
+# narrow windows with a longer dwell.  See utils/assisted_acquisition.py.
+assisted:
+  # 0 with no blocked sectors is the entire sky.
+  min_elevation_deg: 0.0
+  # Stage 2 non-coherent blocks = the signal's num_blocks x this.
+  dwell_multiplier: 10
+  # The highest visible satellites that stage 1 searches wide.
+  stage1_satellites: 4
+  # Stage 2 Doppler window: predicted + clock offset +/- this.
+  doppler_halfwidth_hz: 250.0
+
 report:
   # Page size in inches (width, height).
   page_size_in: [8.5, 11.0]

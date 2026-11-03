@@ -133,6 +133,14 @@ acquisition, add `--set ACQ_THRESHOLD_DB=8.5` (dB above noise) or
 `02c_acquisition_code_phase_slices_all_prns.png` show every PRN searched against the
 threshold.
 
+For a weak sky, assisted acquisition (D-080) predicts the visible satellites and their
+Doppler from the CDDIS broadcast ephemeris and searches them harder:
+`--set ASSISTED_ACQUISITION=True --set "ASSIST_POSITION_GEO=(lat, lon, h)"`, and
+optionally `ASSIST_MIN_ELEVATION_DEG`, `ASSIST_BLOCKED_SECTORS=[(az_from, az_to, up_to_el)]`,
+`ASSIST_DWELL_MULTIPLIER`. It needs network access to CDDIS (Earthdata login in `.env`).
+The prediction table is in section 4's output; the sky plot is
+`02d_assisted_acquisition_skyplot.png`.
+
 ## Notebook 02 · navigation
 
 Reads one or more tracking runs notebook 01 produced and computes a position

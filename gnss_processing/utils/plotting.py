@@ -309,6 +309,10 @@ def plot_acquisition_peak_snr(
     number to type into `ACQ_THRESHOLD_DB`.  Acquired PRNs are filled, the others
     are grey.  For a PRN that a fine search refined, the bar is the coarse peak,
     because detection is decided on the coarse grid.
+
+    When the PRNs have different thresholds (assisted acquisition, D-080: a narrow
+    stage-2 window has fewer cells, so a lower threshold), each bar gets its own
+    dashed threshold mark instead of one line across the plot.
     """
     ax = fig.add_subplot(1, 1, 1)
     if not acq_results:
@@ -317,17 +321,22 @@ def plot_acquisition_peak_snr(
     signal_ids = sorted(acq_results)
     snr_db = np.array([acq_results[sid].peak_snr_db for sid in signal_ids])
     detected = np.array([acq_results[sid].signal_detected for sid in signal_ids])
-    threshold_db = acq_results[signal_ids[0]].detection_threshold_db
+    thresholds = np.array([acq_results[sid].detection_threshold_db for sid in signal_ids])
     x = np.arange(len(signal_ids))
 
     ax.bar(x[detected], snr_db[detected], color="tab:green", label="acquired")
     ax.bar(x[~detected], snr_db[~detected], color="0.65", label="below threshold")
-    ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
-               label=f"detection threshold ({threshold_db:.2f} dB)")
+    if np.ptp(thresholds) < 0.005:
+        ax.axhline(thresholds[0], color="k", ls="--", lw=1.5,
+                   label=f"detection threshold ({thresholds[0]:.2f} dB)")
+    else:
+        ax.hlines(thresholds, x - 0.45, x + 0.45, colors="k", linestyles="--", lw=1.5,
+                  label=f"detection threshold, per PRN ({thresholds.min():.2f}-"
+                        f"{thresholds.max():.2f} dB)")
     ax.set_xticks(x)
     ax.set_xticklabels(signal_ids, rotation=90, fontsize=7 if len(x) > 40 else 8)
     ax.set_xlim(-0.75, len(x) - 0.25)
-    ax.set_ylim(0.0, max(float(snr_db.max()), threshold_db) * 1.1)
+    ax.set_ylim(0.0, max(float(snr_db.max()), float(thresholds.max())) * 1.1)
     ax.set_xlabel("PRN")
     ax.set_ylabel("Peak power [dB above noise]")
     ax.set_title(f"{title}: {int(detected.sum())} of {len(x)} acquired")
@@ -786,9 +795,11 @@ def plot_acquisition_code_phase_slices(
         else:
             ax.plot([], [], ":", color=colour, lw=1.5, label=label)
 
-    threshold_db = acq_results[signal_ids[0]].detection_threshold_db
-    ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
-               label=f"detection threshold ({threshold_db:.2f} dB)")
+    # One line per distinct threshold.  A normal sweep has one; an assisted one
+    # (D-080) has one for its wide stage 1 and a lower one for its narrow stage 2.
+    for threshold_db in sorted({round(acq_results[s].detection_threshold_db, 2) for s in signal_ids}):
+        ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
+                   label=f"detection threshold ({threshold_db:.2f} dB)")
     if any_fine:
         ax.plot([], [], ".-", color="0.4", alpha=0.35, markersize=6, label="faded: coarse")
         ax.plot([], [], ".-", color="0.4", alpha=1.0, markersize=6, label="solid: fine")
@@ -815,6 +826,72 @@ def plot_acquisition_code_phase_slices(
     # One column holds about 22 entries at this size; a 63-PRN sweep needs three.
     many = len(signal_ids) > 22
     place_legend(ax, fontsize=7 if many else 8, ncol=1 + len(signal_ids) // 23)
+    return ax
+
+
+def plot_assisted_skyplot(
+    fig: Figure | SubFigure,
+    report,
+    acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
+    title: str = "Assisted acquisition",
+) -> Axes:
+    """
+    The sky that assisted acquisition (D-080) predicted, and what it found there.
+
+    North is up and azimuth runs clockwise; the centre is the zenith and the rim is
+    the horizon.  Grey is the sky mask: below the minimum elevation, and each blocked
+    sector up to its elevation.  Each predicted satellite is a marker: filled green
+    when acquired, an open circle when searched and not found, a grey cross when the
+    mask blocks it (not searched).  `report` is an `assisted_acquisition.AssistReport`.
+    """
+    ax = fig.add_subplot(1, 1, 1, projection="polar")
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+    ax.set_rlim(0.0, 90.0)
+    ax.set_rticks([0, 30, 60, 90])
+    ax.set_yticklabels(["90°", "60°", "30°", "0°"], fontsize=7)
+
+    mask = report.mask
+    ring = np.linspace(0.0, 2 * np.pi, 361)
+    shade = dict(color="0.6", alpha=0.35, lw=0)
+    if mask.min_elevation_deg > 0.0:
+        ax.fill_between(ring, 90.0 - mask.min_elevation_deg, 90.0, label="blocked", **shade)
+        shade.pop("label", None)
+    for index, sector in enumerate(mask.blocked):
+        width = (sector.az_to_deg - sector.az_from_deg) % 360.0 or 360.0
+        theta = np.radians(sector.az_from_deg + np.linspace(0.0, width, 91))
+        label = "blocked" if (index == 0 and mask.min_elevation_deg <= 0.0) else None
+        ax.fill_between(theta, 90.0 - sector.up_to_elevation_deg, 90.0, label=label, **shade)
+
+    styles = {
+        "acquired": dict(marker="o", color="tab:green", ms=9, ls=""),
+        "searched, not found": dict(marker="o", mfc="none", mec="tab:orange", mew=1.8, ms=9, ls=""),
+        "blocked, not searched": dict(marker="x", color="0.45", ms=8, mew=1.8, ls=""),
+    }
+    drawn: set[str] = set()
+    for sid, p in report.predictions.items():
+        result = acq_results.get(sid)
+        if p.elevation_deg < 0.0:
+            continue  # below the horizon: outside the plot, and no barrier's doing
+        if not p.open_sky:
+            kind = "blocked, not searched"
+        elif result is not None and result.signal_detected:
+            kind = "acquired"
+        elif result is not None:
+            kind = "searched, not found"
+        else:
+            continue
+        ax.plot(np.radians(p.azimuth_deg), 90.0 - p.elevation_deg,
+                label=None if kind in drawn else kind, **styles[kind])
+        drawn.add(kind)
+        ax.annotate(sid, (np.radians(p.azimuth_deg), 90.0 - p.elevation_deg),
+                    xytext=(6, 4), textcoords="offset points", fontsize=7)
+
+    searched = [sid for sid in report.predictions if sid in acq_results]
+    found = sum(acq_results[sid].signal_detected for sid in searched)
+    ax.set_title(f"{title}: {found} of {len(searched)} searched acquired\n"
+                 f"sky mask: {mask.describe()}", fontsize=9, pad=14)
+    place_legend(ax, outside=False, fontsize=7)
     return ax
 
 

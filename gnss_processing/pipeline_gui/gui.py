@@ -30,7 +30,10 @@ from .pipeline import (
     run_and_report,
 )
 from .plan import (
+    AssistRequest,
     RunRequest,
+    assist_request_from_text,
+    build_steps,
     default_track_duration_ms,
     parse_p_fa_total,
     parse_reference_geo,
@@ -147,8 +150,11 @@ class PipelineWindow:
         ttk.Label(row, text="Reference position:", width=16).pack(side="left")
         self.reference_var = tk.StringVar()
         ttk.Entry(row, textvariable=self.reference_var, width=36).pack(side="left")
-        ttk.Label(row, text="lat, lon, height m  (empty = notebook 02 default)",
+        ttk.Label(row, text="lat, lon, height m  (empty = notebook 02 default; "
+                            "needed for assisted acquisition)",
                   foreground="gray").pack(side="left", padx=4)
+
+        self._build_assisted(opts, pad)
 
         row = ttk.Frame(opts)
         row.pack(fill="x", **pad)
@@ -178,6 +184,61 @@ class PipelineWindow:
 
         self.log_box = ScrolledText(self.root, height=16, font=("Consolas", 9), state="disabled")
         self.log_box.pack(fill="both", expand=True, **pad)
+
+    def _build_assisted(self, parent, pad) -> None:
+        """
+        The assisted-acquisition box (D-080).  The sky mask starts as the entire sky:
+        minimum elevation from the config (0) and no blocked sector.
+        """
+        defaults = self.cfg.assisted
+        box = ttk.LabelFrame(parent, text="Assisted acquisition (notebook 01, for a weak sky)")
+        box.pack(fill="x", **pad)
+
+        row = ttk.Frame(box)
+        row.pack(fill="x", **pad)
+        self.assisted_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row, text="Use assisted acquisition", variable=self.assisted_var).pack(side="left")
+        ttk.Label(row, text="Time UTC:").pack(side="left", padx=(16, 0))
+        self.assist_time_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self.assist_time_var, width=20).pack(side="left", padx=4)
+        ttk.Label(row, text="YYYY-MM-DD HH:MM:SS at the file start (empty = from the collect name)",
+                  foreground="gray").pack(side="left")
+
+        row = ttk.Frame(box)
+        row.pack(fill="x", **pad)
+        ttk.Label(row, text="Min. elevation (deg):").pack(side="left")
+        self.assist_min_el_var = tk.StringVar(value=f"{defaults.min_elevation_deg:g}")
+        ttk.Entry(row, textvariable=self.assist_min_el_var, width=6).pack(side="left", padx=4)
+        ttk.Label(row, text="Blocked sectors:").pack(side="left", padx=(12, 0))
+        self.assist_sectors_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self.assist_sectors_var, width=30).pack(side="left", padx=4)
+        ttk.Label(row, text="az_from-az_to:up_to_el; ...  e.g. 300-60:60  (empty = entire sky)",
+                  foreground="gray").pack(side="left")
+
+        row = ttk.Frame(box)
+        row.pack(fill="x", **pad)
+        ttk.Label(row, text="Dwell multiplier:").pack(side="left")
+        self.assist_dwell_var = tk.StringVar(value=str(defaults.dwell_multiplier))
+        ttk.Entry(row, textvariable=self.assist_dwell_var, width=6).pack(side="left", padx=4)
+        ttk.Label(row, text="Stage 1 satellites:").pack(side="left", padx=(12, 0))
+        self.assist_stage1_var = tk.StringVar(value=str(defaults.stage1_satellites))
+        ttk.Entry(row, textvariable=self.assist_stage1_var, width=6).pack(side="left", padx=4)
+        ttk.Label(row, text="Stage 2 window +/- (Hz):").pack(side="left", padx=(12, 0))
+        self.assist_halfwidth_var = tk.StringVar(value=f"{defaults.doppler_halfwidth_hz:g}")
+        ttk.Entry(row, textvariable=self.assist_halfwidth_var, width=8).pack(side="left", padx=4)
+
+    def build_assist(self) -> AssistRequest | None:
+        """Read the assisted-acquisition fields.  None when the box is off."""
+        if not self.assisted_var.get():
+            return None
+        return assist_request_from_text(
+            time_utc=self.assist_time_var.get(),
+            min_elevation=self.assist_min_el_var.get(),
+            sectors=self.assist_sectors_var.get(),
+            dwell_multiplier=self.assist_dwell_var.get(),
+            stage1_satellites=self.assist_stage1_var.get(),
+            doppler_halfwidth=self.assist_halfwidth_var.get(),
+        )
 
     def _reports_root_text(self) -> str:
         try:
@@ -306,6 +367,7 @@ class PipelineWindow:
             acq_p_fa_total=p_fa,
             acq_threshold_db=threshold_db,
             acquisition_only=self.acquisition_only_var.get(),
+            assist=self.build_assist(),
         )
 
     def start_run(self) -> None:
@@ -315,6 +377,9 @@ class PipelineWindow:
             return
         try:
             request = self.build_request(channel)
+            # Check the whole plan now, so a missing value (for example the position
+            # that assisted acquisition needs) is a message here, not a failed run.
+            build_steps(request, self.cfg.navigation_unsupported, self.cfg.acquisition_only_stop_heading)
         except ValueError as exc:
             messagebox.showerror("Bad setting", str(exc))
             return
