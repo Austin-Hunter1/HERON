@@ -1,5 +1,5 @@
 """
-Assisted acquisition (D-080): the sky mask, the prediction, and the two-stage search.
+Assisted acquisition (D-086): the sky mask, the prediction, and the two-stage search.
 
 The search tests use a synthetic dwell with a known receiver clock offset: a strong
 G01, a weak G02 that a normal search misses, and no G03.  The assisted search must

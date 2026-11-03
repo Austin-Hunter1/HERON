@@ -120,7 +120,7 @@ class PipelineWindow:
         for nb, var in self.notebook_vars.items():
             ttk.Checkbutton(row, text=nb, variable=var).pack(side="left", padx=4)
         # Stops notebook 01 after its acquisition plots and skips notebook 02, so a
-        # threshold can be tried in about a minute (D-079).
+        # threshold can be tried in about a minute (D-085).
         self.acquisition_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="Acquisition only (no tracking, no notebook 02)",
                         variable=self.acquisition_only_var).pack(side="left", padx=(24, 4))
@@ -187,7 +187,7 @@ class PipelineWindow:
 
     def _build_assisted(self, parent, pad) -> None:
         """
-        The assisted-acquisition box (D-080).  The sky mask starts as the entire sky:
+        The assisted-acquisition box (D-086).  The sky mask starts as the entire sky:
         minimum elevation from the config (0) and no blocked sector.
         """
         defaults = self.cfg.assisted
@@ -300,7 +300,7 @@ class PipelineWindow:
                       text=f"no signals for band {channel.band_id} in the config").grid(row=0, column=0)
             return
         # One row per signal: the checkbox, then the two acquisition threshold
-        # fields of notebook 01 (D-079).  Empty fields keep the notebook default.
+        # fields of notebook 01 (D-085).  Empty fields keep the notebook default.
         frame = self.signals_frame
         ttk.Label(frame, text="acq. p_fa total").grid(row=0, column=1, padx=4)
         ttk.Label(frame, text="acq. threshold [dB]").grid(row=0, column=2, padx=4)

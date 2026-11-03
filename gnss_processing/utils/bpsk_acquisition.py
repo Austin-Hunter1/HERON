@@ -780,7 +780,7 @@ def run_acquisition(
 
     `detection_threshold_db` sets the threshold directly, in dB above the expected
     noise level -- the scale of `AcquisitionResult.peak_snr_db` and of the dashed
-    line on the acquisition plots (D-079).  Use it to admit a peak that a plot shows
+    line on the acquisition plots (D-085).  Use it to admit a peak that a plot shows
     just under the line.  It replaces `prob_false_alarm_total`, which is then not
     checked; the results carry the false-alarm total that this threshold implies,
     so the two stay consistent.  `None` (the default) keeps the p_fa behaviour.

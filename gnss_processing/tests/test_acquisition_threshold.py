@@ -1,6 +1,6 @@
 """
 The acquisition threshold can be set directly in dB above noise, and every PRN
-searched can be plotted against it (D-079).
+searched can be plotted against it (D-085).
 
 The dB threshold is the inverse of the p_fa one, so a p_fa run and a dB run at
 the equivalent value must decide the same.  The two all-PRN plots must show

@@ -1,5 +1,5 @@
 """
-Assisted acquisition: use the time, the place and the sky mask to search harder (D-080).
+Assisted acquisition: use the time, the place and the sky mask to search harder (D-086).
 
 A normal acquisition knows nothing: it searches every PRN over the full Doppler range,
 and the threshold must hold the false-alarm rate over that whole grid.  For a weak
@@ -318,7 +318,7 @@ def predict_for_collect(
 
 @dataclass(frozen=True)
 class AssistSettings:
-    """The tunable values of the assisted search (notebook 01 config, D-080)."""
+    """The tunable values of the assisted search (notebook 01 config, D-086)."""
 
     dwell_multiplier: int = 10
     """Stage 2 uses `num_blocks * dwell_multiplier` non-coherent blocks."""

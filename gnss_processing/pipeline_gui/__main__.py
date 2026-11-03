@@ -125,7 +125,7 @@ def main() -> int:
     parser.add_argument("--threshold-db", action="append", default=[], metavar="SIGNAL=DB",
                         help="Acquisition threshold in dB above noise, e.g. BdsB1C=8.5. "
                              "Wins over --p-fa. Repeatable.")
-    assist = parser.add_argument_group("assisted acquisition (D-080; needs --reference)")
+    assist = parser.add_argument_group("assisted acquisition (D-086; needs --reference)")
     assist.add_argument("--assisted", action="store_true",
                         help="Predict visible satellites and Doppler, then search them harder")
     assist.add_argument("--assist-time", help='UTC "YYYY-MM-DD HH:MM:SS" at the file start '

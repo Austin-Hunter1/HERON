@@ -131,7 +131,7 @@ def truncate_before(nb: dict, heading: str) -> int:
     many were removed.
 
     Why: a run can stop after one section, for example notebook 01 after its
-    acquisition plots, with no tracking (`--stop-before "## 6. Tracking"`, D-079).
+    acquisition plots, with no tracking (`--stop-before "## 6. Tracking"`, D-085).
     The heading is matched on the first line of a markdown cell, exactly.  A heading
     that is not found is an error, because a silent full run is the wrong result.
     """

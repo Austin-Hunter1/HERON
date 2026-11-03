@@ -1,4 +1,4 @@
-# Settings of the notebook pipeline window (`python -m pipeline_gui`, D-078).
+# Settings of the notebook pipeline window (`python -m pipeline_gui`, D-084).
 # The window runs notebooks 00, 01 and 02 on one channel of a collect, keeps
 # the figures, and writes a short PDF report.  The window reads this file each
 # time it starts.  A bad or missing value stops the start with a message.
@@ -44,11 +44,11 @@ signals_off_by_default: [GpsL1C]
 navigation_unsupported: [GpsL1C]
 
 # "Acquisition only" in the window runs notebook 01 up to this heading and does
-# not run notebook 02 (D-079).  The heading must be the first line of a markdown
+# not run notebook 02 (D-085).  The heading must be the first line of a markdown
 # cell of notebook 01, exactly.
 acquisition_only_stop_heading: "## 6. Tracking"
 
-# Default values of the "Assisted acquisition" fields of the window (D-080).
+# Default values of the "Assisted acquisition" fields of the window (D-086).
 # Notebook 01 predicts the visible satellites and their Doppler from the time,
 # the reference position and the CDDIS broadcast ephemeris.  Stage 1 searches the
 # highest few wide to measure the clock offset; stage 2 searches the rest in

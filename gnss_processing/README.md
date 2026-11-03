@@ -40,7 +40,7 @@ made for HERON's UAS GNSS-R work that are not upstream:
   earth instead of seeding the next epoch with it.
 - `scripts/run_notebook.py` -- runs notebook 00/01/02 headless with parameter
   overrides (see its docstring).
-- `pipeline_gui/` (new, D-078), `scripts/run_pipeline_gui.bat` -- a desktop window
+- `pipeline_gui/` (new, D-084), `scripts/run_pipeline_gui.bat` -- a desktop window
   that runs notebooks 00, 01 and 02 on one channel and writes a PDF report.
 - `notebooks/00-raw-signal-diagnostics.ipynb`, `01-acquisition-and-tracking.ipynb`,
   `02-navigation.ipynb` -- updated to use the above, plus per-run figure saving and
@@ -112,7 +112,7 @@ through the same three notebooks as the GPS signals.
 Limits that you should know: no ionosphere correction for BeiDou, B1C narrow-band
 only, and B1C has no real-data check yet. See `docs/BDS_FOLLOW_UP.md`.
 
-## One-click run of notebooks 00, 01 and 02 with a PDF report (D-078)
+## One-click run of notebooks 00, 01 and 02 with a PDF report (D-084)
 
 `pipeline_gui/` is a desktop window that runs the three notebooks on one channel.
 
@@ -133,7 +133,7 @@ signal fails. The defaults (signals per band, time limit, report layout, the tex
 the report copies) are in `configs/pipeline_gui.yml`. With no window:
 `python -m pipeline_gui --experiment 9 --channel 0 --signals GpsL1CA`.
 
-To examine a weak acquisition (D-079):
+To examine a weak acquisition (D-085):
 
 1. Select **Acquisition only**. Notebook 01 stops after its acquisition plots, and
    notebook 02 does not run. A run takes about a minute.
@@ -153,7 +153,7 @@ On the command line: `--acquisition-only`, `--threshold-db GpsL1CA=8.5`,
 `--p-fa BdsB1C=1e-3`.
 
 For a weak sky (indoors, under a roof, behind a wall), use **Assisted acquisition**
-(D-080):
+(D-086):
 
 1. Type the **Reference position** (lat, lon, height). It is required.
 2. Select **Use assisted acquisition**. The time comes from the collect name; type

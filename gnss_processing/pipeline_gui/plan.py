@@ -38,20 +38,20 @@ class RunRequest:
     reference_geo: tuple[float, float, float] | None = None
     acq_p_fa_total: dict[str, float] = field(default_factory=dict)
     """SIGNAL_ID -> false-alarm total of the first acquisition.  A missing signal
-    keeps the notebook's ACQ_SETTINGS value (D-079)."""
+    keeps the notebook's ACQ_SETTINGS value (D-085)."""
     acq_threshold_db: dict[str, float] = field(default_factory=dict)
     """SIGNAL_ID -> detection threshold in dB above noise.  Wins over
-    `acq_p_fa_total` in the notebook when both are given (D-079)."""
+    `acq_p_fa_total` in the notebook when both are given (D-085)."""
     acquisition_only: bool = False
-    """Run notebook 01 up to its acquisition plots only, and no notebook 02 (D-079)."""
+    """Run notebook 01 up to its acquisition plots only, and no notebook 02 (D-085)."""
     assist: AssistRequest | None = None
-    """Assisted acquisition in notebook 01 (D-080); None is the normal search."""
+    """Assisted acquisition in notebook 01 (D-086); None is the normal search."""
 
 
 @dataclass(frozen=True)
 class AssistRequest:
     """
-    The assisted-acquisition values of notebook 01 (D-080).  The receiver position
+    The assisted-acquisition values of notebook 01 (D-086).  The receiver position
     is `RunRequest.reference_geo`, the same field notebook 02 uses.
 
     `blocked_sectors` holds `(az_from_deg, az_to_deg, up_to_elevation_deg)` tuples,

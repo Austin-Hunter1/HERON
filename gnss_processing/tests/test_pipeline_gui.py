@@ -1,5 +1,5 @@
 """
-Tests of the notebook pipeline window logic (D-078): the config loader, the step
+Tests of the notebook pipeline window logic (D-084): the config loader, the step
 plan, the figure and notebook readers, and the PDF report.  The window itself
 and the real notebook runs are not tested here; they need a display and a kernel.
 """

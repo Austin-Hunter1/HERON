@@ -128,12 +128,12 @@ a generous `--timeout` for a full-length collect.
 To run acquisition only (a minute, no tracking file), add
 `--stop-before "## 6. Tracking"`. To change the detection threshold of the first
 acquisition, add `--set ACQ_THRESHOLD_DB=8.5` (dB above noise) or
-`--set ACQ_P_FA_TOTAL=1e-3`; the dB value wins (D-079). Figures
+`--set ACQ_P_FA_TOTAL=1e-3`; the dB value wins (D-085). Figures
 `02b_acquisition_peak_snr_all_prns.png` and
 `02c_acquisition_code_phase_slices_all_prns.png` show every PRN searched against the
 threshold.
 
-For a weak sky, assisted acquisition (D-080) predicts the visible satellites and their
+For a weak sky, assisted acquisition (D-086) predicts the visible satellites and their
 Doppler from the CDDIS broadcast ephemeris and searches them harder:
 `--set ASSISTED_ACQUISITION=True --set "ASSIST_POSITION_GEO=(lat, lon, h)"`, and
 optionally `ASSIST_MIN_ELEVATION_DEG`, `ASSIST_BLOCKED_SECTORS=[(az_from, az_to, up_to_el)]`,

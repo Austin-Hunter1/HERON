@@ -39,7 +39,7 @@ class ReportConfig:
 
 @dataclass(frozen=True)
 class AssistDefaults:
-    """Default values of the assisted-acquisition fields of the window (D-080)."""
+    """Default values of the assisted-acquisition fields of the window (D-086)."""
 
     min_elevation_deg: float
     dwell_multiplier: int

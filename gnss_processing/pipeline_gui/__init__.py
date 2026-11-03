@@ -1,5 +1,5 @@
 """
-Notebook pipeline window (D-078).
+Notebook pipeline window (D-084).
 
 Runs notebooks 00, 01 and 02 on one channel of a collect with one click, keeps
 every figure, and writes a short PDF report.  Start it from `gnss_processing/`:

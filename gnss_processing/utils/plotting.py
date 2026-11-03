@@ -301,7 +301,7 @@ def plot_acquisition_peak_snr(
     title: str = "Acquisition peak of every PRN searched",
 ) -> Axes:
     """
-    Peak SNR of every PRN searched, as bars, with the detection threshold (D-079).
+    Peak SNR of every PRN searched, as bars, with the detection threshold (D-085).
 
     The scale is dB above the expected noise level -- the scale of the acquisition
     table and of `plot_acquisition_code_phase_slices` -- so a bar just under the
@@ -310,7 +310,7 @@ def plot_acquisition_peak_snr(
     are grey.  For a PRN that a fine search refined, the bar is the coarse peak,
     because detection is decided on the coarse grid.
 
-    When the PRNs have different thresholds (assisted acquisition, D-080: a narrow
+    When the PRNs have different thresholds (assisted acquisition, D-086: a narrow
     stage-2 window has fewer cells, so a lower threshold), each bar gets its own
     dashed threshold mark instead of one line across the plot.
     """
@@ -690,7 +690,7 @@ def plot_acquisition_code_phase_slices(
     Signals are taken from `acq_results` by default only where `signal_detected` is
     set; elsewhere the "peak" is a noise maximum whose neighbourhood means nothing.
 
-    Pass `signal_ids=sorted(acq_results)` to draw every PRN searched (D-079).  A PRN
+    Pass `signal_ids=sorted(acq_results)` to draw every PRN searched (D-085).  A PRN
     below the threshold is then drawn dotted, about its own highest cell.  The shape
     of a dotted curve does not show whether it is a signal: every noise maximum is a
     triangle too (the BOC shape for B1C).  The dotted curves of PRNs that are not
@@ -802,7 +802,7 @@ def plot_acquisition_code_phase_slices(
             ax.plot([], [], ":", color=colour, lw=1.5, label=label)
 
     # One line per distinct threshold.  A normal sweep has one; an assisted one
-    # (D-080) has one for its wide stage 1 and a lower one for its narrow stage 2.
+    # (D-086) has one for its wide stage 1 and a lower one for its narrow stage 2.
     for threshold_db in sorted({round(acq_results[s].detection_threshold_db, 2) for s in signal_ids}):
         ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
                    label=f"detection threshold ({threshold_db:.2f} dB)")
@@ -842,7 +842,7 @@ def plot_assisted_skyplot(
     title: str = "Assisted acquisition",
 ) -> Axes:
     """
-    The sky that assisted acquisition (D-080) predicted, and what it found there.
+    The sky that assisted acquisition (D-086) predicted, and what it found there.
 
     North is up and azimuth runs clockwise; the centre is the zenith and the rim is
     the horizon.  Grey is the sky mask: below the minimum elevation, and each blocked

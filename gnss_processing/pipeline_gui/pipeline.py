@@ -88,7 +88,7 @@ def make_report_dir(reports_root: Path, experiment_name: str, collect_id: str, b
 
 
 def _threshold_text(request: RunRequest) -> str:
-    """The acquisition threshold of each signal, as the summary page shows it (D-079)."""
+    """The acquisition threshold of each signal, as the summary page shows it (D-085)."""
     parts = []
     for signal in request.signals:
         if signal in request.acq_threshold_db:
@@ -99,7 +99,7 @@ def _threshold_text(request: RunRequest) -> str:
 
 
 def _assist_text(request: RunRequest) -> str:
-    """The acquisition mode line of the summary page (D-080)."""
+    """The acquisition mode line of the summary page (D-086)."""
     a = request.assist
     if a is None:
         return "normal (every PRN, full Doppler range)"
