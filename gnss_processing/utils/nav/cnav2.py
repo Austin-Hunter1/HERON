@@ -204,6 +204,25 @@ def find_frame_offset(symbols: np.ndarray) -> tuple[int, float]:
     return best, float(confidence[best])
 
 
+def rank_frame_offsets(symbols: np.ndarray, count: int) -> np.ndarray:
+    """
+    The `count` most likely frame starts, best first.
+
+    The TOI correlation is blind to the polarity of the symbols (it uses magnitudes),
+    so one ranking serves both polarities.  The caller confirms a candidate with the
+    subframe 2 CRC, which `find_frame_offset` alone cannot do.
+    """
+    symbols = np.asarray(symbols, dtype=np.float64)
+    if len(symbols) < FRAME_SYMBOLS + SUBFRAME_1_SYMBOLS:
+        raise ValueError(
+            f"blind frame search needs at least {FRAME_SYMBOLS + SUBFRAME_1_SYMBOLS} "
+            f"symbols to cover every offset, got {len(symbols)}"
+        )
+    blocks = np.stack([symbols[o : o + SUBFRAME_1_SYMBOLS] for o in range(FRAME_SYMBOLS)])
+    _, confidence = _correlate_toi(blocks)
+    return np.argsort(confidence)[::-1][:count]
+
+
 def decode(
     symbols: np.ndarray,
     *,

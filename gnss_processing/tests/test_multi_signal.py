@@ -199,7 +199,7 @@ def test_the_decoder_follows_the_signal_type(patched_extract):
     patched_extract["b"] = _b1c_stream([_b1c_frame(7, 20)])
     assert multi_signal.decode_beidou_channel("a", "C07", "BDS_B2A").anchor.tow_s == 5000 * 3.0
     assert multi_signal.decode_beidou_channel("b", "C07", "BDS_B1C").anchor.tow_s == 10 * 3600 + 360
-    with pytest.raises(ValueError, match="not a BeiDou signal"):
+    with pytest.raises(ValueError, match="carries its own ephemeris"):
         multi_signal.decode_beidou_channel("a", "G07", "GPS_L5")
 
 
@@ -232,3 +232,78 @@ def test_common_epoch_grid_is_the_span_every_channel_shares():
         observables.common_epoch_grid([{"a": outputs(0.0, 100.0)}, {"b": outputs(200.0, 300.0)}])
     with pytest.raises(ValueError, match="enough epochs"):
         observables.common_epoch_grid([{}])
+
+
+# ---------------------------------------------------------------------------
+# GPS L1C (CNAV-2): one subframe 2 holds the ephemeris, the TOI of the frame before it the time
+# ---------------------------------------------------------------------------
+
+
+def _cnav2_stream(n_frames=4, lead=500, sign=1.0, toi0=40, itow=61):
+    from utils.nav import cnav2
+
+    rng = np.random.default_rng(3)
+    frames = []
+    for k in range(n_frames):
+        values = {"wn": 2400, "itow": itow, "toe": 7200.0, "top": 3600.0, "e": 0.01, "delta_a": 100.0,
+                  "M0": 0.1 * k, "af0": 1e-5}
+        sf2 = cnav2.build_subframe_2(values)
+        sf3 = prim.crc24q_append(rng.integers(0, 2, 250).astype(np.uint8))
+        info2 = 1.0 - 2.0 * sf2
+        info3 = 1.0 - 2.0 * sf3
+        frames.append(cnav2.build_frame(
+            toi=toi0 + k,
+            subframe_2=np.concatenate([info2, rng.normal(0, 1, 600)]),
+            subframe_3=np.concatenate([info3, rng.normal(0, 1, 274)]),
+        ))
+    soft = sign * np.concatenate([rng.normal(0, 1, lead)] + frames)
+    return nav_symbols.SymbolStream(
+        values=soft.astype(complex),
+        uptime_ms=1000.0 + 10.0 * np.arange(len(soft)),
+        code_phase_ms=2000.0 + 10.0 * np.arange(len(soft)),
+        symbol_period_ms=10, signal_type_id="GPS_L1C", epochs_per_symbol=1,
+        dropped_epochs=0, bit_sync=None, data_in_quadrature=False,
+    ), lead
+
+
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_an_l1c_stream_gives_an_anchor_in_gps_time_and_an_ephemeris(sign):
+    stream, lead = _cnav2_stream(sign=sign)
+    decoded = multi_signal.decode_cnav2_stream(stream, "G05")
+    assert decoded.failure is None, decoded.failure
+    assert decoded.result.inverted == (sign < 0)
+    assert decoded.anchor.time_system == "GPST"
+    assert decoded.anchor.week == 2400
+    # The anchor is frame 1 (it needs the TOI of frame 0): ITOW 61, TOI 40.
+    assert decoded.anchor.tow_s == 61 * 7200.0 + 40 * 18.0
+    assert decoded.anchor_uptime_ms == pytest.approx(1000.0 + 10.0 * (lead + 1800))
+    assert decoded.anchor.code_phase_ms == pytest.approx(2000.0 + 10.0 * (lead + 1800))
+    assert decoded.ephemeris.sat_id == "G05" and decoded.ephemeris.e == pytest.approx(0.01, abs=2.0**-34)
+
+
+def test_one_frame_is_not_enough_for_an_l1c_anchor():
+    stream, _ = _cnav2_stream(n_frames=1, lead=100)
+    decoded = multi_signal.decode_cnav2_stream(stream, "G05")
+    assert decoded.anchor is None and decoded.failure
+
+
+def test_noise_gives_an_l1c_failure_not_a_guess():
+    noise = np.random.default_rng(1).normal(0, 1, 6000)
+    stream = nav_symbols.SymbolStream(
+        values=noise.astype(complex), uptime_ms=np.arange(6000) * 10.0, code_phase_ms=np.arange(6000) * 10.0,
+        symbol_period_ms=10, signal_type_id="GPS_L1C", epochs_per_symbol=1, dropped_epochs=0,
+        bit_sync=None, data_in_quadrature=False,
+    )
+    decoded = multi_signal.decode_cnav2_stream(stream, "G05")
+    assert decoded.anchor is None and "CRC" in decoded.failure
+
+
+def test_l1c_group_delay_uses_the_pilot_correction():
+    from utils.nav import cnav2
+
+    sf2 = cnav2.Subframe2(
+        fields={**{k: 0.0 for k in cnav2.SUBFRAME_2_FIELDS}, "wn": 1, "tgd": 5e-9, "isc_l1cp": 2e-9, "isc_l1cd": 9e-9},
+        bits=np.zeros(600, dtype=np.uint8), inverted=False,
+    )
+    eph = cnav2.assemble_ephemeris(sf2, "G01")
+    assert observables.signal_group_delay_s(eph, "GPS_L1C") == pytest.approx(-5e-9 + 2e-9)

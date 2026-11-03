@@ -21,8 +21,9 @@ Three notebooks are the application layer. All logic is in `utils/`.
 
 Signals that run end to end: GPS L1 C/A, L2C, L5, BeiDou B2a, BeiDou B1C.
 Galileo E5a acquires and tracks (`utils/gal_e5a.py`, PRN 1 to 50); its F/NAV decoder is not built yet.
-GPS L1C acquires and tracks (codes in `utils/gps_l1c.py`, PRN 1 to 63), but notebook 02 stops at its
-message (the LDPC decoder is missing in `nav/cnav2.py`).
+GPS L1C acquires, tracks and, in notebook 02, gives a fix (codes in `utils/gps_l1c.py`, PRN 1 to 63).
+Its subframe 2 is read without LDPC error correction and accepted on CRC-24Q alone (D-079), so a
+single wrong symbol loses a frame. It is tested on synthetic data only.
 
 ## 2. Layout
 

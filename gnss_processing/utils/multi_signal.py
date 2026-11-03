@@ -17,7 +17,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import broadcast_ephemeris, observables
-from .nav import bcnav1, bcnav2, cnav, lnav
+import numpy as np
+
+from .nav import bcnav1, bcnav2, cnav, cnav2, lnav
 from .nav import symbols as nav_symbols
 from .nav.ephemeris import BdsEphemeris, Ephemeris
 
@@ -25,6 +27,7 @@ SIGNAL_TYPE_ID = "BDS_B2A"
 B1C_SIGNAL_TYPE_ID = "BDS_B1C"
 GPS_L1CA_SIGNAL_TYPE_ID = "GPS_L1CA"
 GPS_L5_SIGNAL_TYPE_ID = "GPS_L5"
+L1C_SIGNAL_TYPE_ID = "GPS_L1C"
 
 
 @dataclass
@@ -96,13 +99,112 @@ def decode_bcnav1_channel(outputs, sat_id: str) -> DecodedChannel:
     )
 
 
+@dataclass
+class Cnav2Decode:
+    """What the CNAV-2 decoder found in one symbol stream, in the shape notebook 02 prints."""
+
+    frames: list[cnav2.Cnav2Frame]
+    subframes_2: list[cnav2.Subframe2 | None]
+    inverted: bool
+    """True when the symbols had to be negated for subframe 2 to pass its CRC."""
+
+    @property
+    def synced(self) -> bool:
+        return any(sf is not None for sf in self.subframes_2)
+
+    def sow_is_consistent(self) -> bool:
+        """Successive TOIs step by one frame (the check notebook 02 calls by this name)."""
+        return cnav2.toi_is_consistent(self.frames)
+
+    @property
+    def page_ids(self) -> list[int]:
+        return []
+
+
+# How many candidate frame starts the CRC is tried at.  The TOI correlation ranks the
+# 1800 offsets; the true one is nearly always first, so a few are enough.
+CNAV2_FRAME_CANDIDATES = 5
+
+
+def _decode_cnav2_polarity(soft: np.ndarray, sign: float, offsets):
+    """Frames, subframes 2 and the number of CRC passes for one symbol polarity."""
+    best: tuple[int, list, list] = (0, [], [])
+    for offset in offsets:
+        frames = cnav2.decode(sign * soft, frame_offset=int(offset))
+        subframes = [cnav2.decode_subframe_2(f) for f in frames]
+        # Only an upright pass counts: a subframe that passes the CRC only after being
+        # flipped means THIS polarity is the wrong one, and its TOI is wrong with it.
+        passes = sum(sf is not None and not sf.inverted for sf in subframes)
+        if passes > best[0]:
+            best = (passes, frames, subframes)
+    return best[1], best[2], best[0]
+
+
+def decode_cnav2_stream(stream, sat_id: str) -> DecodedChannel:
+    """
+    Symbols, frames, ephemeris and time anchor for one L1C stream.
+
+    One frame's subframe 2 holds the whole ephemeris and the clock, so a satellite is
+    usable once one subframe 2 passes its CRC AND the frame before it has a valid TOI:
+    the start of frame k is ``ITOW(k) * 7200 + TOI(k-1) * 18`` (the TOI names the NEXT
+    frame).  So the first anchor needs two whole frames after the frame search, about
+    36 s of symbols plus up to 18 s to the first frame start.
+
+    Polarity: the data axis sign is not known.  Both signs are decoded and the one whose
+    subframe 2 passes the CRC without a flip wins, because the TOI's top bit is its sign
+    and a wrong polarity would give a wrong TOI.
+    """
+    soft = np.asarray(stream.soft, dtype=float)
+    if len(soft) < cnav2.FRAME_SYMBOLS + cnav2.SUBFRAME_1_SYMBOLS:
+        return DecodedChannel(
+            stream, Cnav2Decode([], [], False),
+            failure=f"{sat_id} ({len(soft):,} symbols, under one frame plus a TOI)",
+        )
+    offsets = cnav2.rank_frame_offsets(soft, CNAV2_FRAME_CANDIDATES)
+    candidates = [(sign, *_decode_cnav2_polarity(soft, sign, offsets)) for sign in (1.0, -1.0)]
+    sign, frames, subframes, passes = max(candidates, key=lambda c: c[3])
+    result = Cnav2Decode(frames, subframes, inverted=sign < 0)
+    if passes == 0:
+        return DecodedChannel(
+            stream, result, failure=f"{sat_id} ({len(stream):,} symbols, no subframe 2 survived the CRC)"
+        )
+    for k in range(1, len(frames)):
+        sf2 = subframes[k]
+        if sf2 is not None and frames[k - 1].toi_is_valid:
+            tow_s = cnav2.frame_start_tow_s(frames[k - 1], sf2)
+            symbol_index = frames[k].symbol_index
+            ephemeris = cnav2.assemble_ephemeris(sf2, sat_id)
+            return DecodedChannel(
+                stream, result, ephemeris,
+                anchor=observables.anchor_from_cnav2(
+                    stream, symbol_index, tow_s, int(sf2["wn"]), sat_id
+                ),
+                anchor_uptime_ms=float(stream.uptime_ms[symbol_index]),
+            )
+    return DecodedChannel(
+        stream, result,
+        failure=f"{sat_id} ({passes} subframe 2 passed, but none follows a frame with a valid TOI)",
+    )
+
+
+def decode_cnav2_channel(outputs, sat_id: str) -> DecodedChannel:
+    """`decode_cnav2_stream` for the symbols of one tracked L1C channel."""
+    stream = nav_symbols.extract(outputs, L1C_SIGNAL_TYPE_ID)
+    if not len(stream):
+        return DecodedChannel(stream, failure=f"{sat_id} (never reached the state that makes epochs symbols)")
+    return decode_cnav2_stream(stream, sat_id)
+
+
 def decode_beidou_channel(outputs, sat_id: str, signal_type_id: str) -> DecodedChannel:
     """`decode_bcnav2_channel` or `decode_bcnav1_channel`, by the signal the channel tracked."""
     if signal_type_id == SIGNAL_TYPE_ID:
         return decode_bcnav2_channel(outputs, sat_id)
     if signal_type_id == B1C_SIGNAL_TYPE_ID:
         return decode_bcnav1_channel(outputs, sat_id)
-    raise ValueError(f"{signal_type_id!r} is not a BeiDou signal with a decoder here")
+    if signal_type_id == L1C_SIGNAL_TYPE_ID:
+        # Not BeiDou, but the same shape: the signal carries its own ephemeris.
+        return decode_cnav2_channel(outputs, sat_id)
+    raise ValueError(f"{signal_type_id!r} is not a signal that carries its own ephemeris here")
 
 
 @dataclass

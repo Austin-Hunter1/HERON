@@ -163,6 +163,32 @@ def anchor_from_bcnav1(stream, frame) -> TimeAnchor:
     )
 
 
+def anchor_from_cnav2(
+    stream, symbol_index: int, tow_s: float, week: int, sat_id: str
+) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a CNAV-2 frame start.
+
+    `symbol_index` is where the frame's first symbol sits in `stream`, and `tow_s` is
+    the time of week of that symbol, ``ITOW * 7200 + TOI * 18`` (see
+    `nav.cnav2.frame_start_tow_s`).  The week number is the 13-bit one of subframe 2.
+    CNAV-2 is in GPS time.
+    """
+    if symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=tow_s,
+        code_phase_ms=float(stream.code_phase_ms[symbol_index]),
+        week=week,
+        source="CNAV-2 TOI and ITOW",
+        time_system="GPST",
+    )
+
+
 def anchor_from_lnav(stream, subframe, sat_id: str) -> TimeAnchor:
     """Build a `TimeAnchor` from a decoded LNAV subframe."""
     if subframe.symbol_index >= len(stream.code_phase_ms):
@@ -623,6 +649,8 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
             "GPS_L1CA": ephemeris.isc_l1ca,
             "GPS_L2C": ephemeris.isc_l2c,
             "GPS_L5": ephemeris.isc_l5i5,
+            # The pilot's correction, as for B1C: the carrier loop runs on the pilot.
+            "GPS_L1C": ephemeris.isc_l1cp,
         }.get(signal_type_id) or 0.0
     return -tgd + isc
 
