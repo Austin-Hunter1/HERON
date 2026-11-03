@@ -37,7 +37,14 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from . import time_systems
-from .nav.ephemeris import SPEED_OF_LIGHT, BdsEphemeris, CnavEphemeris, Ephemeris, LnavEphemeris
+from .nav.ephemeris import (
+    SPEED_OF_LIGHT,
+    BdsEphemeris,
+    CnavEphemeris,
+    Ephemeris,
+    GalEphemeris,
+    LnavEphemeris,
+)
 
 # Nominal carrier frequencies, for scaling a single-frequency ionospheric delay
 # between bands.  The Klobuchar model is defined for L1.
@@ -185,6 +192,31 @@ def anchor_from_cnav2(
         code_phase_ms=float(stream.code_phase_ms[symbol_index]),
         week=week,
         source="CNAV-2 TOI and ITOW",
+        time_system="GPST",
+    )
+
+
+def anchor_from_fnav(stream, page, sat_id: str) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded F/NAV page-1 and the stream it came from.
+
+    The time of week of a page names its first symbol, and `page.symbol_index` is where
+    that symbol sits in `stream`.  Galileo System Time is taken as GPS time (they differ
+    by nanoseconds), and the GPS week is the GST week plus 1024.
+    """
+    if "tow" not in page.fields:
+        raise ValueError(f"page type {page.page_type} carries no time of week; use a page 1")
+    if page.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"page at symbol {page.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=float(page.fields["tow"]),
+        code_phase_ms=float(stream.code_phase_ms[page.symbol_index]),
+        week=int(page.fields["wn"]) + 1024,
+        source=f"F/NAV page 1, TOW {int(page.fields['tow'])}",
         time_system="GPST",
     )
 
@@ -642,6 +674,11 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
                 f"not {signal_type_id!r}"
             )
         return ephemeris.group_delay_s(pilot_component)
+    if isinstance(ephemeris, GalEphemeris):
+        # Galileo states one group delay, BGD(E1,E5a); the E5a user scales it (ICD 5.1.5).
+        if signal_type_id != "GAL_E5A":
+            raise ValueError(f"a Galileo F/NAV ephemeris has a group delay for E5a only, not {signal_type_id!r}")
+        return ephemeris.group_delay_s()
     tgd = ephemeris.tgd
     isc = 0.0
     if isinstance(ephemeris, CnavEphemeris):

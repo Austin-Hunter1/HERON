@@ -20,7 +20,7 @@ Three notebooks are the application layer. All logic is in `utils/`.
 | `02-navigation` | Decode the message, form pseudoranges, solve the position | tracking `.h5` file | figures, fix |
 
 Signals that run end to end: GPS L1 C/A, L2C, L5, BeiDou B2a, BeiDou B1C.
-Galileo E5a acquires and tracks (`utils/gal_e5a.py`, PRN 1 to 50); its F/NAV decoder is not built yet.
+Galileo E5a acquires, tracks and, in notebook 02, gives a fix (`utils/gal_e5a.py`, PRN 1 to 50; F/NAV in `utils/nav/fnav.py`). It is tested on synthetic data only.
 GPS L1C acquires, tracks and, in notebook 02, gives a fix (codes in `utils/gps_l1c.py`, PRN 1 to 63).
 Its subframe 2 is read without LDPC error correction and accepted on CRC-24Q alone (D-079), so a
 single wrong symbol loses a frame. It is tested on synthetic data only.
@@ -74,6 +74,7 @@ failures that are not BeiDou work (`docs/BDS_BASELINE_TESTS.md`).
 | --- | --- |
 | `symbols.py` | Tracking outputs to soft symbols. Tables per signal: data component, symbol period, overlay, quadrature. |
 | `lnav.py`, `cnav.py`, `cnav2.py` | GPS LNAV, CNAV, CNAV-2. |
+| `fnav.py` | Galileo F/NAV (E5a): page sync, Viterbi, CRC, pages 1 to 4, ephemeris. |
 | `bcnav2.py` | BeiDou B-CNAV2 (B2a): preamble search, LDPC, CRC, types 10, 11, 30. |
 | `bcnav1.py` | BeiDou B-CNAV1 (B1C): frame search on the BCH-coded PRN field, interleaver, two LDPC codes, CRC, subframes 2 and 3. |
 | `ldpc.py`, `ldpc_b1c_tables.py` | The three 64-ary LDPC codes in one class, with a soft min-sum decoder. |

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from . import broadcast_ephemeris, observables
 import numpy as np
 
-from .nav import bcnav1, bcnav2, cnav, cnav2, lnav
+from .nav import bcnav1, bcnav2, cnav, cnav2, fnav, lnav
 from .nav import symbols as nav_symbols
 from .nav.ephemeris import BdsEphemeris, Ephemeris
 
@@ -28,6 +28,7 @@ B1C_SIGNAL_TYPE_ID = "BDS_B1C"
 GPS_L1CA_SIGNAL_TYPE_ID = "GPS_L1CA"
 GPS_L5_SIGNAL_TYPE_ID = "GPS_L5"
 L1C_SIGNAL_TYPE_ID = "GPS_L1C"
+E5A_SIGNAL_TYPE_ID = "GAL_E5A"
 
 
 @dataclass
@@ -195,12 +196,50 @@ def decode_cnav2_channel(outputs, sat_id: str) -> DecodedChannel:
     return decode_cnav2_stream(stream, sat_id)
 
 
+def decode_fnav_stream(stream, sat_id: str) -> DecodedChannel:
+    """
+    Pages, ephemeris and time anchor for one E5a stream (50 sps).
+
+    The ephemeris needs one page each of types 1, 2, 3 and 4 with the same IOD_nav; the
+    four pages are 40 s of transmission and can arrive in any rotation, so the first
+    complete set can take up to 60 s of tracking after the pull-in.  The anchor is the
+    first page 1: its time of week names the page's first symbol.
+    """
+    result = fnav.decode(stream.soft)
+    if not result.synced:
+        return DecodedChannel(
+            stream, result, failure=f"{sat_id} ({len(stream):,} symbols, no page survived the CRC)"
+        )
+    ephemeris = fnav.assemble_ephemeris(result, sat_id)
+    if ephemeris is None:
+        return DecodedChannel(
+            stream, result,
+            failure=f"{sat_id} ({len(result.pages)} pages, but no set of pages 1-4 with one IOD_nav yet)",
+        )
+    page = result.of_type(1)[0]
+    return DecodedChannel(
+        stream, result, ephemeris,
+        anchor=observables.anchor_from_fnav(stream, page, sat_id),
+        anchor_uptime_ms=float(stream.uptime_ms[page.symbol_index]),
+    )
+
+
+def decode_fnav_channel(outputs, sat_id: str) -> DecodedChannel:
+    """`decode_fnav_stream` for the symbols of one tracked E5a channel."""
+    stream = nav_symbols.extract(outputs, E5A_SIGNAL_TYPE_ID)
+    if not len(stream):
+        return DecodedChannel(stream, failure=f"{sat_id} (never reached the state that makes epochs symbols)")
+    return decode_fnav_stream(stream, sat_id)
+
+
 def decode_beidou_channel(outputs, sat_id: str, signal_type_id: str) -> DecodedChannel:
     """`decode_bcnav2_channel` or `decode_bcnav1_channel`, by the signal the channel tracked."""
     if signal_type_id == SIGNAL_TYPE_ID:
         return decode_bcnav2_channel(outputs, sat_id)
     if signal_type_id == B1C_SIGNAL_TYPE_ID:
         return decode_bcnav1_channel(outputs, sat_id)
+    if signal_type_id == E5A_SIGNAL_TYPE_ID:
+        return decode_fnav_channel(outputs, sat_id)
     if signal_type_id == L1C_SIGNAL_TYPE_ID:
         # Not BeiDou, but the same shape: the signal carries its own ephemeris.
         return decode_cnav2_channel(outputs, sat_id)

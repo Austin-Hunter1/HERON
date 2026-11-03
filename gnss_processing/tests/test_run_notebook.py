@@ -52,10 +52,7 @@ def test_the_runner_can_set_a_beidou_signal(number, signal):
 
 @pytest.mark.parametrize("number", ["01", "02"])
 @pytest.mark.parametrize("signal", ["BdsB2a", "BdsB1C", "GalE5a"])
-def test_every_per_signal_table_of_the_notebook_has_the_signal(number, signal, request):
-    if signal == "GalE5a" and number == "02":
-        # Notebook 02 gets E5a with the F/NAV decoder (Phase E6 of the L1C/E5a plan).
-        request.applymarker(pytest.mark.xfail(strict=True, reason="E5a message decoding is Phase E4 to E6"))
+def test_every_per_signal_table_of_the_notebook_has_the_signal(number, signal):
     """A dict indexed by SIGNAL_ID that lacks a signal fails with a KeyError at run time."""
     code = _code(_notebook(number))
     # Each `{...}[SIGNAL_ID]` or `{...}[SIGNAL_ID.signal_type_id]` block names the signal.
