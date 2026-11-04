@@ -45,6 +45,8 @@ PILOT_SECONDARY_LENGTH = 1800
 # The subcarrier of the BOC(1,1) parts runs at the chip rate (f = 1.023 MHz);
 # a BOC(1,1) chip has two half-cycles ("sub-chips").
 BOC11_SUBCARRIER_RATE_HZ = 1.023e6
+# The BOC(6,1) part of the pilot (QMBOC): the subcarrier runs at 6 times the chip rate.
+BOC61_SUBCARRIER_RATE_HZ = 6.138e6
 
 # --- Power split (ICD Table 4-2) -------------------------------------------
 DATA_POWER_FRACTION = 1.0 / 4.0

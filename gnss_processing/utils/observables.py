@@ -37,7 +37,14 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from . import time_systems
-from .nav.ephemeris import SPEED_OF_LIGHT, BdsEphemeris, CnavEphemeris, Ephemeris, LnavEphemeris
+from .nav.ephemeris import (
+    SPEED_OF_LIGHT,
+    BdsEphemeris,
+    CnavEphemeris,
+    Ephemeris,
+    GalEphemeris,
+    LnavEphemeris,
+)
 
 # Nominal carrier frequencies, for scaling a single-frequency ionospheric delay
 # between bands.  The Klobuchar model is defined for L1.
@@ -52,6 +59,7 @@ BAND_FREQ_HZ: dict[str, float] = {
     "GPS_L5": L5_FREQ_HZ,
     "BDS_B2A": L5_FREQ_HZ,
     "BDS_B1C": L1_FREQ_HZ,
+    "GAL_E5A": L5_FREQ_HZ,
 }
 
 # A rough transit time, used only to place the nominal receiver clock so that
@@ -159,6 +167,57 @@ def anchor_from_bcnav1(stream, frame) -> TimeAnchor:
         week=frame.wn,
         source=f"B-CNAV1 HOW {frame.how}, SOH count {frame.soh_count}",
         time_system="BDT",
+    )
+
+
+def anchor_from_cnav2(
+    stream, symbol_index: int, tow_s: float, week: int, sat_id: str
+) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a CNAV-2 frame start.
+
+    `symbol_index` is where the frame's first symbol sits in `stream`, and `tow_s` is
+    the time of week of that symbol, ``ITOW * 7200 + TOI * 18`` (see
+    `nav.cnav2.frame_start_tow_s`).  The week number is the 13-bit one of subframe 2.
+    CNAV-2 is in GPS time.
+    """
+    if symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=tow_s,
+        code_phase_ms=float(stream.code_phase_ms[symbol_index]),
+        week=week,
+        source="CNAV-2 TOI and ITOW",
+        time_system="GPST",
+    )
+
+
+def anchor_from_fnav(stream, page, sat_id: str) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded F/NAV page-1 and the stream it came from.
+
+    The time of week of a page names its first symbol, and `page.symbol_index` is where
+    that symbol sits in `stream`.  Galileo System Time is taken as GPS time (they differ
+    by nanoseconds), and the GPS week is the GST week plus 1024.
+    """
+    if "tow" not in page.fields:
+        raise ValueError(f"page type {page.page_type} carries no time of week; use a page 1")
+    if page.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"page at symbol {page.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=float(page.fields["tow"]),
+        code_phase_ms=float(stream.code_phase_ms[page.symbol_index]),
+        week=int(page.fields["wn"]) + 1024,
+        source=f"F/NAV page 1, TOW {int(page.fields['tow'])}",
+        time_system="GPST",
     )
 
 
@@ -615,6 +674,11 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
                 f"not {signal_type_id!r}"
             )
         return ephemeris.group_delay_s(pilot_component)
+    if isinstance(ephemeris, GalEphemeris):
+        # Galileo states one group delay, BGD(E1,E5a); the E5a user scales it (ICD 5.1.5).
+        if signal_type_id != "GAL_E5A":
+            raise ValueError(f"a Galileo F/NAV ephemeris has a group delay for E5a only, not {signal_type_id!r}")
+        return ephemeris.group_delay_s()
     tgd = ephemeris.tgd
     isc = 0.0
     if isinstance(ephemeris, CnavEphemeris):
@@ -622,6 +686,8 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
             "GPS_L1CA": ephemeris.isc_l1ca,
             "GPS_L2C": ephemeris.isc_l2c,
             "GPS_L5": ephemeris.isc_l5i5,
+            # The pilot's correction, as for B1C: the carrier loop runs on the pilot.
+            "GPS_L1C": ephemeris.isc_l1cp,
         }.get(signal_type_id) or 0.0
     return -tgd + isc
 

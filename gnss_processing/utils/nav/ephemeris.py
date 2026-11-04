@@ -45,6 +45,15 @@ SPEED_OF_LIGHT = 2.99792458e8  # m/s
 # Relativistic correction factor F = -2 sqrt(mu) / c^2 (IS-GPS-200N 20.3.3.3.3.1).
 RELATIVISTIC_F = -4.442807633e-10
 
+# Galileo (OS SIS ICD Table 68 and 5.1.4): its own gravitational constant and relativistic
+# factor.  The earth rotation rate is the same as for GPS.
+MU_EARTH_GALILEO = 3.986004418e14
+RELATIVISTIC_F_GALILEO = -4.442807309e-10
+# Carrier frequencies for the E5a group delay factor (E1 over E5a, squared).
+GAL_E1_FREQ_HZ = 1575.42e6
+GAL_E5A_FREQ_HZ = 1176.45e6
+GAL_E5A_BGD_FACTOR = (GAL_E1_FREQ_HZ / GAL_E5A_FREQ_HZ) ** 2  # about 1.7933
+
 # CNAV states the semi-major axis and node rate as differences from these
 # references (IS-GPS-200N Table 30-I footnotes).
 CNAV_A_REF = 26559710.0  # meters
@@ -283,6 +292,56 @@ class LnavEphemeris:
 
 
 @dataclass(frozen=True)
+class GalEphemeris(LnavEphemeris):
+    """
+    Galileo ephemeris from F/NAV (E5a) -- the same Keplerian algorithm as GPS LNAV with
+    Galileo's own constants.
+
+    Galileo System Time runs with GPS time, so time arguments are GPST seconds of the
+    week and `week` is the GPS week.  The clock is that of the (E1,E5a) pair; a
+    single-frequency E5a user removes `GAL_E5A_BGD_FACTOR * bgd_e1e5a` from it (ICD 5.1.5),
+    which `group_delay_s` states with the sign a caller adds.
+    """
+
+    bgd_e1e5a: float = 0.0
+    data_valid: bool = True
+
+    def orbit_state(self, t_gps_sec: float) -> OrbitState:
+        tk = _wrap_time_from_epoch(t_gps_sec - self.toe)
+        A = self.semi_major_axis_m
+        n0 = np.sqrt(MU_EARTH_GALILEO / (A * A * A))
+        n = n0 + self.deln * SEMICIRCLES_TO_RADIANS
+        return _orbit_from_kepler_elements(
+            semi_major_axis_m=A,
+            corrected_mean_motion=n,
+            tk=tk,
+            M0=self.M0 * SEMICIRCLES_TO_RADIANS,
+            e=self.e,
+            omega=self.omega * SEMICIRCLES_TO_RADIANS,
+            i0=self.i0 * SEMICIRCLES_TO_RADIANS,
+            i_dot=self.i_dot * SEMICIRCLES_TO_RADIANS,
+            Omega0=self.Omega0 * SEMICIRCLES_TO_RADIANS,
+            Omega_dot=self.Omega_dot * SEMICIRCLES_TO_RADIANS,
+            toe=self.toe,
+            Cus=self.Cus,
+            Cuc=self.Cuc,
+            Crs=self.Crs,
+            Crc=self.Crc,
+            Cis=self.Cis,
+            Cic=self.Cic,
+        )
+
+    def relativistic_correction_s(self, state: OrbitState) -> float:
+        return float(
+            RELATIVISTIC_F_GALILEO * self.e * self.sqrt_a * np.sin(state.eccentric_anomaly_rad)
+        )
+
+    def group_delay_s(self) -> float:
+        """The E5a term to add to the clock: ``-(f_E1/f_E5a)^2 * BGD(E1,E5a)``."""
+        return -GAL_E5A_BGD_FACTOR * self.bgd_e1e5a
+
+
+@dataclass(frozen=True)
 class CnavEphemeris:
     """
     Modernised quasi-Keplerian ephemeris -- CNAV (L2C, L5) and CNAV-2 (L1C).
@@ -329,6 +388,9 @@ class CnavEphemeris:
     isc_l5q5: float | None = None
     isc_l1ca: float | None = None
     isc_l2c: float | None = None
+    # CNAV-2 (L1C) inter-signal corrections, pilot and data (IS-GPS-800 3.5.3.9).
+    isc_l1cp: float | None = None
+    isc_l1cd: float | None = None
     health_l1: int = 0
     health_l2: int = 0
     health_l5: int = 0
@@ -578,7 +640,7 @@ class BdsEphemeris:
         )
 
 
-Ephemeris = LnavEphemeris | CnavEphemeris | BdsEphemeris
+Ephemeris = LnavEphemeris | CnavEphemeris | BdsEphemeris  # GalEphemeris is an LnavEphemeris
 
 
 def from_rinex(record, sat_id: str) -> LnavEphemeris:

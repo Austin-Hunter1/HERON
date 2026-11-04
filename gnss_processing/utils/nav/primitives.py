@@ -239,7 +239,7 @@ class ViterbiDecoder:
             [1.0 - 2.0 * (packed & 1) for packed in range(4)], dtype=np.float64
         )
 
-    def decode(self, symbols: np.ndarray) -> ViterbiResult:
+    def decode(self, symbols: np.ndarray, initial_state: int | None = None) -> ViterbiResult:
         """
         `symbols` are soft values, G1 and G2 interleaved, two per information bit.
 
@@ -263,6 +263,12 @@ class ViterbiDecoder:
         # received pair with what that branch would have transmitted.  Larger is
         # better, so the survivor is an argmax.
         metrics = np.zeros(CONV_NUM_STATES, dtype=np.float64)
+        if initial_state is not None:
+            # A block that starts from a known encoder state (Galileo F/NAV resets the
+            # register for every page): only that state may begin a path.  This makes
+            # the first bits, the page type among them, as reliable as the others.
+            metrics[:] = -1e9
+            metrics[initial_state] = 0.0
         # Survivors hold the winning *predecessor state*, not the winning input.
         # The input cannot stand in for it: next_state = (prev >> 1) | (u << 5)
         # discards prev's low bit, so two predecessors reach the same state on the

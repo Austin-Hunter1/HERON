@@ -75,3 +75,21 @@ Full list of test names:
 - FAILED tests/test_tracking_regression.py::test_tracking_matches_golden[l5_clean]
 - FAILED tests/test_tracking_regression.py::test_tracking_matches_golden[l5_navbits_seeded]
 - FAILED tests/test_tracking_regression.py::test_tracking_matches_golden[l5_noisy]
+
+## Baseline v2 (2026-10-21, after Phases L1, E0 to E2)
+
+Result of `uv run pytest -q`: **12 failed, 1498 passed, 5 xfailed**. No collection errors.
+
+All 12 failures are `test_tracking_regression.py::test_tracking_matches_golden`
+for these cases: `l1c_clean`, `l1c_navbits_seeded`, `l1c_noisy`, `l1c_overlay_synced`,
+`l1c_side_peak_seed`, `l1ca_navbits_seeded`, `l1ca_noisy`, `l2c_late_code_phase`,
+`l2c_navbits_noisy`, `l5_clean`, `l5_navbits_seeded`, `l5_noisy`.
+They are in baseline v1 as golden drift (the golden files differ from what the code now
+computes at the drift level). Nobody has changed these golden files, and nobody will
+without the user's approval (L2 rule).
+
+The 5 xfails: the L1C PRN 64 to 210 cases (not built, OQ-16) and the notebook 02
+per-signal table for Galileo E5a (Phase E6).
+
+New tests since v1: `test_l1c_codes.py`, `test_l1c.py` (now run), `test_e5a_codes.py` (19),
+`test_e5a.py` (31).
