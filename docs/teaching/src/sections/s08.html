@@ -1,0 +1,85 @@
+<section class="part" id="s08" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>GNSS signals in HERON: seven signals, two bands</h2>
+    <div class="meta">{{MIN}} MIN · BPSK, BOC, MBOC · SIGNAL PLAN</div>
+    <p class="lede">HERON records two bands, and three constellations share each band. They all use the same idea (a ±1 code on a carrier), but the newer signals shape each chip with a square-wave subcarrier. That moves power away from the band centre and sharpens the correlation peak.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Time domain: 4 chips</span><span id="s08-modname"></span></div><canvas id="s08-wave" data-aspect="0.26" data-minh="150"></canvas></div>
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Power spectral density</span><span>dB, unit power</span></div><canvas id="s08-psd" data-aspect="0.7" data-minh="220"></canvas></div>
+        <div class="fig"><div class="cap"><span>Auto-correlation</span></div><canvas id="s08-acf" data-aspect="0.7" data-minh="220"></canvas></div>
+      </div>
+      <div class="controls" id="s08-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>How the information goes onto the carrier</h3>
+      <p><strong>BPSK(n):</strong> each chip is a flat ±1 pulse at \(n\times1.023\) MHz. The spectrum is a sinc² with its main lobe \(\pm n\times1.023\) MHz wide.</p>
+      <div class="eq">$$G_{BPSK}(f)=T_c\,\operatorname{sinc}^2(\pi f T_c)$$</div>
+      <p><strong>BOC(m,n):</strong> multiply each chip by a square wave at \(m\times1.023\) MHz. The power splits into two lobes at \(\pm m\times1.023\) MHz. The correlation peak gets narrower, so code tracking is more precise, but side peaks appear. A receiver must not lock on a side peak.</p>
+      <div class="eq">$$s(t)=\sum_k c_k\,p(t-kT_c),\qquad p(t)=\operatorname{sign}\!\big(\sin 2\pi f_s t\big),\ \ 0\le t\lt T_c$$
+        $$G(f)=\frac{1}{T_c}\,\big|P(f)\big|^2$$
+        <div class="where">\(P(f)\) is the Fourier transform of one chip pulse. The page computes it exactly for each pulse shape.</div></div>
+      <p><strong>MBOC:</strong> GPS L1C, Galileo E1 and BeiDou B1C all put 1/11 of their power in BOC(6,1) and 10/11 in BOC(1,1). They do it in different ways: TMBOC (time-multiplexed chips), CBOC (a weighted sum), and QMBOC (in quadrature). The total spectrum is the same, which makes the three signals interoperable.</p>
+      <dl class="readouts" id="s08-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <h3>HERON signal plan: frequency domain</h3>
+    <p class="hint">Tick the boxes under the plots to show or hide each signal.</p>
+    <div class="figrow">
+      <div class="fig"><div class="cap"><span>L1 / E1 / B1C band · centre 1575.42 MHz</span><span>min. received power</span></div><canvas id="s08-l1" data-aspect="0.55" data-minh="240"></canvas></div>
+      <div class="fig"><div class="cap"><span>L5 / E5a / B2a band · centre 1176.45 MHz</span><span>min. received power</span></div><canvas id="s08-l5" data-aspect="0.55" data-minh="240"></canvas></div>
+    </div>
+    <div class="legend checks" id="s08-leg"></div>
+    <p class="tech">Each curve is the spectrum of one signal (data + pilot) scaled to its minimum received power on the ground (approximate values from the ICDs). The dashed line is thermal noise at 290 K: −204 dBW/Hz. Every signal peak is 15 to 22 dB below it. The shaded band is the ±12.5 MHz of the 25 MS/s complex sampling in the Jiawei x2 collect. L1C and E1 lie exactly on top of each other; B1C has the same MBOC shape, 2 dB lower.</p>
+  </div>
+
+  <div class="panel wide">
+    <h3>Expanded signal plan</h3>
+    <div class="tablewrap">
+      <table class="t">
+        <thead><tr><th>Signal</th><th>Carrier (MHz)</th><th>Component</th><th>Modulation</th><th>Chip rate (Mchip/s)</th><th>Primary code</th><th>Secondary / overlay code</th><th>Data</th><th>Power</th><th>HERON track file</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="10">L1 BAND · 1575.42 MHz · λ = 19.03 cm</td></tr>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L1 C/A</td><td class="num">1575.42</td><td>data only</td><td>BPSK(1)</td><td class="num">1.023</td><td class="num">1023 · 1 ms</td><td>— (20 ms bit)</td><td class="num">50 bit/s</td><td class="num">100 %</td><td><span class="tag ok">tracked</span></td></tr>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L1C</td><td class="num">1575.42</td><td>L1C-D data</td><td>BOC(1,1)</td><td class="num">1.023</td><td class="num">10 230 · 10 ms</td><td>—</td><td class="num">100 sym/s</td><td class="num">25 %</td><td rowspan="2"><span class="tag ok">tracked</span></td></tr>
+          <tr><td></td><td></td><td>L1C-P pilot</td><td>TMBOC(6,1,4/33)</td><td class="num">1.023</td><td class="num">10 230 · 10 ms</td><td class="num">L1C<sub>O</sub> 1800 · 18 s</td><td>—</td><td class="num">75 %</td></tr>
+          <tr><td><span class="sys" style="background:var(--gal)"></span>Galileo E1</td><td class="num">1575.42</td><td>E1-B data</td><td>CBOC(6,1,1/11), +</td><td class="num">1.023</td><td class="num">4092 · 4 ms</td><td>—</td><td class="num">250 sym/s</td><td class="num">50 %</td><td rowspan="2"><span class="tag no">no file in this collect</span></td></tr>
+          <tr><td></td><td></td><td>E1-C pilot</td><td>CBOC(6,1,1/11), −</td><td class="num">1.023</td><td class="num">4092 · 4 ms</td><td class="num">CS25 · 25 · 100 ms</td><td>—</td><td class="num">50 %</td></tr>
+          <tr><td><span class="sys" style="background:var(--bds)"></span>BeiDou B1C</td><td class="num">1575.42</td><td>B1C-D data</td><td>BOC(1,1)</td><td class="num">1.023</td><td class="num">10 230 · 10 ms</td><td>—</td><td class="num">100 sym/s</td><td class="num">25 %</td><td rowspan="2"><span class="tag ok">tracked</span></td></tr>
+          <tr><td></td><td></td><td>B1C-P pilot</td><td>QMBOC(6,1,4/33)</td><td class="num">1.023</td><td class="num">10 230 · 10 ms</td><td class="num">1800 · 18 s</td><td>—</td><td class="num">75 %</td></tr>
+          <tr class="grp"><td colspan="10">L5 BAND · 1176.45 MHz · λ = 25.48 cm</td></tr>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L5</td><td class="num">1176.45</td><td>I5 data</td><td>BPSK(10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">NH10 · 10 ms</td><td class="num">100 sym/s</td><td class="num">50 %</td><td rowspan="2"><span class="tag ok">tracked</span></td></tr>
+          <tr><td></td><td></td><td>Q5 pilot (90°)</td><td>BPSK(10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">NH20 · 20 ms</td><td>—</td><td class="num">50 %</td></tr>
+          <tr><td><span class="sys" style="background:var(--gal)"></span>Galileo E5a</td><td class="num">1176.45</td><td>E5a-I data</td><td>BPSK(10) lobe of AltBOC(15,10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">CS20 · 20 ms</td><td class="num">50 sym/s</td><td class="num">50 %</td><td rowspan="2"><span class="tag ok">tracked</span></td></tr>
+          <tr><td></td><td></td><td>E5a-Q pilot</td><td>BPSK(10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">CS100 · 100 ms</td><td>—</td><td class="num">50 %</td></tr>
+          <tr><td><span class="sys" style="background:var(--bds)"></span>BeiDou B2a</td><td class="num">1176.45</td><td>B2a-D data</td><td>BPSK(10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">5 chips · 5 ms</td><td class="num">200 sym/s</td><td class="num">50 %</td><td rowspan="2"><span class="tag ok">tracked</span></td></tr>
+          <tr><td></td><td></td><td>B2a-P pilot</td><td>BPSK(10)</td><td class="num">10.23</td><td class="num">10 230 · 1 ms</td><td class="num">100 chips · 100 ms</td><td>—</td><td class="num">50 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Space domain · to scale, 0 to 300 m</span></div><canvas id="s08-bus" data-aspect="0.62" data-minh="330"></canvas></div>
+      <div class="fig"><div class="cap"><span>Time domain · 3 µs of each HERON signal (pilot where there is one)</span></div><canvas id="s08-time" data-aspect="0.55" data-minh="300"></canvas></div>
+    </div>
+    <div class="notes">
+      <h3>How big is a chip?</h3>
+      <p>Light travels 293 m during one L1 C/A chip. An L5, E5a or B2a chip is ten times shorter: 29 m. A carrier wavelength is 19 to 25 cm. The school bus (12.2 m) in the top row gives the scale.</p>
+      <ul>
+        <li>The code tells you the range to within a fraction of a chip: metres.</li>
+        <li>The carrier tells you range change to within a fraction of a wavelength: millimetres.</li>
+        <li>The code repeats every 300 km (1 ms), 1200 km (4 ms) or 3000 km (10 ms). The secondary code and the message remove that ambiguity.</li>
+      </ul>
+      <p>For GNSS-R from a drone the reflected path is only a few tens to a few hundreds of metres longer than the direct path (Part 10). That is less than one L1 C/A chip, and only a few L5 chips. This is why the 10.23 Mchip/s signals are attractive for HERON.</p>
+      <dl class="readouts" id="s08-ro2"></dl>
+    </div>
+  </div>
+</section>

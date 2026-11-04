@@ -279,7 +279,7 @@ def build_smp_footprint():
 # symmetric. The cathode is a large tab under the body (1.15-1.55 mm long);
 # the anode is a short end terminal. The stock SOD-323F land (two 0.5 mm
 # pads) catches only the outer end of the cathode tab and lets the GND pour
-# run under the rest of it (D-041). Dimensions: Panjit SS1030HEWS datasheet
+# run under the rest of it (D-093). Dimensions: Panjit SS1030HEWS datasheet
 # rev 06 (2025-08-19), page 3, "Mounting Pad Layout".
 SOD323HE_FP_NAME = "D_SOD-323HE_Panjit"
 SOD323HE_K = (1.85, 1.1)       # cathode pad (x, y) size

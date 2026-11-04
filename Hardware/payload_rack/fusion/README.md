@@ -1,6 +1,6 @@
 # flight_rack Fusion builder
 
-Fusion is the master model (D-035). `heron_rack.py` is frozen. This folder only
+Fusion is the master model (D-087). `heron_rack.py` is frozen. This folder only
 builds and checks the Fusion design.
 
 ## Files
@@ -15,11 +15,11 @@ builds and checks the Fusion design.
 - `run_extend.py` - MCP script text: add parts to a saved design (`build_flight_rack.extend`). Refuses other documents and documents with unsaved changes, writes a log, never saves.
 - `check_ref.py` - compare Fusion parts with `ref_volumes.json`.
 - `sync_kicad.py` - update only the `CLK_J<n>_KX/_KY` parameters.
-- `update_revd.py` - MCP script text that brought `flight_rack_asm` to clock board rev D (D-042), in two phases (`params`, `parts`). Writes a log, never saves.
+- `update_revd.py` - MCP script text that brought `flight_rack_asm` to clock board rev D (D-094), in two phases (`params`, `parts`). Writes a log, never saves.
 - `fab_plan.py` - laser and print layout plan: part extents as expressions, rows, overlap check (pure Python).
 - `fab_layout.py` - build, check and remove the layouts in Fusion (`FAB_laser_layout`, `FAB_print_layout`).
 - `run_fab_layout.py` - MCP script text for `fab_layout` (`ACTION` = build, check or remove). Writes a log, never saves.
-- `export_laser_dxf.py` - MCP script text: save the laser DXF files (one per part type plus the whole layout sheet) to `../out/fusion_laser_dxf/`. No kerf compensation (Q-016). Never saves the design.
+- `export_laser_dxf.py` - MCP script text: save the laser DXF files (one per part type plus the whole layout sheet) to `../out/fusion_laser_dxf/`. No kerf compensation (Q-021). Never saves the design.
 - `run_in_fusion.py` - loader text for the Fusion MCP script tool.
 - `tests/` - pytest for the pure-Python modules.
 
@@ -67,7 +67,7 @@ document without saving when you are done.
 - `parts/latch.py` builds `ASA_latch_sdr_preload` (boss, insert pocket, screw hole) and
   `ASA_latch` (plain). The latch is symmetric about its local y = 0, so `mirror_top` of a latch is
   a move in Z (by `H_ - 2 * LATCH_Z`), not a mirror image. The top latches are more occurrences of
-  the same two components (D-035, 2026-10-14), as in the print list (8 preload, 3 plain).
+  the same two components (D-087, 2026-10-14), as in the print list (8 preload, 3 plain).
 - `build_flight_rack.latch_rows` makes 11 revolute placements: `latch_bot_<slot>`, `latch_top_<slot>`
   and `latch_ssd_hatch` (an occurrence of `ASA_latch` on the top plate, axis world Z). The child joint
   origin is `JO_pivot` (pivot hole centre). The parent origin lies on the pivot screw axis. Angle 0 is the
@@ -84,7 +84,7 @@ document without saving when you are done.
 - `build_flight_rack.ssd_rows` makes 2 placements: `ssd_cage` (rigid) and `ssd_sled` (slider along world Z,
   slide 0 = installed, no travel limit because none is specified). Both parent joint origins sit at `(0, 0, RACK_Z0)`.
 - On the YZ plane Fusion puts sketch (x, y) at world (-Z, Y). The sled cuts use offset YZ planes and `flip_range`.
-- Change from heron_rack.py (D-035, 2026-10-14): in heron_rack.py the two top ears of the cage touch no other
+- Change from heron_rack.py (D-087, 2026-10-14): in heron_rack.py the two top ears of the cage touch no other
   part of the cage (a 4.9 mm gap to each guide), so it is 3 loose solids. In Fusion the top ears span the full
   cage length (`SSD_EAR_Y0` to `SSD_EAR_Y1` = `SSD_FY0` to `SSD_FY1`) and join both guides: the cage is one body,
   2454 mm3 larger. The lightening cut still nicks the bottom flanges, as in CadQuery.
@@ -104,7 +104,7 @@ document without saving when you are done.
 - `build_flight_rack.ref_rows` makes 11 rigid placements at the ROOT: `REF_clock_board_revD` (origin `CLK_Y0 + CLK_PCB_T`),
   8 adapters `REF_adapter_<slot>_<ref_a|ref_b>` (origin on the SDR SMA axis at `SDR_SMA_TIP_Y`, cylinder toward +Y),
   `REF_NUC_envelope` and `REF_SSD`. New seed value: `NUCREF_INSET`.
-- SDR board stand-ins (added 2026-10-26, D-048): one component `REF_SDR_envelope` (one box `SDR_W` x `SDR_L` x
+- SDR board stand-ins (added 2026-10-26, D-100): one component `REF_SDR_envelope` (one box `SDR_W` x `SDR_L` x
   `SDR_TOP`, the same as the `heron_rack.py` fallback, because the Ettus STEP files are missing), placed 4 times at
   the ROOT: `REF_B210_1 ... REF_B200_2`, origin `TRAY_X_<slot> + T_ / 2 + STANDOFF`, frame like the NUC. No new
   parameter. Check 2026-10-26: X span 14.125 mm from the board plane, Y 3.0-157.7, Z 12.0-112.0 in all 4 slots;
@@ -114,7 +114,7 @@ document without saving when you are done.
 - `run_extend.py` is the MCP text that adds the refs to `flight_rack_asm` (log: `extend_refs.log`; the SDR run:
   `extend_sdr_refs.log`).
 
-## Clock board rev D update (2026-10-20, D-040, D-042)
+## Clock board rev D update (2026-10-20, D-092, D-094)
 - `update_revd.py` ran on `flight_rack_asm` (not saved by the script). Phase `params`: set `CLK_H` 60, `CLK_TOP_Z` 90,
   `SDR_REAR_SMA_REF_A` 34.16 (10 MHz), `SDR_REAR_SMA_REF_B` 70.89 (PPS) and the J1 XH envelope (`CLKREF_JST_W/H/D`
   7.4/11.5/6.1); created `SDR_GPS_BX`, `USB_DX`, `CLK_USB_W/H`, `REAR_USB_W/H`, `CLKREF_JST_DX/DZ`; deleted the unused
@@ -124,12 +124,12 @@ document without saving when you are done.
 - Checks after the update: no unhealthy timeline item (only the 3 suppressed `windows_above` items); board bbox
   X 46-164, Z 30-90 (CadQuery frame); all 8 adapter axes on their jacks; volumes equal CadQuery (board 11187 mm3,
   rear plate 44332 mm3); Fusion interference analysis of all root occurrences: 0.
-- `heron_rack.py` (frozen, D-035) was also edited for the J1 envelope and rev D, so `check_fit.py` keeps working. Fusion
+- `heron_rack.py` (frozen, D-087) was also edited for the J1 envelope and rev D, so `check_fit.py` keeps working. Fusion
   stays the master.
-- Phase `holes` (2026-10-21, D-043): rebuilt `REF_clock_board_revD` with 6 mounting holes and added `clock_center_holes`
+- Phase `holes` (2026-10-21, D-095): rebuilt `REF_clock_board_revD` with 6 mounting holes and added `clock_center_holes`
   (the 2 mid-edge holes) to `LZR_rear_plate`. Volumes equal CadQuery (board 11161 mm3, rear plate 44278 mm3), interference 0.
 
-## Fabrication layouts (2026-10-21, D-044)
+## Fabrication layouts (2026-10-21, D-096)
 - `FAB_laser_layout` holds all 10 laser pieces flat (thickness along Z, lowest face on Z = 0). `FAB_print_layout`
   holds all 33 printed pieces in their local frames. Both sit at +X beside the rack (`FAB_SPACE`); parts are
   `FAB_GAP` apart. Each piece is an occurrence of the rack component, so an edit to a part shows in the layout.
@@ -147,5 +147,5 @@ document without saving when you are done.
 - Export: laser - sketch on the layout XY plane, project the pieces, right-click the sketch, Save As DXF
   (1:1 mm, for CorelDRAW). Print - right-click a component, Save As Mesh (STL or 3MF). The `_top` rail strips
   are already mirrored: do not mirror them in the slicer. Choose the print orientation in the slicer.
-- No laser beam compensation is in the model (Q-016). `KERF` is only the slot clearance on each side.
+- No laser beam compensation is in the model (Q-021). `KERF` is only the slot clearance on each side.
 - The layout copies add to the root mass and to a Fusion BOM.

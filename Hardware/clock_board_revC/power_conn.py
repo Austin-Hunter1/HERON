@@ -1,4 +1,4 @@
-"""Change the rev C power input J1 from JST-GH (SMD) to JST XH (through-hole) (D-040).
+"""Change the rev C power input J1 from JST-GH (SMD) to JST XH (through-hole) (D-092).
 
 Why: the JST SM02B-GHS-TB(LF)(SN) is out of stock (Digi-Key, 2026-10-20), and
 no GH-compatible substitute is sold there. The new part is the JST

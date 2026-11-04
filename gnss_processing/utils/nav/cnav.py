@@ -437,9 +437,20 @@ def parse_type_11(message: CnavMessage) -> Type11:
 
 
 def parse_type_30(message: CnavMessage) -> Type30:
-    if not 30 <= message.message_type <= 37:
+    """
+    Clock, group delay and Klobuchar coefficients, from a message of type 30 only.
+
+    Types 30 to 37 all open with the same clock block (bits 39-127), but what follows it
+    differs: type 30 has the group delays and the ionosphere model, type 32 the Earth
+    orientation parameters, type 33 the UTC parameters, and so on.  Read as type 30, those
+    other messages give nonsense for `tgd`, the `isc_*` terms, `alpha` and `beta` -- and
+    nonsense that still looks like numbers.  On the 2026-10-14 L5 recording it put 25 to
+    67 m of wrong ionosphere into the L5 fix.  So any other type is refused.
+    """
+    if message.message_type != 30:
         raise ValueError(
-            f"clock parameters live in message types 30-37, got {message.message_type}"
+            f"group delays and ionosphere coefficients live in message type 30 only, "
+            f"got type {message.message_type}"
         )
     b = message.bits
     # Bits 128-192 are the five group delay terms, 13 bits each at 2^-35 s
@@ -480,7 +491,7 @@ def assemble_ephemeris(
     result: CnavDecodeResult, sat_id: str | None = None
 ) -> CnavEphemeris | None:
     """
-    Combine messages 10, 11 and a 30-series clock message into one ephemeris.
+    Combine messages 10, 11 and 30 into one ephemeris.
 
     Returns None when the pieces are not all present, or when they do not belong to
     the same CEI data set.  The spec's own consistency rule is that `toe` in
@@ -495,7 +506,8 @@ def assemble_ephemeris(
     """
     tens = result.of_type(10)
     elevens = result.of_type(11)
-    clocks = [m for m in result.messages if 30 <= m.message_type <= 37]
+    # Type 30 only: it is the one clock message that also holds the group delays.
+    clocks = result.of_type(30)
     if not (tens and elevens and clocks):
         return None
 

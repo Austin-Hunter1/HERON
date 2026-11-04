@@ -1,4 +1,4 @@
-"""MCP script text: save the laser-cut DXF files from `flight_rack_asm` (D-044).
+"""MCP script text: save the laser-cut DXF files from `flight_rack_asm` (D-096).
 
 Why this file exists: the laser shop needs 1:1 DXF outlines for CorelDRAW,
 and they must come from the Fusion master. Copy this whole text into one MCP
@@ -14,7 +14,7 @@ How: for each piece, a temporary sketch on the XY plane projects the bottom
 face (z = 0). All laser cuts go through the sheet, so the bottom face holds
 every outline and hole. The script checks that the top face has the same
 area (no partial pocket is lost). It deletes the temporary sketches and
-never saves. No kerf compensation is applied (Q-016).
+never saves. No kerf compensation is applied (Q-021).
 """
 import os
 import time

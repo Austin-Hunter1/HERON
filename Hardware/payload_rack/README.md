@@ -1,6 +1,6 @@
 # HERON payload rack, Rev A (concept)
 
-> **Frozen (2026-10-14, D-035).** The design master is now the parametric Fusion design `flight_rack_asm` (Fusion project `HERON`), seeded by `fusion/build_flight_rack.py`. See `fusion/README.md`. This script and its outputs are kept as a record. Do not change the design here. Known change in Fusion: the SSD cage top ears span the full cage.
+> **Frozen (2026-10-14, D-087).** The design master is now the parametric Fusion design `flight_rack_asm` (Fusion project `HERON`), seeded by `fusion/build_flight_rack.py`. See `fusion/README.md`. This script and its outputs are kept as a record. Do not change the design here. Known change in Fusion: the SSD cage top ears span the full cage.
 
 A blade-style rack for 2× B210, 2× B200, the bare NUC7i3DNB board, a hot-swap 2.5" SATA SSD, and the clock board. It is made from laser-cut sheet plus printed ASA and TPU, with no metal structure and no fan.
 
@@ -42,7 +42,7 @@ uv run python check_fit.py
   - The cable leaves the base toward the NUC. A swing latch on the top plate holds the sled handle down.
   - To swap: open the latch and pull the cord loop on the handle. The removal path is checked clear of all parts.
   - Swap with the payload powered off.
-- **Clock board rev D.** A 118 × 60 mm board on the rear plate, behind the four SDRs (`../clock_board_revD/`, D-042). Each SDR USB-B plug passes through a hole in the board and an opening in the rear plate.
+- **Clock board rev D.** A 118 × 60 mm board on the rear plate, behind the four SDRs (`../clock_board_revD/`, D-094). Each SDR USB-B plug passes through a hole in the board and an opening in the rear plate.
   - Its 8 SDR jacks (J3–J10) are Amphenol RF SMP-MSSB-PCT10T SMP male jacks (smooth bore). They face forward, coaxial with each SDR's rear reference SMAs. J2 (PPS IN) stays an SMA jack.
   - There are no cable jumpers. Each SDR blade plugs directly onto the board. See "SMP direct mate" below.
 
@@ -173,8 +173,8 @@ uv run python check_fit.py
 6. **Laser kerf.** Tabs and slots assume 0.15 mm per side. Cut one corner joint first.
 
 ## Clock board rev D
-The board is in `../clock_board_revD/` (118 × 60 mm, KiCad 10, D-042). Rev D puts J3–J6 on the SDR 10 MHz SMAs and J7–J10 on the PPS SMAs, with a USB hole between them (the rev C jack rows faced the wrong SMAs). `heron_rack.py` reads the jack
+The board is in `../clock_board_revD/` (118 × 60 mm, KiCad 10, D-094). Rev D puts J3–J6 on the SDR 10 MHz SMAs and J7–J10 on the PPS SMAs, with a USB hole between them (the rev C jack rows faced the wrong SMAs). `heron_rack.py` reads the jack
 positions and footprint names from that KiCad file. J3–J10 are SMP jacks (footprint `SMP_Amphenol_SMP-MSSB-PCT10T_Vertical_Float`; the script also accepts the old `SMP-MSLD-PCT` name). J2 is an SMA jack. If the file has an old 132134 footprint on J3–J10, the script still draws them as SMP.
 All 8 SDR jacks are coaxial with the SDR reference SMAs (error 0.000 mm).
 The board mounts on the rear plate with four M3 × 20 mm standoffs (`CLK_STANDOFF`). Its holes are at world (X, Z) =
-(50, 86), (160, 86), (50, 34) and (160, 34), plus (105, 86) and (105, 34) at the middle of the long edges (D-043). The rear plate has a 20 × 22 mm opening (PROPOSED, `REAR_USB_W`, `REAR_USB_H`) behind each USB hole, so the USB cables leave through the back of the rack.
+(50, 86), (160, 86), (50, 34) and (160, 34), plus (105, 86) and (105, 34) at the middle of the long edges (D-095). The rear plate has a 20 × 22 mm opening (PROPOSED, `REAR_USB_W`, `REAR_USB_H`) behind each USB hole, so the USB cables leave through the back of the rack.

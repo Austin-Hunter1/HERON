@@ -32,7 +32,7 @@ SDR_HOLES = [(3.17, -20.19), (96.77, -20.19), (3.17, -140.21), (96.77, -140.21)]
 # bx of the rear SMAs that mate with the clock board. Silkscreen order on a B210
 # and a B200 (photos, 2026-10-20, Q-015 b): GPS ANT 14.22, 10 MHz 34.16,
 # USB-B 51.69, PPS 70.89, DC 89.43. ref_a = 10 MHz (clock board J3-J6),
-# ref_b = PPS (J7-J10). GPS ANT stays free for a cable (clock board rev D, D-042).
+# ref_b = PPS (J7-J10). GPS ANT stays free for a cable (clock board rev D, D-094).
 SDR_REAR_SMA = {"ref_a": 34.16, "ref_b": 70.89}
 SDR_GPS_BX = 14.22
 SDR_USB_BX, SDR_PWR_BX = 51.69, 89.43
@@ -459,7 +459,7 @@ USB_DX = (PCB_T + SDR_TOP) / 2 - SMA_BZ
 REAR_USB_W, REAR_USB_H = 20.0, 22.0   # PROPOSED: rear plate opening (board hole 16 x 18 + 2 mm each side)
 # J1 body envelope from its KiCad origin (pin 1), world axes: (x0, x1, z0, z1, height
 # toward the SDRs). JST S2B-XH-A-1 at rotation 180 (KiCad 10 STEP model and Digi-Key:
-# 7.4 x 11.5 mm, 6.1 mm high). The mouth faces up, 0.2 mm below the board top edge (D-040).
+# 7.4 x 11.5 mm, 6.1 mm high). The mouth faces up, 0.2 mm below the board top edge (D-092).
 J1_BODY = (-4.95, 2.45, -3.9, 7.6, 6.1)
 
 def clk_outline():
@@ -469,7 +469,7 @@ def clk_outline():
 
 def clk_holes():
     """Clock board mounting holes: 4 corners, and the middle of the top and bottom
-    long edges (rev D H5, H6, D-043: they carry the push of the direct-mate jacks)."""
+    long edges (rev D H5, H6, D-095: they carry the push of the direct-mate jacks)."""
     x0, x1, z0, z1 = clk_outline()
     xm = (x0 + x1) / 2
     return [(x0 + 4, z1 - 4), (x1 - 4, z1 - 4), (x0 + 4, z0 + 4), (x1 - 4, z0 + 4), (xm, z1 - 4), (xm, z0 + 4)]
@@ -482,7 +482,7 @@ def clk_to_world(kx, ky):
 _HERE = os.path.dirname(os.path.abspath(__file__))
 CLK_PCB = next((p for p in (os.path.join(_HERE, "..", "clock_board_revD", "project", "heron_clock.kicad_pcb"),
                             os.path.join(_HERE, "..", "clockB", "project", "heron_clock.kicad_pcb")) if os.path.exists(p)),
-               "")   # rev D KiCad board (D-042); the jack positions come from this file
+               "")   # rev D KiCad board (D-094); the jack positions come from this file
 
 def _clk_read():
     """{ref: (kx, ky, footprint_name)} for J1..J10 from the KiCad file (rev C)."""
@@ -546,7 +546,7 @@ def clock_board_ref():
     toward_sdr = cq.Vector(0, -1, 0)
     for ref, (kx, ky, fp) in _clk_read().items():
         wx, wz = clk_to_world(kx, ky)
-        if ref == "J1":   # JST XH S2B-XH-A-1, mouth up (D-040). KiCad origin = pin 1, rotation 180
+        if ref == "J1":   # JST XH S2B-XH-A-1, mouth up (D-092). KiCad origin = pin 1, rotation 180
             pcb = pcb.fuse(box(wx + J1_BODY[0], CLK_Y0 - J1_BODY[4], wz + J1_BODY[2],
                                wx + J1_BODY[1], CLK_Y0, wz + J1_BODY[3]))
         elif clk_jack_kind(ref, fp) == "smp":

@@ -45,6 +45,15 @@ SPEED_OF_LIGHT = 2.99792458e8  # m/s
 # Relativistic correction factor F = -2 sqrt(mu) / c^2 (IS-GPS-200N 20.3.3.3.3.1).
 RELATIVISTIC_F = -4.442807633e-10
 
+# Galileo (OS SIS ICD Table 68 and 5.1.4): its own gravitational constant and relativistic
+# factor.  The earth rotation rate is the same as for GPS.
+MU_EARTH_GALILEO = 3.986004418e14
+RELATIVISTIC_F_GALILEO = -4.442807309e-10
+# Carrier frequencies for the E5a group delay factor (E1 over E5a, squared).
+GAL_E1_FREQ_HZ = 1575.42e6
+GAL_E5A_FREQ_HZ = 1176.45e6
+GAL_E5A_BGD_FACTOR = (GAL_E1_FREQ_HZ / GAL_E5A_FREQ_HZ) ** 2  # about 1.7933
+
 # CNAV states the semi-major axis and node rate as differences from these
 # references (IS-GPS-200N Table 30-I footnotes).
 CNAV_A_REF = 26559710.0  # meters
@@ -123,9 +132,14 @@ def _orbit_from_kepler_elements(
     Crc: float,
     Cis: float,
     Cic: float,
+    omega_e_dot: float = OMEGA_E_DOT,
 ) -> OrbitState:
     """
     The half of the algorithm both models share, from mean anomaly to ECEF.
+
+    `omega_e_dot` is the earth rotation rate of the system's own reference frame.
+    It defaults to the GPS (WGS 84) value; BeiDou passes its BDCS value, which
+    differs in the sixth digit and so moves a satellite by about a decimetre.
 
     Every angular argument is in radians here -- the messages state them in
     semi-circles, and each model's `orbit_state` converts before calling in.  Doing
@@ -157,7 +171,7 @@ def _orbit_from_kepler_elements(
 
     # Corrected longitude of ascending node.  The `- OMEGA_E_DOT * toe` term is
     # what puts the result in ECEF rather than an inertial frame.
-    Omega_k = Omega0 + (Omega_dot - OMEGA_E_DOT) * tk - OMEGA_E_DOT * toe
+    Omega_k = Omega0 + (Omega_dot - omega_e_dot) * tk - omega_e_dot * toe
     sin_O, cos_O = np.sin(Omega_k), np.cos(Omega_k)
     cos_i = np.cos(i)
 
@@ -278,6 +292,56 @@ class LnavEphemeris:
 
 
 @dataclass(frozen=True)
+class GalEphemeris(LnavEphemeris):
+    """
+    Galileo ephemeris from F/NAV (E5a) -- the same Keplerian algorithm as GPS LNAV with
+    Galileo's own constants.
+
+    Galileo System Time runs with GPS time, so time arguments are GPST seconds of the
+    week and `week` is the GPS week.  The clock is that of the (E1,E5a) pair; a
+    single-frequency E5a user removes `GAL_E5A_BGD_FACTOR * bgd_e1e5a` from it (ICD 5.1.5),
+    which `group_delay_s` states with the sign a caller adds.
+    """
+
+    bgd_e1e5a: float = 0.0
+    data_valid: bool = True
+
+    def orbit_state(self, t_gps_sec: float) -> OrbitState:
+        tk = _wrap_time_from_epoch(t_gps_sec - self.toe)
+        A = self.semi_major_axis_m
+        n0 = np.sqrt(MU_EARTH_GALILEO / (A * A * A))
+        n = n0 + self.deln * SEMICIRCLES_TO_RADIANS
+        return _orbit_from_kepler_elements(
+            semi_major_axis_m=A,
+            corrected_mean_motion=n,
+            tk=tk,
+            M0=self.M0 * SEMICIRCLES_TO_RADIANS,
+            e=self.e,
+            omega=self.omega * SEMICIRCLES_TO_RADIANS,
+            i0=self.i0 * SEMICIRCLES_TO_RADIANS,
+            i_dot=self.i_dot * SEMICIRCLES_TO_RADIANS,
+            Omega0=self.Omega0 * SEMICIRCLES_TO_RADIANS,
+            Omega_dot=self.Omega_dot * SEMICIRCLES_TO_RADIANS,
+            toe=self.toe,
+            Cus=self.Cus,
+            Cuc=self.Cuc,
+            Crs=self.Crs,
+            Crc=self.Crc,
+            Cis=self.Cis,
+            Cic=self.Cic,
+        )
+
+    def relativistic_correction_s(self, state: OrbitState) -> float:
+        return float(
+            RELATIVISTIC_F_GALILEO * self.e * self.sqrt_a * np.sin(state.eccentric_anomaly_rad)
+        )
+
+    def group_delay_s(self) -> float:
+        """The E5a term to add to the clock: ``-(f_E1/f_E5a)^2 * BGD(E1,E5a)``."""
+        return -GAL_E5A_BGD_FACTOR * self.bgd_e1e5a
+
+
+@dataclass(frozen=True)
 class CnavEphemeris:
     """
     Modernised quasi-Keplerian ephemeris -- CNAV (L2C, L5) and CNAV-2 (L1C).
@@ -324,6 +388,9 @@ class CnavEphemeris:
     isc_l5q5: float | None = None
     isc_l1ca: float | None = None
     isc_l2c: float | None = None
+    # CNAV-2 (L1C) inter-signal corrections, pilot and data (IS-GPS-800 3.5.3.9).
+    isc_l1cp: float | None = None
+    isc_l1cd: float | None = None
     health_l1: int = 0
     health_l2: int = 0
     health_l5: int = 0
@@ -389,7 +456,191 @@ class CnavEphemeris:
         return self.clock_polynomial_s(t_gps_sec) + self.relativistic_correction_s(state)
 
 
-Ephemeris = LnavEphemeris | CnavEphemeris
+# ---------------------------------------------------------------------------
+# BeiDou (B-CNAV2 on B2a)
+# ---------------------------------------------------------------------------
+
+# The BDCS constants of BDS-SIS-ICD-B2a-1.0, Table 7-9.  They are the *defined*
+# values of the broadcast algorithm, so using the GPS ones above instead would move
+# a satellite by about a decimetre.  `BDS_PI` is the ICD's rounded value; it is used
+# only to turn the messages' semi-circles into radians.
+BDS_MU_EARTH = 3.986004418e14  # m^3/s^2
+BDS_OMEGA_E_DOT = 7.2921150e-5  # rad/s
+BDS_PI = 3.1415926535898
+# F = -2 sqrt(mu) / c^2 (ICD 7.5.2), from the BDCS mu above.
+BDS_RELATIVISTIC_F = -2.0 * float(np.sqrt(BDS_MU_EARTH)) / SPEED_OF_LIGHT**2
+
+# SatType, as the message states it (ICD Table 7-8): 01 GEO, 10 IGSO, 11 MEO.
+BDS_SAT_TYPE_GEO = 1
+BDS_SAT_TYPE_IGSO = 2
+BDS_SAT_TYPE_MEO = 3
+# Semi-major axis reference values by orbit type (ICD Table 7-8, note ***).
+BDS_A_REF_M = {
+    BDS_SAT_TYPE_MEO: 27_906_100.0,
+    BDS_SAT_TYPE_IGSO: 42_162_200.0,
+}
+
+
+@dataclass(frozen=True)
+class BdsEphemeris:
+    """
+    BeiDou quasi-Keplerian ephemeris, from B-CNAV2 (B2a) message types 10 and 11 or from
+    B-CNAV1 (B1C) subframe 2.  Both carry the same orbit and clock blocks and the same
+    user algorithm (ICD Table 7-9 of both ICDs); they differ in the group delay terms.
+
+    It has the same shape as `CnavEphemeris` -- a semi-major axis stated as a
+    difference from a reference with a rate, and a mean motion correction with a
+    rate -- with three differences that keep it a separate class:
+
+      * the references and constants are BeiDou's (BDCS), not GPS's;
+      * the reference semi-major axis depends on the orbit type (MEO or IGSO);
+      * the node rate `Omega_dot` is sent directly, not as a difference from a
+        reference rate.
+
+    GEO satellites are rejected: they do not broadcast B2a or B1C, and their orbit
+    algorithm differs (the ICD gives only the MEO/IGSO one for this signal).
+
+    Times are seconds of the BDT week, and `week` is the BDT week.  The angles
+    are in semi-circles, as the message states them.  Units are in the names.
+    """
+
+    sat_id: str
+    week: int
+    toe: float
+    sat_type: int
+    delta_a: float  # m, relative to the reference for `sat_type`
+    a_dot: float  # m/s
+    delta_n0: float  # semi-circles/s
+    delta_n0_dot: float  # semi-circles/s^2
+    M0: float  # semi-circles
+    e: float
+    omega: float  # semi-circles
+    Omega0: float  # semi-circles
+    Omega_dot: float  # semi-circles/s, the full rate
+    i0: float  # semi-circles
+    i_dot: float  # semi-circles/s
+    Cis: float
+    Cic: float
+    Crs: float
+    Crc: float
+    Cus: float
+    Cuc: float
+    toc: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    tgd_b2ap: float = 0.0  # s
+    isc_b2ad: float = 0.0  # s
+    tgd_b1cp: float = 0.0  # s
+    isc_b1cd: float = 0.0  # s, B-CNAV1 subframe 2 only
+    iode: int | None = None
+    iodc: int | None = None
+    health: int = 0
+
+    def __post_init__(self) -> None:
+        if self.sat_type not in BDS_A_REF_M:
+            raise ValueError(
+                f"{self.sat_id}: SatType {self.sat_type} is not MEO (3) or IGSO (2). "
+                "GEO satellites (1) do not broadcast B2a, and 0 is reserved."
+            )
+
+    @property
+    def semi_major_axis_at_toe_m(self) -> float:
+        return BDS_A_REF_M[self.sat_type] + self.delta_a
+
+    @property
+    def sqrt_a(self) -> float:
+        """For the relativistic clock term, which is defined in terms of sqrt(A)."""
+        return float(np.sqrt(self.semi_major_axis_at_toe_m))
+
+    @property
+    def af0(self) -> float:
+        """`a0` under the name the GPS ephemerides use, for code that tabulates both."""
+        return self.a0
+
+    def orbit_state(self, t_bdt_sec: float) -> OrbitState:
+        """
+        Antenna phase centre in BDCS at BDT time of week `t_bdt_sec` (ICD Table 7-9).
+
+        The time must be the BDT time of signal *transmission*.  A GPS time of week
+        is wrong by 14 s -- convert with `utils.time_systems` first.
+        """
+        tk = _wrap_time_from_epoch(t_bdt_sec - self.toe)
+        A0 = self.semi_major_axis_at_toe_m
+        Ak = A0 + self.a_dot * tk
+        n0 = np.sqrt(BDS_MU_EARTH / (A0 * A0 * A0))
+        # Delta n_A = Delta n0 + 1/2 (Delta n0 dot) tk.  As for CNAV, the 1/2 is the
+        # easy term to drop and the error then grows with tk^2.
+        delta_n = self.delta_n0 + 0.5 * self.delta_n0_dot * tk
+        n = n0 + delta_n * BDS_PI
+        return _orbit_from_kepler_elements(
+            semi_major_axis_m=Ak,
+            corrected_mean_motion=n,
+            tk=tk,
+            M0=self.M0 * BDS_PI,
+            e=self.e,
+            omega=self.omega * BDS_PI,
+            i0=self.i0 * BDS_PI,
+            i_dot=self.i_dot * BDS_PI,
+            Omega0=self.Omega0 * BDS_PI,
+            Omega_dot=self.Omega_dot * BDS_PI,
+            toe=self.toe,
+            Cus=self.Cus,
+            Cuc=self.Cuc,
+            Crs=self.Crs,
+            Crc=self.Crc,
+            Cis=self.Cis,
+            Cic=self.Cic,
+            omega_e_dot=BDS_OMEGA_E_DOT,
+        )
+
+    def clock_polynomial_s(self, t_bdt_sec: float) -> float:
+        """`a0 + a1 (t - toc) + a2 (t - toc)^2` (ICD 7-2), without the relativistic term."""
+        dt = _wrap_time_from_epoch(t_bdt_sec - self.toc)
+        return float(self.a0 + self.a1 * dt + self.a2 * dt * dt)
+
+    def relativistic_correction_s(self, state: OrbitState) -> float:
+        """`F e sqrt(A) sin(E_k)` (ICD 7-3), with BDCS's mu in F."""
+        return float(
+            BDS_RELATIVISTIC_F * self.e * self.sqrt_a * np.sin(state.eccentric_anomaly_rad)
+        )
+
+    def clock_correction_s(self, t_bdt_sec: float, state: OrbitState | None = None) -> float:
+        """
+        The satellite clock offset `dt_sv` of ICD 7-2: polynomial plus relativity.
+
+        The group delay is not included; `group_delay_s` gives it per component.
+        """
+        if state is None:
+            state = self.orbit_state(t_bdt_sec)
+        return self.clock_polynomial_s(t_bdt_sec) + self.relativistic_correction_s(state)
+
+    def group_delay_s(self, component: str = "B2ap") -> float:
+        """
+        The term to add to `dt_sv` for one B2a or B1C component (ICD 7-4 and 7-5).
+
+        Pilot:  ``dt_sv,B2ap = dt_sv - T_GDB2ap``
+        Data:   ``dt_sv,B2ad = dt_sv - T_GDB2ap - ISC_B2ad``
+        B1C:    ``dt_sv,B1Cp = dt_sv - T_GDB1Cp``, ``dt_sv,B1Cd = dt_sv - T_GDB1Cp - ISC_B1Cd``
+
+        The result carries the minus signs already, so a caller adds it.
+        """
+        if component == "B2ap":
+            return -self.tgd_b2ap
+        if component == "B2ad":
+            return -self.tgd_b2ap - self.isc_b2ad
+        # B1C (ICD 7-4 and 7-5 of the B1C ICD).  Only B-CNAV1 broadcasts `isc_b1cd`, so
+        # the data component is meaningful for an ephemeris decoded from B1C.
+        if component == "B1Cp":
+            return -self.tgd_b1cp
+        if component == "B1Cd":
+            return -self.tgd_b1cp - self.isc_b1cd
+        raise ValueError(
+            f"component must be 'B2ap', 'B2ad', 'B1Cp' or 'B1Cd', got {component!r}"
+        )
+
+
+Ephemeris = LnavEphemeris | CnavEphemeris | BdsEphemeris  # GalEphemeris is an LnavEphemeris
 
 
 def from_rinex(record, sat_id: str) -> LnavEphemeris:

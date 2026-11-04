@@ -17,7 +17,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class TrackingScenario:
     name: str
-    family: str  # "L1CA" | "L2C" | "L5" | "L1C"
+    family: str  # "L1CA" | "L2C" | "L5" | "L1C" | "B2A"
     prn: int
     duration_ms: int
     samp_rate: float
@@ -169,6 +169,54 @@ SCENARIOS: tuple[TrackingScenario, ...] = (
         family="L5",
         prn=7,
         duration_ms=400,
+        samp_rate=25e6,
+        doppler_hz=-2400.0,
+        code_phase_ms=0.72,
+        doppler_error_hz=125.0,
+        code_error_chips=0.5,
+        noise_sigma=3.0,
+        nav_bits=True,
+        rng_seed=5,
+        buffer_duration_ms=50,
+    ),
+    # BeiDou B2a.  Same sample rate and structure as L5, but the pilot overlay is
+    # 100 ms long and acquisition does not supply it, so the channel finds it with
+    # the default search: four overlay periods of 1 ms prompts, i.e. 400 ms after PLL
+    # lock.  800 ms leaves a long stretch of 5 ms epochs after the switch.  The
+    # Doppler seeding error is half the fine search's 500 Hz step, 250 Hz.
+    TrackingScenario(
+        name="b2a_clean",
+        family="B2A",
+        prn=1,
+        duration_ms=800,
+        samp_rate=25e6,
+        doppler_hz=1500.0,
+        code_phase_ms=0.31,
+        doppler_error_hz=0.0,
+        code_error_chips=0.0,
+        noise_sigma=0.0,
+        nav_bits=False,
+        buffer_duration_ms=50,
+    ),
+    TrackingScenario(
+        name="b2a_navbits_seeded",
+        family="B2A",
+        prn=1,
+        duration_ms=800,
+        samp_rate=25e6,
+        doppler_hz=1500.0,
+        code_phase_ms=0.31,
+        doppler_error_hz=250.0,
+        code_error_chips=0.25,
+        noise_sigma=0.0,
+        nav_bits=True,
+        buffer_duration_ms=50,
+    ),
+    TrackingScenario(
+        name="b2a_noisy",
+        family="B2A",
+        prn=7,
+        duration_ms=800,
         samp_rate=25e6,
         doppler_hz=-2400.0,
         code_phase_ms=0.72,

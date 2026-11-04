@@ -35,6 +35,49 @@ def setup_default_plotting():
     })
 
 
+LEGEND_LOCATION_INSIDE = "lower left"
+"""Where a legend sits when it stays inside the axes (D-075)."""
+
+LEGEND_OUTSIDE_PAD_PX = 8.0
+"""Gap, in pixels, between an outside-left legend and the axis label next to it."""
+
+
+def place_legend(ax: Axes, handles=None, *, outside: bool = True, **kwargs):
+    """
+    Put the legend of `ax` on the left: outside the left edge, or in the lower left.
+
+    Every plot of notebook 01 draws its legend through this function (D-075), so the
+    place of legends is decided here and not in each plot.  On the right and the top
+    of an axes are the peak of an acquisition correlation, the end of a time series
+    and the labels of the early/late ends; the left is the quiet side.
+
+    `outside=True` puts the legend left of the axis label, so it never covers data.
+    How far left depends on the width of the tick labels and the label, and that is
+    measured here, so a plot with six-digit ticks gets the room it needs.  Use it
+    only for an axes in the first column of a figure; another column would put the
+    legend on its neighbour.  `outside=False` puts the legend in the lower left of the
+    axes, for a small legend in a panel that has no room on its left.
+
+    `handles` and any other keyword go to `Axes.legend`; a `loc` or `bbox_to_anchor`
+    in `kwargs` replaces the placement.  If the outside offset cannot be measured (a
+    canvas without a renderer) the legend falls back to the lower left.
+    """
+    options: dict = {"loc": LEGEND_LOCATION_INSIDE}
+    if outside:
+        try:
+            renderer = ax.figure.canvas.get_renderer()
+            axes_box = ax.get_window_extent(renderer)
+            axis_box = ax.yaxis.get_tightbbox(renderer)
+            reach = (axes_box.x0 - axis_box.x0 + LEGEND_OUTSIDE_PAD_PX) / axes_box.width
+            options = {"loc": "center right", "bbox_to_anchor": (-reach, 0.5)}
+        except (AttributeError, ValueError):
+            pass
+    options.update(kwargs)
+    if handles is not None:
+        return ax.legend(handles=handles, **options)
+    return ax.legend(**options)
+
+
 def plot_receiver_channel_bands(
         fig: Figure | SubFigure,
         metadata: ExperimentMetadata,
@@ -249,6 +292,56 @@ def plot_acquisition_peak_values(
     ax.set_xlabel("Signal ID (PRN)")
     ax.set_ylabel("Normalized Peak Correlation Value")
     ax.grid()
+    return ax
+
+
+def plot_acquisition_peak_snr(
+    fig: Figure | SubFigure,
+    acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
+    title: str = "Acquisition peak of every PRN searched",
+) -> Axes:
+    """
+    Peak SNR of every PRN searched, as bars, with the detection threshold (D-085).
+
+    The scale is dB above the expected noise level -- the scale of the acquisition
+    table and of `plot_acquisition_code_phase_slices` -- so a bar just under the
+    dashed line is a candidate for a lower threshold, and the line's value is the
+    number to type into `ACQ_THRESHOLD_DB`.  Acquired PRNs are filled, the others
+    are grey.  For a PRN that a fine search refined, the bar is the coarse peak,
+    because detection is decided on the coarse grid.
+
+    When the PRNs have different thresholds (assisted acquisition, D-086: a narrow
+    stage-2 window has fewer cells, so a lower threshold), each bar gets its own
+    dashed threshold mark instead of one line across the plot.
+    """
+    ax = fig.add_subplot(1, 1, 1)
+    if not acq_results:
+        ax.set_title("No PRNs searched")
+        return ax
+    signal_ids = sorted(acq_results)
+    snr_db = np.array([acq_results[sid].peak_snr_db for sid in signal_ids])
+    detected = np.array([acq_results[sid].signal_detected for sid in signal_ids])
+    thresholds = np.array([acq_results[sid].detection_threshold_db for sid in signal_ids])
+    x = np.arange(len(signal_ids))
+
+    ax.bar(x[detected], snr_db[detected], color="tab:green", label="acquired")
+    ax.bar(x[~detected], snr_db[~detected], color="0.65", label="below threshold")
+    if np.ptp(thresholds) < 0.005:
+        ax.axhline(thresholds[0], color="k", ls="--", lw=1.5,
+                   label=f"detection threshold ({thresholds[0]:.2f} dB)")
+    else:
+        ax.hlines(thresholds, x - 0.45, x + 0.45, colors="k", linestyles="--", lw=1.5,
+                  label=f"detection threshold, per PRN ({thresholds.min():.2f}-"
+                        f"{thresholds.max():.2f} dB)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(signal_ids, rotation=90, fontsize=7 if len(x) > 40 else 8)
+    ax.set_xlim(-0.75, len(x) - 0.25)
+    ax.set_ylim(0.0, max(float(snr_db.max()), float(thresholds.max())) * 1.1)
+    ax.set_xlabel("PRN")
+    ax.set_ylabel("Peak power [dB above noise]")
+    ax.set_title(f"{title}: {int(detected.sum())} of {len(x)} acquired")
+    ax.grid(True, axis="y")
+    place_legend(ax, fontsize=8)
     return ax
 
 
@@ -498,7 +591,7 @@ def plot_acquisition_dwell_layout(
         # can straddle is 5 ms long, and saying so is the whole point.
         handles.append(plt.Line2D([0], [0], color="none",
                                   label=f"symbol {symbol_period_ms:g} ms: none in this window"))
-    ax_time.legend(handles=handles, fontsize=7, loc="upper right")
+    place_legend(ax_time, handles, fontsize=7)
 
     # --- frequency ---
     # What the search actually steps, which is the FFT bin spacing divided by the
@@ -527,9 +620,12 @@ def plot_acquisition_dwell_layout(
     ax_freq.set_ylabel("Normalised correlation")
     ax_freq.set_title("Grid spacing vs response width")
     ax_freq.set_xlim(-span, span)
-    ax_freq.set_ylim(0, 1.1)
+    # Room under the zero line for the legend, which sits in the lower left (D-075)
+    # and would otherwise cover the grid ticks.  The ticks stay on 0 to 1.
+    ax_freq.set_ylim(-0.4, 1.1)
+    ax_freq.set_yticks(np.linspace(0.0, 1.0, 6))
     ax_freq.grid()
-    ax_freq.legend(fontsize=7, loc="upper right")
+    place_legend(ax_freq, outside=False, fontsize=7)
     return axes
 
 
@@ -538,6 +634,7 @@ def plot_acquisition_code_phase_slices(
     acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
     signal_ids: Optional[Sequence[str]] = None,
     window_chips: float = 3.0,
+    title: str = "Acquisition correlation vs code delay",
 ) -> Axes:
     """
     Correlation power against code delay, one curve per signal, each taken at its
@@ -570,8 +667,10 @@ def plot_acquisition_code_phase_slices(
     property of the sweep rather than of any signal.
 
     A healthy dwell is a sharp peak at delay zero, far above the line, falling to a
-    flat floor within about a chip either side.  A false acquisition is a low,
-    shapeless bump that barely clears it.
+    flat floor within about a chip either side.  A false acquisition is a noise
+    maximum that barely clears it -- and it has the same shape, because the
+    correlation of noise has the shape of the code's own autocorrelation: nearby
+    code delays share most of their chips.  Only the height tells them apart.
 
     Resolution is set by the sample rate, and it is coarse: at 22 Msps against a
     10.23 Mcps code there are only 2.15 samples per chip -- one sample is 45.5 ns,
@@ -590,6 +689,15 @@ def plot_acquisition_code_phase_slices(
 
     Signals are taken from `acq_results` by default only where `signal_detected` is
     set; elsewhere the "peak" is a noise maximum whose neighbourhood means nothing.
+
+    Pass `signal_ids=sorted(acq_results)` to draw every PRN searched (D-085).  A PRN
+    below the threshold is then drawn dotted, about its own highest cell.  The shape
+    of a dotted curve does not show whether it is a signal: every noise maximum is a
+    triangle too (the BOC shape for B1C).  The dotted curves of PRNs that are not
+    there show the band where noise maxima sit.  A peak just under the line is worth
+    a lower threshold only when it stands clearly above that band, repeats at the
+    same code phase and Doppler in a later dwell, or (assisted acquisition) agrees
+    with the predicted Doppler plus the clock offset.
     """
     if signal_ids is None:
         signal_ids = sorted(sid for sid, r in acq_results.items() if r.signal_detected)
@@ -620,10 +728,12 @@ def plot_acquisition_code_phase_slices(
         order = np.argsort(delay_chips[keep])
         return delay_chips[keep][order], power_db[keep][order]
 
-    any_fine = False
+    # tab10 repeats after ten curves; an all-PRN plot has up to 63.
+    palette = plt.get_cmap("tab10" if len(signal_ids) <= 10 else "tab20")
+    any_fine = any_below = False
     for index, signal_id in enumerate(signal_ids):
         result = acq_results[signal_id]
-        colour = f"C{index}"
+        colour = palette(index % palette.N)
         fine = result.fine_correlation_result
 
         # Both curves are referenced to the FINE peak, so the coarse curve's own
@@ -658,9 +768,15 @@ def plot_acquisition_code_phase_slices(
             )
 
         x, y = _slice(result, result.correlation_result, coarse_row, reference_seconds)
-        # Faded, same colour and marker: the eye should read the pair as one signal
-        # measured two ways, not as two signals.
-        ax.plot(x, y, ".-", color=colour, alpha=0.35, markersize=6, lw=1.2)
+        if not result.signal_detected:
+            # Dotted and thin: the eye should find the acquired curves first.
+            any_below = True
+            ax.plot(x, y, ":", color=colour, alpha=0.8, lw=1.0)
+        else:
+            # Faded when a fine curve follows, same colour and marker: the eye should
+            # read the pair as one signal measured two ways, not as two signals.
+            ax.plot(x, y, ".-", color=colour, alpha=0.35 if fine is not None else 1.0,
+                    markersize=6, lw=1.2)
 
         if fine is not None:
             any_fine = True
@@ -680,14 +796,21 @@ def plot_acquisition_code_phase_slices(
         label = f"{signal_id}  {snr:.1f} dB"
         if fine_snr is not None:
             label = f"{signal_id}  {snr:.1f} => {fine_snr:.1f} dB"
-        ax.plot([], [], ".-", color=colour, markersize=6, label=label)
+        if result.signal_detected:
+            ax.plot([], [], ".-", color=colour, markersize=6, label=label)
+        else:
+            ax.plot([], [], ":", color=colour, lw=1.5, label=label)
 
-    threshold_db = acq_results[signal_ids[0]].detection_threshold_db
-    ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
-               label=f"detection threshold ({threshold_db:.2f} dB)")
+    # One line per distinct threshold.  A normal sweep has one; an assisted one
+    # (D-086) has one for its wide stage 1 and a lower one for its narrow stage 2.
+    for threshold_db in sorted({round(acq_results[s].detection_threshold_db, 2) for s in signal_ids}):
+        ax.axhline(threshold_db, color="k", ls="--", lw=1.5,
+                   label=f"detection threshold ({threshold_db:.2f} dB)")
     if any_fine:
         ax.plot([], [], ".-", color="0.4", alpha=0.35, markersize=6, label="faded: coarse")
         ax.plot([], [], ".-", color="0.4", alpha=1.0, markersize=6, label="solid: fine")
+    if any_below:
+        ax.plot([], [], ":", color="0.4", lw=1.5, label="dotted: below threshold")
 
     # Noise cells scatter several dB below the 0 dB mean, so clamp the floor rather
     # than letting one deep null squash every curve.
@@ -698,7 +821,7 @@ def plot_acquisition_code_phase_slices(
     # sign of this axis is the one thing about the figure that cannot be read off
     # it.  Above the frame, so they never collide with the legend or the curves,
     # with the title padded up to make room.
-    ax.set_title("Acquisition correlation vs code delay", pad=18)
+    ax.set_title(title, pad=18)
     for x, ha, text in (
         (0.0, "left", "\u2190 early: replica ahead, shorter delay"),
         (1.0, "right", "late: replica behind, longer delay (multipath) \u2192"),
@@ -706,7 +829,75 @@ def plot_acquisition_code_phase_slices(
         ax.text(x, 1.01, text, transform=ax.transAxes, ha=ha, va="bottom",
                 fontsize=7.5, color="0.35")
     ax.grid(True)
-    ax.legend(fontsize=8, ncol=1, loc="upper right", bbox_to_anchor=(1.0, 1.0))
+    # One column holds about 22 entries at this size; a 63-PRN sweep needs three.
+    many = len(signal_ids) > 22
+    place_legend(ax, fontsize=7 if many else 8, ncol=1 + len(signal_ids) // 23)
+    return ax
+
+
+def plot_assisted_skyplot(
+    fig: Figure | SubFigure,
+    report,
+    acq_results: dict[str, bpsk_acquisition.AcquisitionResult],
+    title: str = "Assisted acquisition",
+) -> Axes:
+    """
+    The sky that assisted acquisition (D-086) predicted, and what it found there.
+
+    North is up and azimuth runs clockwise; the centre is the zenith and the rim is
+    the horizon.  Grey is the sky mask: below the minimum elevation, and each blocked
+    sector up to its elevation.  Each predicted satellite is a marker: filled green
+    when acquired, an open circle when searched and not found, a grey cross when the
+    mask blocks it (not searched).  `report` is an `assisted_acquisition.AssistReport`.
+    """
+    ax = fig.add_subplot(1, 1, 1, projection="polar")
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+    ax.set_rlim(0.0, 90.0)
+    ax.set_rticks([0, 30, 60, 90])
+    ax.set_yticklabels(["90°", "60°", "30°", "0°"], fontsize=7)
+
+    mask = report.mask
+    ring = np.linspace(0.0, 2 * np.pi, 361)
+    shade = dict(color="0.6", alpha=0.35, lw=0)
+    if mask.min_elevation_deg > 0.0:
+        ax.fill_between(ring, 90.0 - mask.min_elevation_deg, 90.0, label="blocked", **shade)
+        shade.pop("label", None)
+    for index, sector in enumerate(mask.blocked):
+        width = (sector.az_to_deg - sector.az_from_deg) % 360.0 or 360.0
+        theta = np.radians(sector.az_from_deg + np.linspace(0.0, width, 91))
+        label = "blocked" if (index == 0 and mask.min_elevation_deg <= 0.0) else None
+        ax.fill_between(theta, 90.0 - sector.up_to_elevation_deg, 90.0, label=label, **shade)
+
+    styles = {
+        "acquired": dict(marker="o", color="tab:green", ms=9, ls=""),
+        "searched, not found": dict(marker="o", mfc="none", mec="tab:orange", mew=1.8, ms=9, ls=""),
+        "blocked, not searched": dict(marker="x", color="0.45", ms=8, mew=1.8, ls=""),
+    }
+    drawn: set[str] = set()
+    for sid, p in report.predictions.items():
+        result = acq_results.get(sid)
+        if p.elevation_deg < 0.0:
+            continue  # below the horizon: outside the plot, and no barrier's doing
+        if not p.open_sky:
+            kind = "blocked, not searched"
+        elif result is not None and result.signal_detected:
+            kind = "acquired"
+        elif result is not None:
+            kind = "searched, not found"
+        else:
+            continue
+        ax.plot(np.radians(p.azimuth_deg), 90.0 - p.elevation_deg,
+                label=None if kind in drawn else kind, **styles[kind])
+        drawn.add(kind)
+        ax.annotate(sid, (np.radians(p.azimuth_deg), 90.0 - p.elevation_deg),
+                    xytext=(6, 4), textcoords="offset points", fontsize=7)
+
+    searched = [sid for sid in report.predictions if sid in acq_results]
+    found = sum(acq_results[sid].signal_detected for sid in searched)
+    ax.set_title(f"{title}: {found} of {len(searched)} searched acquired\n"
+                 f"sky mask: {mask.describe()}", fontsize=9, pad=14)
+    place_legend(ax, outside=False, fontsize=7)
     return ax
 
 
@@ -926,7 +1117,7 @@ def plot_prompt_components(
         ax.set_ylabel(f"{name}\nPrompt")
         ax.grid(True)
     axes[0].set_title(title if title is not None else f"Prompt correlators: {sig_id}")
-    axes[0].legend(markerscale=8, loc="upper right", fontsize=8)
+    place_legend(axes[0], markerscale=8, fontsize=8)
     axes[-1].set_xlabel("Uptime [s]")
     fig.align_labels()
     return axes
@@ -1068,7 +1259,7 @@ def plot_code_delay_and_doppler(
             [0], [0], color="none",
             label=f"delay at t=0: {start_ms:.3f} ms  (mod {ambiguity_ms:g} ms)",
         ))
-    ax.legend(handles=handles, loc="best", fontsize=8)
+    place_legend(ax, handles, fontsize=8)
     return ax
 
 
@@ -1186,7 +1377,7 @@ def plot_prompt_circ_length(
             ax_cn0.set_ylim(centre - half_span, centre + half_span)
         handles.append(line)
 
-    ax.legend(handles=handles, markerscale=4, loc="lower right", fontsize=8)
+    place_legend(ax, handles, markerscale=4, fontsize=8)
     return ax
 
 

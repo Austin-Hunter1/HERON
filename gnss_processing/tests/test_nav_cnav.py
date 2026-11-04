@@ -375,12 +375,15 @@ def test_type_30_iono_block_spans_bits_193_to_256():
     assert 225 + 8 * 3 + 8 - 1 == 256
 
 
-def test_clock_parsing_accepts_the_whole_30_to_37_range():
-    for message_type in range(30, 38):
-        parsed = cnav.parse_type_30(message_with_field(message_type, 72, 26, 1000))
-        assert parsed.af0 == pytest.approx(1000 * 2.0**-35)
-    with pytest.raises(ValueError, match="30-37"):
-        cnav.parse_type_30(message_with_field(11, 72, 26, 0))
+def test_type_30_parsing_refuses_every_other_message_type():
+    """
+    Types 31 to 37 share the clock block but not the rest, so reading their group delay or
+    ionosphere bits as type 30 gives wrong numbers (found on real L5 data).
+    """
+    assert cnav.parse_type_30(message_with_field(30, 72, 26, 1000)).af0 == pytest.approx(1000 * 2.0**-35)
+    for message_type in (10, 11, *range(31, 38)):
+        with pytest.raises(ValueError, match="type 30 only"):
+            cnav.parse_type_30(message_with_field(message_type, 72, 26, 1000))
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +415,32 @@ def test_assemble_ephemeris_needs_every_piece():
         messages = build_consistent_set().messages
         del messages[missing]
         assert cnav.assemble_ephemeris(cnav.CnavDecodeResult(messages=messages)) is None
+
+
+def _clock_message(message_type: int, toc_raw: int, tgd_raw: int) -> cnav.CnavMessage:
+    """A clock-bearing message with a given toc (bits 61-71) and a value in bits 128-140."""
+    message = message_with_field(message_type, 61, 11, toc_raw)
+    bits = cnav.set_field(np.array(message.bits[: cnav.INFORMATION_BITS], dtype=np.uint8), 128, 13, tgd_raw)
+    return cnav.CnavMessage(0, message_type, 0, False, prim.crc24q_append(bits), 0, cnav.L5_MESSAGE_DURATION_S)
+
+
+def test_assemble_ephemeris_takes_the_group_delay_from_type_30_not_a_later_type_33():
+    """Bits 128-140 hold T_GD in type 30 and something else in type 33; only type 30 may supply tgd."""
+    ten = message_with_field(10, 71, 11, 1008)
+    eleven = message_with_field(11, 39, 11, 1008)
+    thirty = _clock_message(30, 1008, 100)
+    thirty_three = _clock_message(33, 1008, 4000)  # same bit position, different meaning
+    e = cnav.assemble_ephemeris(cnav.CnavDecodeResult(messages=[ten, eleven, thirty, thirty_three]), sat_id="G01")
+    assert e is not None
+    assert e.tgd == pytest.approx(100 * 2.0**-35)
+
+
+def test_assemble_ephemeris_needs_a_type_30_message():
+    """A type 33 message alone has a clock block but no group delay, so it cannot finish the set."""
+    ten = message_with_field(10, 71, 11, 1008)
+    eleven = message_with_field(11, 39, 11, 1008)
+    result = cnav.CnavDecodeResult(messages=[ten, eleven, _clock_message(33, 1008, 4000)])
+    assert cnav.assemble_ephemeris(result) is None
 
 
 def test_assemble_ephemeris_rejects_a_data_set_cutover():

@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="349.2pt" height="316.8pt" viewBox="0 0 349.2 316.8" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-24T19:25:19.938625</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 316.8 
+L 349.2 316.8 
+L 349.2 0 
+L 0 0 
+z
+" style="fill: #f2f7fa"/>
+  </g>
+  <g id="axes_1">
+   <g id="line2d_1">
+    <path d="M 213.391837 274.77551 
+L 245.718367 274.77551 
+" clip-path="url(#p9ca4fb6301)" style="fill: none; stroke: #0d2340; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Calibri'; fill: #1b3a6b" transform="translate(86.099442 14.807494)">Altitude h</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Calibri'; fill: #1b3a6b" transform="translate(89.549442 24.08015)">(e = 30°)</text>
+   </g>
+   <g id="patch_2">
+    <path d="M 106.714286 48.442385 
+C 112.188494 48.442385 117.439229 47.354922 121.310079 45.419497 
+C 125.180929 43.484073 127.355855 40.858705 127.355855 38.121601 
+C 127.355855 35.384497 125.180929 32.759129 121.310079 30.823704 
+C 117.439229 28.888279 112.188494 27.800816 106.714286 27.800816 
+C 101.240078 27.800816 95.989342 28.888279 92.118492 30.823704 
+C 88.247643 32.759129 86.072717 35.384497 86.072717 38.121601 
+C 86.072717 40.858705 88.247643 43.484073 92.118492 45.419497 
+C 95.989342 47.354922 101.240078 48.442385 106.714286 48.442385 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #6fb8cc; opacity: 0.32; stroke: #6fb8cc; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="106.714286" y="56.110446" transform="rotate(-0 106.714286 56.110446)">6.4 × 12.8 m</text>
+   </g>
+   <g id="patch_3">
+    <path d="M 106.714286 94.521658 
+C 114.991028 94.521658 122.92989 92.877466 128.78243 89.951196 
+C 134.63497 87.024926 137.923355 83.055495 137.923355 78.917124 
+C 137.923355 74.778753 134.63497 70.809322 128.78243 67.883052 
+C 122.92989 64.956781 114.991028 63.312589 106.714286 63.312589 
+C 98.437544 63.312589 90.498682 64.956781 84.646141 67.883052 
+C 78.793601 70.809322 75.505217 74.778753 75.505217 78.917124 
+C 75.505217 83.055495 78.793601 87.024926 84.646141 89.951196 
+C 90.498682 92.877466 98.437544 94.521658 106.714286 94.521658 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #3a99b3; opacity: 0.32; stroke: #3a99b3; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="106.714286" y="102.18972" transform="rotate(-0 106.714286 102.18972)">9.7 × 19.3 m</text>
+   </g>
+   <g id="patch_4">
+    <path d="M 106.714286 150.675 
+C 117.662702 150.675 128.164173 148.500074 135.905872 144.629225 
+C 143.647572 140.758375 147.997423 135.507639 147.997423 130.033431 
+C 147.997423 124.559223 143.647572 119.308488 135.905872 115.437638 
+C 128.164173 111.566788 117.662702 109.391863 106.714286 109.391863 
+C 95.76587 109.391863 85.264398 111.566788 77.522699 115.437638 
+C 69.781 119.308488 65.431148 124.559223 65.431148 130.033431 
+C 65.431148 135.507639 69.781 140.758375 77.522699 144.629225 
+C 85.264398 148.500074 95.76587 150.675 106.714286 150.675 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #1a7a9a; opacity: 0.32; stroke: #1a7a9a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="106.714286" y="158.343062" transform="rotate(-0 106.714286 158.343062)">12.8 × 25.5 m</text>
+   </g>
+   <g id="patch_5">
+    <path d="M 106.714286 216.106516 
+C 120.123302 216.106516 132.984925 213.442786 142.466532 208.701983 
+C 151.948138 203.96118 157.275597 197.530368 157.275597 190.82586 
+C 157.275597 184.121352 151.948138 177.69054 142.466532 172.949737 
+C 132.984925 168.208934 120.123302 165.545204 106.714286 165.545204 
+C 93.305269 165.545204 80.443646 168.208934 70.96204 172.949737 
+C 61.480433 177.69054 56.152974 184.121352 56.152974 190.82586 
+C 56.152974 197.530368 61.480433 203.96118 70.96204 208.701983 
+C 80.443646 213.442786 93.305269 216.106516 106.714286 216.106516 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #145f78; opacity: 0.32; stroke: #145f78; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="106.714286" y="223.774577" transform="rotate(-0 106.714286 223.774577)">15.6 × 31.3 m</text>
+   </g>
+   <g id="patch_6">
+    <path d="M 106.714286 296.251092 
+C 124.025252 296.251092 140.629536 292.812232 152.870237 286.691881 
+C 165.110938 280.571531 171.988658 272.269389 171.988658 263.613906 
+C 171.988658 254.958423 165.110938 246.656281 152.870237 240.53593 
+C 140.629536 234.41558 124.025252 230.97672 106.714286 230.97672 
+C 89.40332 230.97672 72.799036 234.41558 60.558335 240.53593 
+C 48.317633 246.656281 41.439914 254.958423 41.439914 263.613906 
+C 41.439914 272.269389 48.317633 280.571531 60.558335 286.691881 
+C 72.799036 292.812232 89.40332 296.251092 106.714286 296.251092 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #0d4357; opacity: 0.32; stroke-dasharray: 5.2,3.9; stroke-dashoffset: 0; stroke: #0d4357; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="106.714286" y="303.919153" transform="rotate(-0 106.714286 303.919153)">20.2 × 40.4 m (waiver)</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Calibri'; fill: #1b3a6b" transform="translate(222.898055 14.807494)">Elevation e</text>
+    <text style="font-weight: 700; font-size: 10px; font-family: 'Calibri'; fill: #1b3a6b" transform="translate(223.255867 24.08015)">(h = 150 ft)</text>
+   </g>
+   <g id="patch_7">
+    <path d="M 245.718367 49.868961 
+C 248.644638 49.868961 251.451449 48.706341 253.520635 46.637156 
+C 255.58982 44.56797 256.75244 41.761159 256.75244 38.834889 
+C 256.75244 35.908618 255.58982 33.101807 253.520635 31.032621 
+C 251.451449 28.963436 248.644638 27.800816 245.718367 27.800816 
+C 242.792097 27.800816 239.985286 28.963436 237.9161 31.032621 
+C 235.846915 33.101807 234.684295 35.908618 234.684295 38.834889 
+C 234.684295 41.761159 235.846915 44.56797 237.9161 46.637156 
+C 239.985286 48.706341 242.792097 49.868961 245.718367 49.868961 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #6fb8cc; opacity: 0.32; stroke: #6fb8cc; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="245.718367" y="57.537022" transform="rotate(-0 245.718367 57.537022)">6.8 × 6.8 m</text>
+   </g>
+   <g id="patch_8">
+    <path d="M 245.718367 88.452929 
+C 249.349302 88.452929 252.832012 87.203613 255.399471 84.980129 
+C 257.96693 82.756644 259.409516 79.740529 259.409516 76.596047 
+C 259.409516 73.451565 257.96693 70.43545 255.399471 68.211965 
+C 252.832012 65.988481 249.349302 64.739165 245.718367 64.739165 
+C 242.087432 64.739165 238.604722 65.988481 236.037264 68.211965 
+C 233.469805 70.43545 232.027219 73.451565 232.027219 76.596047 
+C 232.027219 79.740529 233.469805 82.756644 236.037264 84.980129 
+C 238.604722 87.203613 242.087432 88.452929 245.718367 88.452929 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #3a99b3; opacity: 0.32; stroke: #3a99b3; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="245.718367" y="96.120991" transform="rotate(-0 245.718367 96.120991)">7.3 × 8.5 m</text>
+   </g>
+   <g id="patch_9">
+    <path d="M 245.718367 129.566728 
+C 250.639748 129.566728 255.360223 128.184133 258.840165 125.723442 
+C 262.320106 123.262752 264.275391 119.924872 264.275391 116.444931 
+C 264.275391 112.964989 262.320106 109.627109 258.840165 107.166419 
+C 255.360223 104.705729 250.639748 103.323133 245.718367 103.323133 
+C 240.796987 103.323133 236.076511 104.705729 232.59657 107.166419 
+C 229.116629 109.627109 227.161344 112.964989 227.161344 116.444931 
+C 227.161344 119.924872 229.116629 123.262752 232.59657 125.723442 
+C 236.076511 128.184133 240.796987 129.566728 245.718367 129.566728 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #1a7a9a; opacity: 0.32; stroke: #1a7a9a; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="245.718367" y="137.234789" transform="rotate(-0 245.718367 137.234789)">8.1 × 11.5 m</text>
+   </g>
+   <g id="patch_10">
+    <path d="M 245.718367 175.646001 
+C 253.995109 175.646001 261.933971 174.001809 267.786512 171.075539 
+C 273.639052 168.149269 276.927437 164.179837 276.927437 160.041467 
+C 276.927437 155.903096 273.639052 151.933664 267.786512 149.007394 
+C 261.933971 146.081124 253.995109 144.436932 245.718367 144.436932 
+C 237.441625 144.436932 229.502763 146.081124 223.650223 149.007394 
+C 217.797683 151.933664 214.509298 155.903096 214.509298 160.041467 
+C 214.509298 164.179837 217.797683 168.149269 223.650223 171.075539 
+C 229.502763 174.001809 237.441625 175.646001 245.718367 175.646001 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #145f78; opacity: 0.32; stroke: #145f78; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="245.718367" y="183.314062" transform="rotate(-0 245.718367 183.314062)">9.7 × 19.3 m</text>
+   </g>
+   <g id="patch_11">
+    <path d="M 245.718367 228.250825 
+C 260.348117 228.250825 274.380639 226.262846 284.725434 222.724718 
+C 295.07023 219.186589 300.882691 214.387184 300.882691 209.383515 
+C 300.882691 204.379846 295.07023 199.580441 284.725434 196.042312 
+C 274.380639 192.504184 260.348117 190.516205 245.718367 190.516205 
+C 231.088618 190.516205 217.056095 192.504184 206.7113 196.042312 
+C 196.366505 199.580441 190.554044 204.379846 190.554044 209.383515 
+C 190.554044 214.387184 196.366505 219.186589 206.7113 222.724718 
+C 217.056095 226.262846 231.088618 228.250825 245.718367 228.250825 
+z
+" clip-path="url(#p9ca4fb6301)" style="fill: #0d4357; opacity: 0.32; stroke: #0d4357; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #5b6b7f" x="245.718367" y="235.918886" transform="rotate(-0 245.718367 235.918886)">11.7 × 34.1 m</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="229.555102" y="270.710918" transform="rotate(-0 229.555102 270.710918)">10 m</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 8.5px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="232.787755" y="298.930102" transform="rotate(-0 232.787755 298.930102)">along-track</text>
+   </g>
+   <g id="patch_12">
+    <path d="M 213.391837 289.322449 
+Q 232.787755 289.322449 250.842033 289.322449 
+" style="fill: none; stroke: #0d2340; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 246.842033 287.322449 
+L 250.842033 289.322449 
+L 246.842033 291.322449 
+z
+" style="fill: #0d2340; stroke: #0d2340; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="106.714286" y="40.371601" transform="rotate(-0 106.714286 40.371601)">20 m</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="106.714286" y="81.167124" transform="rotate(-0 106.714286 81.167124)">150 ft</text>
+   </g>
+   <g id="text_17">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="106.714286" y="132.283431" transform="rotate(-0 106.714286 132.283431)">80 m</text>
+   </g>
+   <g id="text_18">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="106.714286" y="193.07586" transform="rotate(-0 106.714286 193.07586)">120 m</text>
+   </g>
+   <g id="text_19">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="106.714286" y="265.863906" transform="rotate(-0 106.714286 265.863906)">200 m</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="245.718367" y="41.084889" transform="rotate(-0 245.718367 41.084889)">90°</text>
+   </g>
+   <g id="text_21">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="245.718367" y="78.846047" transform="rotate(-0 245.718367 78.846047)">60°</text>
+   </g>
+   <g id="text_22">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="245.718367" y="118.694931" transform="rotate(-0 245.718367 118.694931)">45°</text>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="245.718367" y="162.291467" transform="rotate(-0 245.718367 162.291467)">30°</text>
+   </g>
+   <g id="text_24">
+    <text style="font-weight: 700; font-size: 9px; font-family: 'Calibri'; text-anchor: middle; fill: #0d2340" x="245.718367" y="211.633515" transform="rotate(-0 245.718367 211.633515)">20°</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p9ca4fb6301">
+   <rect x="0" y="0" width="349.2" height="316.8"/>
+  </clipPath>
+ </defs>
+</svg>

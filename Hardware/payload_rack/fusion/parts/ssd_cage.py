@@ -13,7 +13,7 @@ Order of features (the same as the CadQuery order, for the same result):
   5. top ears           6. insert holes, bottom and top
   7. receptacle pocket (open toward -Y)     8. base lightening pocket
 
-Change from heron_rack.py (D-035, 2026-10-14): in heron_rack.py the two top
+Change from heron_rack.py (D-087, 2026-10-14): in heron_rack.py the two top
 ears span `SSD_YM +/- SSD_FLANGE_HALF`, the same as the bottom flanges. There
 they touch no other part of the cage (a 4.9 mm gap to each guide), so the
 printed cage would be 3 loose pieces. Here the top ears span the full cage

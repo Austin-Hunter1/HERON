@@ -1,0 +1,18 @@
+<section class="part" id="s02" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>What a working GNSS needs</h2>
+    <div class="meta">{{MIN}} MIN · REQUIREMENTS FOR THE TRILATERATION SYSTEM</div>
+    <p class="lede">The forest worked because we knew where the towers were, we could tell the chimes apart, and they rang at a known time. Scale that up to a world-wide, all-weather, always-on system and you get this list. Every item becomes a feature of the signal.</p>
+  </header>
+  <div class="btnrow"><button class="btn" id="s02-all">Expand all</button><button class="btn" id="s02-none">Collapse all</button></div>
+  <div class="needs">
+    <details class="need"><summary class="q">Know where the transmitters are</summary><div class="a">Each satellite broadcasts its own orbit (ephemeris) and clock correction inside its navigation message. The ground segment uploads new values about every 2 hours.</div><div class="k">→ Navigation message · Part 05</div></details>
+    <details class="need"><summary class="q">Tell the transmitters apart</summary><div class="a">All GPS satellites send on the same frequency. Each one has its own pseudo-random noise (PRN) code. The receiver separates them by correlation: code division (CDMA), not tone division (FDMA).</div><div class="k">→ PRN codes · Part 04</div></details>
+    <details class="need"><summary class="q">Measure again and again</summary><div class="a">The code repeats every 1 to 10 ms, so the receiver gets a new range at every repeat. The message repeats in frames of seconds, so a receiver can start at any time.</div><div class="k">→ Repeating structure · Parts 03, 07</div></details>
+    <details class="need"><summary class="q">Know what time it is</summary><div class="a">Atomic clocks on each satellite keep system time. The message stamps the time of transmission. The receiver clock error is the fourth unknown, so we use four or more satellites.</div><div class="k">→ Time of week + 4th satellite · Parts 01, 05</div></details>
+    <details class="need"><summary class="q">Work in any weather</summary><div class="a">L-band (1 to 2 GHz) goes through cloud and rain with little loss. The ionosphere delay goes as 1/f², so two frequencies let the receiver measure it and remove it.</div><div class="k">→ L1 + L5 · Part 09</div></details>
+    <details class="need"><summary class="q">Hear a signal below the noise</summary><div class="a">A satellite 20 000 km away sends about 50 W. At the antenna the signal is about 20 dB below the thermal noise. The code spreads the signal, and correlation collects it back with 30 to 40 dB of gain.</div><div class="k">→ Correlation gain · Parts 04, 06</div></details>
+    <details class="need" style="border-color:var(--refl)"><summary class="q">HERON adds one more</summary><div class="a">For reflectometry we receive the same satellite twice: the direct path and the path that bounced off the water. Both receivers must share one clock so that the difference between the two paths is clean.</div><div class="k" style="color:var(--refl)">→ Shared 10 MHz + PPS clock board · Part 10</div></details>
+  </div>
+</section>

@@ -71,7 +71,7 @@ You are a test engineer on this project. Obey these rules at all times:
   - `clock_board/` — The 10 MHz + PPS distribution board (D-025,
     D-026). Python generators make the KiCad 7 files; see its
     `README.md` before you edit the board.
-  - `clock_board_revD/` — The current clock board revision (D-042):
+  - `clock_board_revD/` — The current clock board revision (D-094):
     jacks on the real SDR 10 MHz and PPS SMAs, holes for the SDR
     USB-B plugs, KiCad 10. `gen_pcb.py` makes the PCB (Freerouting
     for the non-critical nets). Revs A-C are kept as records; do not
@@ -103,7 +103,7 @@ You are a test engineer on this project. Obey these rules at all times:
 - SDRs: two Ettus B210 and two Ettus B200, all USB 3.0, all on UHD
   4.x (D-020, D-024). The software records all four. Sample format is
   sc8 (8-bit complex).
-- Sync: the HERON clock board (current revision `Hardware/clock_board_revD/`, D-025, D-042) gives
+- Sync: the HERON clock board (current revision `Hardware/clock_board_revD/`, D-025, D-094) gives
   10 MHz and PPS to all four units (`clock_source = external`,
   `time_source = external`). The 10 MHz comes from a SiTime SiT5155
   Super-TCXO (SiT5155AI-FK-33E0-10.000000, ±0.5 ppm). It is

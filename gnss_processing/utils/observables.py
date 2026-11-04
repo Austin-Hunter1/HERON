@@ -32,11 +32,19 @@ on where the receiver is -- Sagnac, troposphere, ionospheric mapping -- lives in
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-from .nav.ephemeris import SPEED_OF_LIGHT, CnavEphemeris, Ephemeris, LnavEphemeris
+from . import time_systems
+from .nav.ephemeris import (
+    SPEED_OF_LIGHT,
+    BdsEphemeris,
+    CnavEphemeris,
+    Ephemeris,
+    GalEphemeris,
+    LnavEphemeris,
+)
 
 # Nominal carrier frequencies, for scaling a single-frequency ionospheric delay
 # between bands.  The Klobuchar model is defined for L1.
@@ -49,6 +57,9 @@ BAND_FREQ_HZ: dict[str, float] = {
     "GPS_L1C": L1_FREQ_HZ,
     "GPS_L2C": L2_FREQ_HZ,
     "GPS_L5": L5_FREQ_HZ,
+    "BDS_B2A": L5_FREQ_HZ,
+    "BDS_B1C": L1_FREQ_HZ,
+    "GAL_E5A": L5_FREQ_HZ,
 }
 
 # A rough transit time, used only to place the nominal receiver clock so that
@@ -59,11 +70,11 @@ NOMINAL_TRANSIT_TIME_S = 0.075
 
 @dataclass(frozen=True)
 class TimeAnchor:
-    """Ties one satellite's cumulative code phase to absolute GPS time."""
+    """Ties one satellite's cumulative code phase to absolute time of week."""
 
     sat_id: str
     tow_s: float
-    """GPS time of week at the anchor instant."""
+    """Time of week at the anchor instant, in the system named by `time_system`."""
 
     code_phase_ms: float
     """Cumulative code phase at that same instant."""
@@ -71,6 +82,11 @@ class TimeAnchor:
     week: int | None = None
     source: str = ""
     """Human-readable provenance, e.g. "CNAV type 11, TOW count 100001"."""
+
+    time_system: str = "GPST"
+    """The time scale of `tow_s` and `week`: "GPST", or "BDT" for BeiDou.  BDT has
+    no leap seconds and runs 14 s behind GPST, so a BDT anchor must be converted
+    before it is mixed with GPS data; nothing in this class does that."""
 
     def transmit_time_s(self, code_phase_ms: np.ndarray | float) -> np.ndarray | float:
         """
@@ -83,7 +99,9 @@ class TimeAnchor:
         return self.tow_s + (np.asarray(code_phase_ms) - self.code_phase_ms) * 1e-3
 
 
-def anchor_from_cnav(stream, message, sat_id: str | None = None) -> TimeAnchor:
+def anchor_from_cnav(
+    stream, message, sat_id: str | None = None, *, sat_id_prefix: str = "G"
+) -> TimeAnchor:
     """
     Build a `TimeAnchor` from a decoded CNAV message and the stream it came from.
 
@@ -97,10 +115,109 @@ def anchor_from_cnav(stream, message, sat_id: str | None = None) -> TimeAnchor:
             f"{len(stream.code_phase_ms)}-symbol stream"
         )
     return TimeAnchor(
-        sat_id=sat_id or f"G{message.prn:02d}",
+        sat_id=sat_id or f"{sat_id_prefix}{message.prn:02d}",
         tow_s=message.tow_at_message_start_s,
         code_phase_ms=float(stream.code_phase_ms[message.symbol_index]),
         source=f"CNAV type {message.message_type}, TOW count {message.tow_count}",
+    )
+
+
+def anchor_from_bcnav2(stream, frame, week: int | None = None) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded B-CNAV2 frame and the stream it came from.
+
+    The SOW of a B-CNAV2 frame names the first preamble chip of that same frame, and
+    `frame.symbol_index` is where that preamble starts in `stream`, so the code phase
+    there is a direct lookup.  The time system is BDT.  The BDT week number is only
+    in message type 10 (`Type10.wn`); pass it as `week` when it is known.
+    """
+    if frame.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {frame.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=f"C{frame.prn:02d}",
+        tow_s=frame.sow_at_frame_start_s,
+        code_phase_ms=float(stream.code_phase_ms[frame.symbol_index]),
+        week=week,
+        source=f"B-CNAV2 type {frame.message_type}, SOW count {frame.sow_count}",
+        time_system="BDT",
+    )
+
+
+def anchor_from_bcnav1(stream, frame) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded B-CNAV1 frame and the stream it came from.
+
+    The time of week of a frame, ``HOW * 3600 + SOH * 18``, names the first symbol of
+    subframe 1 (ICD 7.3), and `frame.symbol_index` is where that symbol sits in
+    `stream`, so the code phase there is a direct lookup.  The time system is BDT and
+    the week number is in subframe 2, so it is set from the frame.
+    """
+    if frame.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {frame.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=f"C{frame.prn:02d}",
+        tow_s=frame.tow_at_frame_start_s,
+        code_phase_ms=float(stream.code_phase_ms[frame.symbol_index]),
+        week=frame.wn,
+        source=f"B-CNAV1 HOW {frame.how}, SOH count {frame.soh_count}",
+        time_system="BDT",
+    )
+
+
+def anchor_from_cnav2(
+    stream, symbol_index: int, tow_s: float, week: int, sat_id: str
+) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a CNAV-2 frame start.
+
+    `symbol_index` is where the frame's first symbol sits in `stream`, and `tow_s` is
+    the time of week of that symbol, ``ITOW * 7200 + TOI * 18`` (see
+    `nav.cnav2.frame_start_tow_s`).  The week number is the 13-bit one of subframe 2.
+    CNAV-2 is in GPS time.
+    """
+    if symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"frame at symbol {symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=tow_s,
+        code_phase_ms=float(stream.code_phase_ms[symbol_index]),
+        week=week,
+        source="CNAV-2 TOI and ITOW",
+        time_system="GPST",
+    )
+
+
+def anchor_from_fnav(stream, page, sat_id: str) -> TimeAnchor:
+    """
+    Build a `TimeAnchor` from a decoded F/NAV page-1 and the stream it came from.
+
+    The time of week of a page names its first symbol, and `page.symbol_index` is where
+    that symbol sits in `stream`.  Galileo System Time is taken as GPS time (they differ
+    by nanoseconds), and the GPS week is the GST week plus 1024.
+    """
+    if "tow" not in page.fields:
+        raise ValueError(f"page type {page.page_type} carries no time of week; use a page 1")
+    if page.symbol_index >= len(stream.code_phase_ms):
+        raise ValueError(
+            f"page at symbol {page.symbol_index} is past the end of a "
+            f"{len(stream.code_phase_ms)}-symbol stream"
+        )
+    return TimeAnchor(
+        sat_id=sat_id,
+        tow_s=float(page.fields["tow"]),
+        code_phase_ms=float(stream.code_phase_ms[page.symbol_index]),
+        week=int(page.fields["wn"]) + 1024,
+        source=f"F/NAV page 1, TOW {int(page.fields['tow'])}",
+        time_system="GPST",
     )
 
 
@@ -140,6 +257,15 @@ class Observables:
     week: int | None = None
     anchors: dict[str, TimeAnchor] = field(default_factory=dict)
 
+    time_system: str = "GPST"
+    """The time scale of `receive_time_s` and `transmit_time_s`: "GPST" or "BDT".
+    A set built from BeiDou anchors alone is in BDT; a combined set is in GPST."""
+
+    signal_type_ids: dict[str, str] = field(default_factory=dict)
+    """Satellite id -> signal type id (e.g. "GPS_L5", "BDS_B2A"), for a combined set
+    whose satellites were tracked on different signals.  A satellite with no entry
+    takes the `signal_type_id` the caller passes to the solver."""
+
     @property
     def num_epochs(self) -> int:
         return len(self.epoch_uptime_ms)
@@ -153,8 +279,42 @@ class Observables:
         return self.valid_mask().sum(axis=1)
 
 
+def refined_code_phase_ms(outputs, code_rate_chips_per_sec: float | None) -> np.ndarray:
+    """
+    The code phase of every epoch, with the subcarrier correction added when there is one.
+
+    A channel tracked with the double estimator (the BOC discriminator: a code loop on
+    the wide BPSK triangle plus a subcarrier loop on the steep, repeating peak) keeps
+    two delay estimates.  `code_phase_ms` is the code loop's, unambiguous but noisy;
+    `subcarrier_offset_chips` is how far the subcarrier loop sits from it, always within
+    half the ambiguity interval, so it is the fine correction to the same quantity.  The
+    delay the signal actually shows is their sum.  Leaving the offset out throws the
+    precision away: measured on B1C, the pseudorange scatter is 5-7 m without it and
+    1.6-2.1 m with it, and the offset with the other sign gives 9-19 m.
+
+    `code_rate_chips_per_sec` is the signal's nominal code rate, which turns chips into
+    milliseconds.  With None, or for a channel without a subcarrier loop, the code phase
+    is returned unchanged.
+
+    The time anchor still takes the code loop's value at its one epoch.  The offset there
+    is a few metres on B1C (the per-satellite means in notebook 02 section 9 show it), so
+    it is not corrected; correcting it would need the stream to carry the offset too.
+    """
+    code_phase = np.asarray(outputs.code_phase_ms, dtype=float)
+    layout = getattr(outputs, "tap_layout", None)
+    if code_rate_chips_per_sec is None or layout is None or not layout.tracks_subcarrier:
+        return code_phase
+    chips_per_ms = code_rate_chips_per_sec * 1e-3
+    return code_phase + np.asarray(outputs.subcarrier_offset_chips, dtype=float) / chips_per_ms
+
+
 def _interpolate_code_phase(
-    outputs, epoch_uptime_ms: np.ndarray
+    outputs,
+    epoch_uptime_ms: np.ndarray,
+    *,
+    max_gap_factor: float | None = None,
+    guard_after_gap_ms: float = 0.0,
+    code_rate_chips_per_sec: float | None = None,
 ) -> np.ndarray:
     """
     Code phase at arbitrary receiver-clock instants.
@@ -164,13 +324,46 @@ def _interpolate_code_phase(
     the curvature over one interval is far below a millimetre of range.  Requests
     outside the tracked span return NaN rather than extrapolating -- an
     extrapolated code phase is a fabricated measurement.
+
+    The same rule applies INSIDE the tracked span when a channel lost lock and
+    was re-acquired (`utils.tracking_supervisor`).  The merged record then has a
+    hole of several hundred milliseconds in `uptime_epoch_ms`, and the code
+    phase after the hole carries the code periods the dropped samples took with
+    them -- up to a full code period of jump (c x 1 ms = 300 km on L1 C/A).  A
+    straight line across that hole puts a made-up, satellite-dependent fraction
+    of the jump into every request that lands in it, which is a fabricated
+    measurement just as much as an extrapolated one.  So:
+
+    - `max_gap_factor`: an interval between two consecutive epochs that is longer
+      than this many times the MEDIAN epoch spacing is a hole, and requests
+      inside it return NaN.  Relative to the median, not an absolute time, so
+      one value fits 5 ms (L1 C/A) and 20 ms (L5) epochs alike.  `None` keeps
+      the old behaviour (interpolate across everything).
+    - `guard_after_gap_ms`: also return NaN for this long after the hole ends,
+      while the freshly seeded loop settles.  0 disables it.
+
+    `code_rate_chips_per_sec` adds the subcarrier loop's correction when the channel
+    was tracked with the double estimator; see `refined_code_phase_ms`.
     """
     valid = outputs.valid
     uptime = outputs.uptime_epoch_ms[valid]
-    code_phase = outputs.code_phase_ms[valid]
+    code_phase = refined_code_phase_ms(outputs, code_rate_chips_per_sec)[valid]
     if len(uptime) < 2:
         return np.full(len(epoch_uptime_ms), np.nan)
     out = np.interp(epoch_uptime_ms, uptime, code_phase, left=np.nan, right=np.nan)
+
+    if max_gap_factor is None:
+        return out
+    spacing = np.diff(uptime)
+    hole_limit_ms = max_gap_factor * float(np.median(spacing))
+    hole_indices = np.nonzero(spacing > hole_limit_ms)[0]
+    for i in hole_indices:
+        # Hole is the open interval between epoch i and epoch i+1; the guard
+        # extends it past the far end.
+        in_hole = (epoch_uptime_ms > uptime[i]) & (
+            epoch_uptime_ms < uptime[i + 1] + guard_after_gap_ms
+        )
+        out[in_hole] = np.nan
     return out
 
 
@@ -181,9 +374,20 @@ def form_observables(
     epoch_uptime_ms: np.ndarray | None = None,
     epoch_interval_ms: float = 100.0,
     week: int | None = None,
+    max_gap_factor: float | None = None,
+    guard_after_gap_ms: float = 0.0,
+    time_system: str | None = None,
+    code_rate_chips_per_sec: float | dict[str, float] | None = None,
+    max_uptime_ms: float | None = None,
 ) -> Observables:
     """
     Build pseudoranges for every anchored satellite on one common grid.
+
+    `time_system` is the scale the result is expressed in.  Left at None it is the
+    scale of the anchors when they all agree (a BeiDou-only set is then in BDT), and
+    GPST when they do not.  Satellites whose anchor is in another scale are moved by
+    the constant 14 s offset, so every transmit time and the receive time share one
+    scale -- which is what makes `receive - transmit` a range.
 
     `tracking_outputs` maps satellite id to a `SignalTrackingOutputs`.  Only
     satellites that also appear in `anchors` contribute -- an unanchored channel
@@ -193,6 +397,19 @@ def form_observables(
     channels share.  100 ms is a deliberate choice: fast enough to show the
     receiver clock drifting, slow enough that a minute of tracking is a few hundred
     fixes rather than tens of thousands.
+
+    `max_gap_factor` and `guard_after_gap_ms` control what happens at a hole left
+    by a lost-and-reacquired channel; see `_interpolate_code_phase`.  Both
+    default to the old behaviour (interpolate across holes), so a caller opts in.
+
+    `code_rate_chips_per_sec` is the nominal code rate of the signal (one number, or one
+    per satellite id).  Given it, a channel tracked with the BOC discriminator (the
+    double estimator) has its subcarrier correction added to the code phase before the
+    pseudorange is formed.  Left at None, the code phase is used as logged.
+
+    `max_uptime_ms` ends the default grid at that receiver instant (exclusive), so an
+    analysis can use the first part of a run only -- for example to stop before a USB
+    overflow late in a recording.  It does nothing when the caller passes the grid.
     """
     sat_ids = sorted(set(tracking_outputs) & set(anchors))
     if not sat_ids:
@@ -216,19 +433,36 @@ def form_observables(
         # every satellite has data, and stepping outside that would silently drop
         # satellites mid-run.
         start, stop = max(starts), min(stops)
+        if max_uptime_ms is not None:
+            stop = min(stop, max_uptime_ms)
         if stop <= start:
             raise ValueError(
-                "the tracked channels do not overlap in time; no common measurement "
-                "epoch exists"
+                "the tracked channels do not overlap in time (inside `max_uptime_ms`); "
+                "no common measurement epoch exists"
             )
         epoch_uptime_ms = np.arange(start, stop, epoch_interval_ms)
     epoch_uptime_ms = np.asarray(epoch_uptime_ms, dtype=float)
 
+    if time_system is None:
+        scales = {anchors[sat_id].time_system for sat_id in sat_ids}
+        time_system = scales.pop() if len(scales) == 1 else "GPST"
+
     n, m = len(epoch_uptime_ms), len(sat_ids)
     transmit = np.full((n, m), np.nan)
     for j, sat_id in enumerate(sat_ids):
-        code_phase = _interpolate_code_phase(tracking_outputs[sat_id], epoch_uptime_ms)
-        transmit[:, j] = anchors[sat_id].transmit_time_s(code_phase)
+        code_phase = _interpolate_code_phase(
+            tracking_outputs[sat_id],
+            epoch_uptime_ms,
+            max_gap_factor=max_gap_factor,
+            guard_after_gap_ms=guard_after_gap_ms,
+            code_rate_chips_per_sec=(
+                code_rate_chips_per_sec.get(sat_id)
+                if isinstance(code_rate_chips_per_sec, dict) else code_rate_chips_per_sec
+            ),
+        )
+        transmit[:, j] = time_systems.convert_time_of_week(
+            anchors[sat_id].transmit_time_s(code_phase), anchors[sat_id].time_system, time_system
+        )
 
     # Anchor the nominal receiver clock so pseudoranges land near their true
     # magnitude.  The offset is arbitrary and the clock bias absorbs it; picking a
@@ -248,7 +482,167 @@ def form_observables(
         pseudorange_m=pseudorange,
         week=week,
         anchors={s: anchors[s] for s in sat_ids},
+        time_system=time_system,
     )
+
+
+def common_epoch_grid(
+    tracking_outputs: list[dict],
+    epoch_interval_ms: float = 100.0,
+    max_uptime_ms: float | None = None,
+) -> np.ndarray:
+    """
+    One receiver-instant grid for several tracking runs of one recording.
+
+    `form_observables` picks its own grid from the channels it is given, so two runs
+    formed separately get different grids and cannot be combined
+    (`combine_observables`).  This takes every channel of every run and returns the
+    grid over the span all of them share, which both runs are then formed on.
+    `max_uptime_ms` ends the grid at that receiver instant (exclusive).
+    """
+    starts, stops = [], []
+    for outputs_by_sat in tracking_outputs:
+        for outputs in outputs_by_sat.values():
+            uptime = outputs.uptime_epoch_ms[outputs.valid]
+            if len(uptime) >= 2:
+                starts.append(uptime[0])
+                stops.append(uptime[-1])
+    if not starts:
+        raise ValueError("no channel has enough epochs to interpolate")
+    start, stop = max(starts), min(stops)
+    if max_uptime_ms is not None:
+        stop = min(stop, max_uptime_ms)
+    if stop <= start:
+        raise ValueError("the tracked channels do not overlap in time; no common grid exists")
+    return np.arange(start, stop, epoch_interval_ms)
+
+
+def combine_observables(
+    parts: list[Observables],
+    signal_type_ids: list[str],
+    *,
+    time_system: str = "GPST",
+    labels: list[str] | None = None,
+) -> Observables:
+    """
+    Join observables of several tracking runs (for example GPS L5 and BeiDou B2a of
+    one collect) into one set on one measurement grid (D-058).
+
+    The parts must be measured at the same receiver instants: same
+    `epoch_uptime_ms`, which means both runs started at the same `START_OFFSET_MS` on
+    the same sample clock, and the caller passed one grid to `form_observables` for
+    both.  If the grids differ the receiver clock of one part is not the receiver
+    clock of the other, and joining them would put a false offset into every
+    pseudorange, so it is refused.
+
+    Each part's `receive_time_s` was set separately, to a nominal 75 ms after its own
+    latest satellite, so the parts disagree by an arbitrary constant.  They are put on
+    the first part's receive time here, shifting the pseudoranges by the same amount;
+    what remains between the systems is the real receiver inter-system bias, which
+    the solver estimates (D-057).
+
+    `signal_type_ids` names the signal each part was tracked on, in the same order.
+
+    `labels` (D-073) names the receiver stream of each part, for runs from radios that
+    do not share a clock.  When given, every column is renamed `<sat id>@<label>`, so
+    the same satellite on two signals ("G01@L1" and "G01@L5") is two columns, and the
+    solver gives each stream and constellation its own clock bias (see
+    `navigation.system_letter`).  Two parts with the same label share a clock; a label
+    must not repeat a signal that is already in that stream, because the bias absorbs
+    one signal's delays only.  Without labels the ids are kept and a repeated id is an
+    error.  The epoch grids still have to match: that is a grid of receiver sample
+    counts, and each stream has its own.  Streams started at different instants then
+    measure at different true times, which a fixed receiver does not mind and a
+    moving one would.
+    """
+    if not parts:
+        raise ValueError("no observables to combine")
+    if len(signal_type_ids) != len(parts):
+        raise ValueError("give one signal type id for each part")
+    if labels is not None and len(labels) != len(parts):
+        raise ValueError("give one label for each part")
+    reference = parts[0]
+    for number, part in enumerate(parts[1:], start=1):
+        if not np.array_equal(part.epoch_uptime_ms, reference.epoch_uptime_ms):
+            raise ValueError(
+                f"part {number} is measured at different receiver instants than part 0; "
+                "run both with the same START_OFFSET_MS and pass one epoch grid to "
+                "form_observables"
+            )
+
+    def to_scale(part: Observables):
+        shift = time_systems.convert_time_of_week(0.0, part.time_system, time_system)
+        return part.receive_time_s + shift, part.transmit_time_s + shift
+
+    common_receive, _ = to_scale(reference)
+    sat_ids: list[str] = []
+    transmit_columns, pseudorange_columns = [], []
+    anchors: dict[str, TimeAnchor] = {}
+    types: dict[str, str] = {}
+    for number, (part, signal_type_id) in enumerate(zip(parts, signal_type_ids)):
+        receive, transmit = to_scale(part)
+
+        def renamed(sat_id: str, number=number) -> str:
+            return sat_id if labels is None else f"{sat_id}@{labels[number]}"
+
+        for column, sat_id in enumerate(part.sat_ids):
+            column_id = renamed(sat_id)
+            if column_id in sat_ids:
+                raise ValueError(f"satellite {column_id} appears in more than one part")
+            sat_ids.append(column_id)
+            types[column_id] = part.signal_type_ids.get(sat_id, signal_type_id)
+        transmit_columns.append(transmit)
+        # Same range as before, measured against the common receive time.
+        pseudorange_columns.append(
+            part.pseudorange_m + SPEED_OF_LIGHT * (common_receive - receive)[:, None]
+        )
+        # An anchor names its satellite too; keep that name the same as the column's.
+        anchors.update(
+            {
+                renamed(sat_id): replace(anchor, sat_id=renamed(sat_id))
+                for sat_id, anchor in part.anchors.items()
+            }
+        )
+    return Observables(
+        epoch_uptime_ms=reference.epoch_uptime_ms,
+        receive_time_s=common_receive,
+        sat_ids=sat_ids,
+        transmit_time_s=np.hstack(transmit_columns),
+        pseudorange_m=np.hstack(pseudorange_columns),
+        week=reference.week,
+        anchors=anchors,
+        time_system=time_system,
+        signal_type_ids=types,
+    )
+
+
+def cn0_on_grid(outputs, epoch_uptime_ms: np.ndarray, component: int) -> np.ndarray:
+    """
+    The C/N0 estimate of one channel at the receiver instants of a grid, in dB-Hz.
+
+    Tracking writes a C/N0 estimate every few hundred milliseconds
+    (`cn0_uptime_ms`, `cn0_dbhz`).  This interpolates it onto the grid; outside the
+    span it covers the value is NaN, not an extrapolation.  `component` is the one the
+    loops ran on (the pilot).
+    """
+    block = outputs.cn0_valid
+    times = np.asarray(outputs.cn0_uptime_ms)[block]
+    values = np.asarray(outputs.cn0_dbhz)[block, component]
+    if len(times) < 1:
+        return np.full(len(epoch_uptime_ms), np.nan)
+    return np.interp(epoch_uptime_ms, times, values, left=np.nan, right=np.nan)
+
+
+def ephemeris_time_s(ephemeris: Ephemeris, time_s, time_system: str):
+    """
+    A time of week in the scale the ephemeris is defined in.
+
+    GPS ephemerides are functions of GPST and the BeiDou one of BDT.  `time_system` is
+    the scale `time_s` is in; the result is what to hand to `orbit_state` and
+    `clock_correction_s`.
+    """
+    native = "BDT" if isinstance(ephemeris, BdsEphemeris) else "GPST"
+    return time_systems.convert_time_of_week(time_s, time_system, native)
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +664,21 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
     gets the T_GD part and no ISC.  That is a real limitation of the legacy message
     rather than a gap here, and it is worth a decimetre or two.
     """
+    if isinstance(ephemeris, BdsEphemeris):
+        # BeiDou states the pilot and data corrections itself (ICD 7-4 and 7-5).  The
+        # pilot's is used: it is the component tracking runs its carrier loop on.
+        pilot_component = {"BDS_B2A": "B2ap", "BDS_B1C": "B1Cp"}.get(signal_type_id)
+        if pilot_component is None:
+            raise ValueError(
+                f"a BeiDou ephemeris has group delays for B2a and B1C only, "
+                f"not {signal_type_id!r}"
+            )
+        return ephemeris.group_delay_s(pilot_component)
+    if isinstance(ephemeris, GalEphemeris):
+        # Galileo states one group delay, BGD(E1,E5a); the E5a user scales it (ICD 5.1.5).
+        if signal_type_id != "GAL_E5A":
+            raise ValueError(f"a Galileo F/NAV ephemeris has a group delay for E5a only, not {signal_type_id!r}")
+        return ephemeris.group_delay_s()
     tgd = ephemeris.tgd
     isc = 0.0
     if isinstance(ephemeris, CnavEphemeris):
@@ -277,6 +686,8 @@ def signal_group_delay_s(ephemeris: Ephemeris, signal_type_id: str) -> float:
             "GPS_L1CA": ephemeris.isc_l1ca,
             "GPS_L2C": ephemeris.isc_l2c,
             "GPS_L5": ephemeris.isc_l5i5,
+            # The pilot's correction, as for B1C: the carrier loop runs on the pilot.
+            "GPS_L1C": ephemeris.isc_l1cp,
         }.get(signal_type_id) or 0.0
     return -tgd + isc
 
@@ -304,12 +715,16 @@ def satellite_clock_corrections(
         eph = ephemerides.get(sat_id)
         if eph is None:
             continue
-        delay = signal_group_delay_s(eph, signal_type_id) if apply_group_delay else 0.0
+        sat_signal = observables.signal_type_ids.get(sat_id, signal_type_id)
+        delay = signal_group_delay_s(eph, sat_signal) if apply_group_delay else 0.0
         for i in range(n):
             t_sv = observables.transmit_time_s[i, j]
             if not np.isfinite(t_sv):
                 continue
-            out[i, j] = eph.clock_correction_s(t_sv) + delay
+            # The ephemeris wants its own system's time, which differs by 14 s for
+            # BeiDou in a GPST set.  The clock polynomial and the orbit both use it.
+            t_native = ephemeris_time_s(eph, t_sv, observables.time_system)
+            out[i, j] = eph.clock_correction_s(t_native) + delay
     return out
 
 

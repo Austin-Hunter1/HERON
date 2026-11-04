@@ -37,7 +37,7 @@ Q-001. `heron-onboard check-config` prints this sum for a config.
 | B200 size and mass | The B200 board (about 97 × 155 mm) is larger and heavier than the B200mini it replaces | Mounting, payload mass, and USB power draw: **TBD — check on the bench** |
 | UHD support | UHD 4.x (apt on Ubuntu 22.04/24.04) runs all four | Q-011 closed |
 | Sample format | sc8 (8-bit complex) files (D-009); sc16 on the USB wire by default | `capture.cpu_format`, `capture.wire_format` |
-| Sync | HERON clock board (D-025, D-026): SiT5155 Super-TCXO 10 MHz (fixed frequency, factory-set, no I2C) and buffered GNSS PPS to all four units (D-014, D-024, D-025) | Design files: `Hardware/clock_board/` (rev A); current revision `Hardware/clock_board_revD/` (D-042). 4× 10 MHz SMA (≈ +7 dBm sine) and 4× PPS SMA (3.3 V). PPS source (GNSS receiver model): **TBD**. 5 V in on JST XH (D-040). |
+| Sync | HERON clock board (D-025, D-026): SiT5155 Super-TCXO 10 MHz (fixed frequency, factory-set, no I2C) and buffered GNSS PPS to all four units (D-014, D-024, D-025) | Design files: `Hardware/clock_board/` (rev A); current revision `Hardware/clock_board_revD/` (D-094). 4× 10 MHz SMA (≈ +7 dBm sine) and 4× PPS SMA (3.3 V). PPS source (GNSS receiver model): **TBD**. 5 V in on JST XH (D-092). |
 | Time alignment | All four units: PPS-aligned to the same UTC second (D-024) | See `DATA_FORMATS.md` |
 | Legacy settings | 22 Msps, sc8, L5 1176.45 MHz, gain 45, BW 20.322 MHz | `SURGE/NUC_scripts/SDR_backup_files/b210_split_settings-balloon.xml` |
 
@@ -61,7 +61,7 @@ Q-001. `heron-onboard check-config` prints this sum for a config.
 | Payload control link | **Flight-controller telemetry link (D-016).** NUC ↔ Cube telemetry serial port (MAVLink 2, component 191); Cube ↔ ground via the existing telemetry radio / Herelink | Cube port and baud: Q-014. Default TELEM2 at 921600 |
 | Drone airframe | Aurelia X6 (from SURGE; drone team confirms) | |
 
-## 5. Payload mass budget (estimate, D-046)
+## 5. Payload mass budget (estimate, D-098)
 
 Status: **estimate only**. The values come from vendor datasheets and
 from the rack CAD. Nobody has weighed an item yet. When you weigh an
@@ -94,7 +94,7 @@ and the cables are the largest open items.
 The Ettus 350 g value is one value for "B200/B210". It is not clear
 if it is the bare board. A bare board can be lighter.
 
-## 6. Payload power budget (estimate, D-047)
+## 6. Payload power budget (estimate, D-099)
 
 Status: **estimate only**. The values come from vendor datasheets and
 manuals. Nobody has measured a draw yet. Ettus does not publish a
@@ -150,5 +150,5 @@ SDR draw.
 | 2026-09-16 | Draft 2: NUC7i3DNB, +2 B100s, sc8, SATA data SSD, ground station laptop, payload/flight-control separation, shared oscillator | Claude + Nathan |
 | 2026-09-17 | Draft 3: B100 → B200mini (USB 3.0, UHD 4.x, one reference input); GPSDO 10 MHz + PPS; payload link on the flight-controller link; ZED-F9P assumed on the ground | Claude + Nathan |
 | 2026-09-24 | Draft 4: B200mini → B200 (separate REF IN and PPS IN); PPS to all four units (D-024) | Claude + Nathan |
-| 2026-10-26 | Section 5: payload mass budget, an estimate from datasheet values (D-046) | Claude + Nathan |
-| 2026-10-26 | Section 6: payload power budget, an estimate from datasheet values (D-047) | Claude + Nathan |
+| 2026-10-26 | Section 5: payload mass budget, an estimate from datasheet values (D-098) | Claude + Nathan |
+| 2026-10-26 | Section 6: payload power budget, an estimate from datasheet values (D-099) | Claude + Nathan |

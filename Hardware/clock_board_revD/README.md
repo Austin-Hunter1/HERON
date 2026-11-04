@@ -1,15 +1,15 @@
 # HERON clock board (rev D): 10 MHz + PPS distribution, jacks on the real SDR connectors
 
-Rev D puts each jack on the SDR connector it must mate with (D-042). The rev C jacks faced the
+Rev D puts each jack on the SDR connector it must mate with (D-094). The rev C jacks faced the
 wrong SMAs (see Q-015 b): the SDR rear edge order is **GPS ANT, 10 MHz, USB-B, PPS, DC jack**
 (silkscreen on a B210 and a B200, photos 2026-10-20). The USB-B connector sits between the
 10 MHz and PPS SMAs, so the board is taller and has a hole for each USB plug.
 
-**Status: ready to order (D-049). Not ordered. Not built.** The SDR connector positions, the
+**Status: ready to order (D-101). Not ordered. Not built.** The SDR connector positions, the
 USB hole size and the plug clearances are checked on the real parts (user, 2026-10-27).
 
 The circuit, the schematic and the parts are the rev C ones, including the JST XH power
-connector J1 (D-040) and the Panjit SOD-323HE land for D2 (D-041). One part change (D-045): the 10 MHz ESD diodes D4–D7 are the bidirectional TPD1E10B06DYAR
+connector J1 (D-092) and the Panjit SOD-323HE land for D2 (D-093). One part change (D-097): the 10 MHz ESD diodes D4–D7 are the bidirectional TPD1E10B06DYAR
 (same SOD-523 package), because the AC-coupled 10 MHz swings below GND.
 
 ![Rev D top](project/fab/heron_clock_revD_top.png)
@@ -25,7 +25,7 @@ connector J1 (D-040) and the Panjit SOD-323HE land for D2 (D-041). One part chan
 | SDR GPS ANT and DC jack | GPS ANT covered by the board | Both stay free for cables: the board stays above the GPS ANT plug and below the DC plug |
 | Layout | Rev B layout, patched by `make_revc.py` | New: `gen_pcb.py` places all parts and routes the sensitive nets by hand; Freerouting routes the rest (as rev B) |
 | Footprints | KiCad 7 copies (25 `lib_footprint_mismatch` notes) | Loaded from the KiCad 10 library and the project library: no mismatch |
-| PPS outputs | Dog-leg around a jack leg (3 starved thermals, D-039) | ESD diode and 22 R straight right of the jack tab: no starved thermals |
+| PPS outputs | Dog-leg around a jack leg (3 starved thermals, D-091) | ESD diode and 22 R straight right of the jack tab: no starved thermals |
 | 10 MHz filter columns | Right of the jack | Left of the jack (mirror image of rev C); the jack turns 180° so its tab points at the column |
 | DRC | 28 items (accepted) | **0 violations, 0 unconnected, 0 footprint errors, 0 schematic parity issues** |
 
@@ -43,14 +43,14 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 
 - **USB holes:** 16 mm (x) × 18 mm (y), 1 mm corner radius, centred 5.89 mm right of the jack axis
   (the USB-B axis is 5.89 mm from the SMA axis, toward the SDR component side). Sized for a generic
-  straight USB 3.0 B overmold of 16 × 14 mm with 1 mm clearance. Checked with the real cable (D-049).
+  straight USB 3.0 B overmold of 16 × 14 mm with 1 mm clearance. Checked with the real cable (D-101).
 - **Keep-out ring:** 2 mm round each hole, on all four copper layers: no tracks, vias, pads,
   pours or parts. A hole can grow to about 20 × 22 mm by an Edge.Cuts change only.
 - **Board edges:** the top edge (rack z 90) is 8.4 mm below the SDR DC jack axis (z 98.4); the
   bottom edge (z 30) is 6.8 mm above the GPS ANT axis (z 23.2). A plug up to about 13 mm in
-  diameter fits on each. Checked with the real plugs (D-049).
+  diameter fits on each. Checked with the real plugs (D-101).
 - **Mounting holes:** 6 × M3, all 4 mm in from the long edges. H1–H4 at the corners: rack (X, Z) = (50, 86), (160, 86),
-  (50, 34), (160, 34). H5, H6 (D-043) at the middle of the top and bottom edges, in line with the corner holes:
+  (50, 34), (160, 34). H5, H6 (D-095) at the middle of the top and bottom edges, in line with the corner holes:
   (105, 86) and (105, 34). They carry the push of the direct-mate jacks when the SDR trays slide in. At X 105
   the rear plate is solid (between the B210_2 and B200_1 solder windows), so each standoff seats on full material.
 - **J1** (JST XH): mouth on the top edge between the B210_1 and B210_2 DC plugs.
@@ -84,7 +84,7 @@ from the component side (the side that faces the SDRs). Rack: world X = 46 + x, 
 | --- | --- |
 | KiCad DRC (KiCad 10.0.6, with schematic parity, 2026-10-21, with H5, H6) | 0 violations, 0 unconnected pads, 0 footprint errors, 0 parity issues |
 | ERC | 0 errors, 0 warnings |
-| D4–D7 to TPD1E10B06 (D-045, 2026-10-24) | Fields only: tracks and footprints unchanged. DRC 0, unconnected 0, parity 0; ERC 0 |
+| D4–D7 to TPD1E10B06 (D-097, 2026-10-24) | Fields only: tracks and footprints unchanged. DRC 0, unconnected 0, parity 0; ERC 0 |
 | Netlist (`check_net.py`) | 112 parts (with H5, H6), 51 nets. Single-node nets only on the intentional NC pins U1.4, U2.4, U5.1 |
 | Rack fit (`../payload_rack/check_fit.py`, 2026-10-21, 6 standoffs) | 0 clashes. Mate report: all 8 jacks 0.000 mm radial and axial error (J3–J6 on the SDR 10 MHz SMA, J7–J10 on the PPS SMA). Stop screw access: clear |
 | Rack fit, run again 2026-10-27 (after the rack changes) | 0 clashes, all 8 jacks mate, stop screw access clear |

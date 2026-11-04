@@ -4,12 +4,44 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#132a2d" />
-  <title>HERON Mission Planner</title>
+  <title>HERON Ground Control</title>
   <link rel="preconnect" href="https://unpkg.com" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css?v=aim39" />
+  <link rel="stylesheet" href="/static/style.css?v=ground4" />
+  <link rel="stylesheet" href="/static/flight.css?v=12" />
 </head>
-<body class="click-wps">
+<body class="click-wps" data-view="plan">
+  <header id="appbar">
+    <div class="ab-brand">
+      <img src="/static/heron-logo.avif" alt="" width="30" height="30" />
+      <div><b>HERON</b><small>Ground Control</small></div>
+    </div>
+    <nav class="ab-tabs" role="tablist" aria-label="Workspace">
+      <button type="button" role="tab" id="tabPlan" data-view="plan" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Plan</button>
+      <button type="button" role="tab" id="tabSim" data-view="sim" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>Simulate<i class="tab-dot" id="dotSim"></i></button>
+      <button type="button" role="tab" id="tabFly" data-view="fly" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="m7 7 3.5 3.5M17 7l-3.5 3.5M7 17l3.5-3.5M17 17l-3.5-3.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Fly<i class="tab-dot" id="dotFly"></i></button>
+    </nav>
+
+    <div id="abStatus" class="ab-status hidden" aria-label="Vehicle status">
+      <div class="ind"><small>Mode</small><b id="abMode">—</b></div>
+      <div class="ind"><small>GPS</small><b id="abGps">—</b></div>
+      <div class="ind"><small>Battery</small><b id="abBatt">—</b><em id="abCurrent">—</em></div>
+      <div class="ind"><small>Link</small><b id="abLink">—</b></div>
+      <button id="abReady" type="button" class="ready-pill" title="Show launch checks"><i></i><span id="abReadyText">—</span></button>
+    </div>
+
+    <div id="abConnFly" class="ab-conn">
+      <select id="connPort" aria-label="Connection"><option value="auto">AUTO</option></select>
+      <select id="connBaud" aria-label="Baud rate"><option>115200</option><option>57600</option><option>230400</option><option>460800</option><option>921600</option></select>
+      <button id="connSettings" type="button" class="icon-btn" aria-label="Link settings" aria-expanded="false" aria-controls="connPopover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      <button id="connButton" type="button" class="conn-btn">Connect</button>
+    </div>
+    <div id="abConnSim" class="ab-conn hidden">
+      <span class="sim-flag">Simulation</span>
+      <button id="simButton" type="button" class="conn-btn">Start simulator</button>
+    </div>
+  </header>
+
   <main id="map" aria-label="Interactive mission planning map"></main>
 
   <aside id="sidebar" class="sidebar" aria-label="Mission planner">
@@ -23,7 +55,7 @@
     </header>
 
     <form id="form">
-      <section class="form-section" aria-labelledby="flight-heading">
+      <section class="form-section flight-setup" aria-labelledby="flight-heading">
         <div class="section-heading">
           <span class="section-number">01</span>
           <div>
@@ -41,7 +73,7 @@
         <div class="field-grid">
           <label class="field"><span>Speed</span><div class="input-unit"><input type="number" id="speed" min="2" max="25" step="0.5" value="8" /><em>m/s</em></div></label>
           <label class="field"><span>Hover</span><div class="input-unit"><input type="number" id="loiter" min="0" max="1200" step="1" value="30" /><em>sec/WP</em></div></label>
-          <label class="field"><span>Altitude</span><div class="input-unit"><input type="number" id="h_agl" min="30" max="122" value="120" /><em>m AGL</em></div></label>
+          <label class="field"><span>Above Home</span><div class="input-unit"><input type="number" id="h_agl" min="2" max="122" value="60" /><em>m</em></div></label>
           <label class="field" id="windowField"><span>Search window</span><div class="input-unit"><input type="number" id="duration" min="10" max="180" value="40" /><em>min</em></div></label>
           <label class="field"><span>Elevation mask</span><div class="input-unit"><input type="number" id="mask" min="10" max="40" value="20" /><em>degrees</em></div></label>
         </div>
@@ -81,6 +113,7 @@
         </div>
 
         <div class="mode-row" role="group" aria-label="Flight pattern">
+          <button type="button" id="modeGround" class="mode mode-ground" aria-pressed="false"><b>Ground</b><span>Stand on the shore</span></button>
           <button type="button" id="modeClick" class="mode on" aria-pressed="true"><b>Route</b><span>Place waypoints</span></button>
           <button type="button" id="modeAreas" class="mode" aria-pressed="false"><b>Area</b><span>Sweep a boundary</span></button>
           <button type="button" id="modeSurvey" class="mode" aria-pressed="false"><b>Water</b><span>Follow a surface</span></button>
@@ -93,7 +126,7 @@
           </div>
 
           <div id="areaTools" class="hidden">
-            <p class="tool-guidance">Draw a box or polygon. The planner creates a complete lawnmower sweep.</p>
+            <p class="tool-guidance">Draw a box or polygon. Passes run along its long side.</p>
             <div class="tool-actions"><button type="button" id="btnDraw" class="secondary-button">Draw area</button><button type="button" id="btnFinish" disabled>Finish</button><button type="button" id="btnUndo" disabled>Undo</button><button type="button" id="btnClear">Clear</button></div>
           </div>
 
@@ -102,16 +135,49 @@
             <div class="tool-actions"><span id="nSurveyPicks" class="selection-count">No water selected</span><button type="button" id="btnClearSurvey">Clear</button></div>
           </div>
 
+          <div id="groundTools" class="hidden">
+            <p class="tool-guidance">Click land to move where you stand. Click a lake only to use its surface height. Reflections are drawn on every nearby lake.</p>
+            <div class="field-grid compact-grid">
+              <label class="field"><span>From</span><input type="datetime-local" id="g_from" /></label>
+              <label class="field"><span>To</span><input type="datetime-local" id="g_to" /></label>
+            </div>
+            <p class="tool-guidance" id="g_tz">Times are Mountain Time.</p>
+            <div class="field-grid compact-grid">
+              <label class="field"><span>Ground height</span><div class="input-unit"><input type="number" id="g_ground" step="0.1" /><em>m</em></div></label>
+              <label class="field"><span>Antenna above ground</span><div class="input-unit"><input type="number" id="g_ant" step="0.1" min="0" /><em>m</em></div></label>
+              <label class="field"><span>Water surface</span><div class="input-unit"><input type="number" id="g_water" step="0.1" /><em>m</em></div></label>
+              <label class="field"><span>Lowest satellite</span><div class="input-unit"><input type="number" id="g_mask" step="0.5" min="0.5" max="60" /><em>deg</em></div></label>
+            </div>
+          </div>
+
           <div id="tileTools" class="hidden">
             <div class="field-grid compact-grid">
-              <label class="field aim-el-field">
-                <span>Aim elevation</span>
-                <div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div>
-                <small>Locks onto the satellite closest to this elevation.</small>
-              </label>
-              <label class="field"><span>Tile spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" placeholder="Auto" /><em>m</em></div></label>
-              <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+              <label class="field"><span>Aim elevation</span><div class="input-unit"><input type="number" id="target_el" min="15" max="85" step="1" value="45" /><em>deg</em></div></label>
+              <label class="field"><span>Fly</span><select id="survey_style"><option value="continuous">Keep moving</option><option value="hover">Stop and hover</option></select></label>
             </div>
+            <label class="field"><span>Coverage</span>
+              <select id="coverage">
+                <option value="125">Overlap · strips overlap 20% (wind margin)</option>
+                <option value="100" selected>Full · strips just touch</option>
+                <option value="50">Half · one strip gap between passes</option>
+                <option value="25">Quarter · three strip gap between passes</option>
+                <option value="custom">Custom lane spacing</option>
+              </select>
+            </label>
+            <label id="tileField" class="field hidden"><span>Lane spacing</span><div class="input-unit"><input type="number" id="tile_m" min="4" max="400" step="1" placeholder="e.g. 30" /><em>m</em></div></label>
+            <p id="sweepHint" class="sweep-hint" aria-live="polite"></p>
+
+            <details class="more-settings">
+              <summary>More settings</summary>
+              <label class="field"><span>Sweep direction</span><div class="input-unit"><input type="number" id="sweep_bearing" min="0" max="179.9" step="1" placeholder="Auto · along the long side" /><em>°</em></div><small>Clockwise from north. Areas only; rivers follow the channel.</small></label>
+              <label class="field"><span>Antenna pointing</span><select id="roi_mode"><option value="body_yaw">Turn the aircraft to face the reflection</option><option value="none">Don't command heading</option><option value="per_point">Point at each splash point (old)</option></select></label>
+              <label class="field"><span>Antenna faces</span><div class="input-unit"><input type="number" id="antenna_offset_deg" min="-180" max="180" value="0" /><em>° from nose</em></div><small>0 forward, 90 right, 180 back.</small></label>
+              <div class="field-grid">
+                <label class="field"><span>Max gap between waypoints</span><div class="input-unit"><input type="number" id="max_leg_m" min="20" max="500" value="500" /><em>m</em></div></label>
+                <label class="field"><span>Waypoint limit</span><div class="input-unit"><input type="number" id="max_wp" min="20" max="400" value="200" /><em>max</em></div></label>
+              </div>
+              <small class="more-note">Shorter gaps follow the moving satellite more closely but use more waypoints.</small>
+            </details>
           </div>
         </div>
       </section>
@@ -138,7 +204,135 @@
       </table>
     </div>
     <div id="exports" class="hidden"></div>
+    <p class="flight-alt-note">Flight export uses altitude above Home. Geometry previews assume level terrain; they do not provide terrain clearance.</p>
   </aside>
+
+  <section id="deck" aria-label="Flight deck">
+    <div id="deckEmpty" class="deck-empty">
+      <div class="empty-card">
+        <div id="emptyRadar" class="radar" aria-hidden="true"><i></i><b></b></div>
+        <p id="emptyKicker" class="empty-kicker">Fly</p>
+        <h2 id="emptyTitle">Looking for your aircraft</h2>
+        <p id="emptyText">Plug the flight controller into USB. HERON connects on its own.</p>
+        <div class="empty-actions">
+          <button id="emptyPrimary" type="button" class="btn-primary">Connect</button>
+          <button id="emptySecondary" type="button" class="btn-quiet">Other connections</button>
+        </div>
+        <p id="emptyHint" class="empty-hint"></p>
+      </div>
+    </div>
+
+    <aside id="deckMission" class="deck-card deck-mission" aria-label="Mission">
+      <header class="card-head">
+        <span class="card-kicker">Mission</span>
+        <span id="missionBadge" class="pill">No mission</span>
+      </header>
+      <div id="missionSource" class="seg hidden" role="group" aria-label="Mission to fly">
+        <button type="button" data-source="plan" aria-pressed="true">HERON plan</button>
+        <button type="button" data-source="aircraft" aria-pressed="false">On drone</button>
+      </div>
+      <h3 id="missionName">Nothing loaded</h3>
+      <p id="flightPlanNote" class="card-note">Build a mission on the Plan page, or read the one already on the drone.</p>
+      <div id="missionProgress" class="progress hidden" role="status">
+        <div class="progress-row"><b id="missionProgressText">Taking off</b><span id="missionProgressEta"></span></div>
+        <div class="progress-track"><i id="missionProgressBar"></i></div>
+      </div>
+      <div class="mission-io">
+        <button id="missionRead" type="button" class="io-btn" title="Download the mission stored on the drone, like Read WPs in Mission Planner"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Read from drone</button>
+        <button id="flightUpload" type="button" class="io-btn" title="Send the HERON plan to the drone and read it back to verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>Write to drone</button>
+      </div>
+      <ol class="steps" aria-label="Launch steps">
+        <li id="stepUpload"><div class="step-row"><span class="step-n">1</span><span><b id="stepUploadTitle">Mission on drone</b><small id="stepUploadText">Write or read a mission</small></span></div></li>
+        <li id="stepChecks"><button id="flightChecksOpen" type="button" class="step-btn" aria-expanded="false" aria-controls="flightPreflight"><span class="step-n">2</span><span><b id="flightCheckSummary">Launch checks</b><small>Aircraft and fence</small></span></button></li>
+      </ol>
+      <div id="flightPreflight" class="checks hidden"><p class="checks-note">Switch off checks you don't need. Locked checks always apply.</p><ul id="flightChecks"></ul><button id="flightRefresh" type="button" class="btn-quiet">Refresh checks</button></div>
+      <div id="flightMessage" class="card-msg" role="status" aria-live="polite"></div>
+      <div class="card-foot">
+        <button id="flightUseHome" type="button" class="btn-quiet">Use aircraft Home as pad</button>
+        <button id="missionToPlan" type="button" class="btn-quiet">Edit in Plan</button>
+      </div>
+    </aside>
+
+    <aside id="deckInstruments" class="deck-instruments" aria-label="Instruments">
+      <div class="deck-card pfd-card"><canvas id="pfd" role="img" aria-label="Primary flight display"></canvas></div>
+      <div class="deck-card nav-card">
+        <canvas id="hsi" role="img" aria-label="Compass"></canvas>
+        <dl class="tele">
+          <div title="Compass heading the nose points to (ArduPilot AHRS)"><dt>Heading</dt><dd id="tHdg">—</dd></div>
+          <div title="GPS course over ground, shown once the aircraft is moving"><dt>GPS course</dt><dd id="tCog">—</dd></div>
+          <div><dt>Ground speed</dt><dd id="tSpeed">—</dd></div>
+          <div><dt>Altitude</dt><dd id="tAlt">—</dd></div>
+          <div><dt>Climb</dt><dd id="tClimb">—</dd></div>
+          <div><dt>To Home</dt><dd id="tHome">—</dd></div>
+          <div><dt>Waypoint</dt><dd id="tWp">—</dd></div>
+          <div><dt>State</dt><dd id="tLanded">—</dd></div>
+        </dl>
+      </div>
+    </aside>
+
+    <div class="deck-maptools" role="toolbar" aria-label="Map">
+      <button id="flightCenter" type="button" class="tool-btn" title="Center on aircraft" aria-label="Center on aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/></svg></button>
+      <button id="flightFollow" type="button" class="tool-btn" aria-pressed="false" title="Follow aircraft" aria-label="Follow aircraft"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 17-7-4-7 4z"/></svg></button>
+      <button id="flightTrack" type="button" class="tool-btn" aria-pressed="true" title="Show flight trail" aria-label="Show flight trail"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19c4 0 3-7 8-7s4-7 8-7"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="5" r="1.5"/></svg></button>
+    </div>
+
+    <div class="deck-actions">
+      <button id="flightLaunch" type="button" class="fly-btn hidden"><span class="fly-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></span><span><b>Fly mission</b><small id="flyHint">Auto takeoff, fly every waypoint, return home</small></span><svg class="fly-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+      <button id="flightRtl" type="button" class="rtl-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M6 10v10h12V10M10 20v-6h4v6"/></svg>Return home</button>
+    </div>
+
+    <section id="deckLog" class="deck-log deck-card" aria-label="Messages">
+      <header class="log-head">
+        <b>Messages</b>
+        <div class="log-filter" role="group" aria-label="Message source">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="ardupilot" aria-pressed="false">ArduPilot</button>
+          <button type="button" data-filter="heron" aria-pressed="false">HERON</button>
+        </div>
+        <span id="flightMessageCount" class="count">0</span>
+        <button id="logToggle" type="button" class="log-toggle" aria-expanded="true" aria-controls="flightEvents" aria-label="Collapse messages"><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6 6 1.5 10.5 6"/></svg></button>
+      </header>
+      <p id="logLatest" class="log-latest">No aircraft messages yet</p>
+      <ol id="flightEvents" class="log-list"></ol>
+    </section>
+  </section>
+
+  <div id="connPopover" class="popover hidden" role="dialog" aria-label="Link settings">
+    <label class="switch-row"><span><b>Auto-connect</b><small>Connect as soon as a flight controller appears on USB</small></span><input id="connAuto" type="checkbox" checked /></label>
+    <div class="pop-grid">
+      <label><span id="flightHostLabel">Address</span><input id="flightHost" value="0.0.0.0" /></label>
+      <label><span>Port</span><input id="flightPort" type="number" value="14550" min="1024" max="65535" /></label>
+      <label><span>System ID</span><input id="flightSystem" type="number" min="1" max="254" value="1" /></label>
+    </div>
+    <p id="flightTransportNote" class="pop-note">Address and port apply to network links. USB uses the port and baud in the bar.</p>
+  </div>
+
+  <dialog id="flightConfirm" aria-labelledby="flightConfirmTitle" aria-describedby="flightConfirmText">
+    <p class="confirm-kicker" id="confirmKicker">Fly mission</p>
+    <h2 id="flightConfirmTitle">Are you sure you want to fly?</h2>
+    <p id="flightConfirmText"></p>
+    <dl class="confirm-stats">
+      <div><dt>Waypoints</dt><dd id="cWp">—</dd></div>
+      <div><dt>Max altitude</dt><dd id="cAlt">—</dd></div>
+      <div><dt>Route</dt><dd id="cLen">—</dd></div>
+      <div><dt>Est. time</dt><dd id="cTime">—</dd></div>
+    </dl>
+    <ol class="confirm-steps">
+      <li>Arm motors in GUIDED</li>
+      <li id="cTakeoff">Take off</li>
+      <li id="cFly">Fly every waypoint in AUTO</li>
+      <li>Return home and land (RTL)</li>
+    </ol>
+    <p class="confirm-warn">Clear the launch area and keep your RC transmitter in hand. <b>Return home</b> and your RC mode switch override the mission at any time.</p>
+    <div class="dialog-row">
+      <button id="flightCancelLaunch" type="button" class="btn-quiet">Cancel</button>
+      <button id="flightConfirmLaunch" type="button" class="hold-btn" aria-describedby="holdHelp">
+        <svg class="hold-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="hold-track" cx="22" cy="22" r="19"/><circle id="holdRing" class="hold-prog" cx="22" cy="22" r="19"/></svg>
+        <span id="holdLabel">Hold to fly</span>
+      </button>
+    </div>
+    <p id="holdHelp" class="hold-help">Press and hold for 3 seconds (mouse, touch, Space or Enter). Let go to cancel.</p>
+  </dialog>
 
   <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Hide mission planner" aria-expanded="true">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>
@@ -195,6 +389,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js?v=aim39"></script>
+  <script src="/static/app.js?v=ground7"></script>
+  <script src="/static/instruments.js?v=2"></script>
+  <script src="/static/flight.js?v=15"></script>
 </body>
 </html>

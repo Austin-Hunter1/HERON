@@ -6,7 +6,7 @@ rear face (z = 0). The arm plate has a pivot hole and a grip nub on the front
 face. The SDR latch (`preload`) is longer. It also has a boss with a heat-set
 insert pocket and a clearance hole for the preload thumbscrew.
 
-The top latches use the SAME components as the bottom latches (D-035,
+The top latches use the SAME components as the bottom latches (D-087,
 2026-10-14). Why: the latch is symmetric about local y = 0. So `mirror_top`
 of a latch equals the bottom latch moved by `H_ - 2 * LATCH_Z` in Z, not a
 mirror image. The README print list also has no mirrored latches

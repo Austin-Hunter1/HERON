@@ -1,4 +1,4 @@
-# Seed values for the flight_rack Fusion design (decision D-035).
+# Seed values for the flight_rack Fusion design (decision D-087).
 #
 # Why this file exists: Fusion is the master model. This file only seeds a
 # NEW design. After that, you edit the User Parameters in Fusion.
@@ -92,7 +92,7 @@ SDR_HOLE4_BX = { value = 96.77,  unit = "mm", comment = "SDR_HOLES[3] bx" }
 SDR_HOLE4_BY = { value = -140.21, unit = "mm", comment = "SDR_HOLES[3] by" }
 SDR_REAR_SMA_REF_A = { value = 34.16, unit = "mm", comment = "bx of the rear 10 MHz SMA (mates with clock board J3-J6). Silkscreen checked on a B210 and a B200, 2026-10-20" }
 SDR_REAR_SMA_REF_B = { value = 70.89, unit = "mm", comment = "bx of the rear PPS SMA (mates with clock board J7-J10). Silkscreen checked 2026-10-20" }
-SDR_GPS_BX         = { value = 14.22, unit = "mm", comment = "bx of the rear GPS ANT SMA (kept free for a cable, D-042)" }
+SDR_GPS_BX         = { value = 14.22, unit = "mm", comment = "bx of the rear GPS ANT SMA (kept free for a cable, D-094)" }
 SDR_USB_BX = { value = 51.69, unit = "mm", comment = "USB connector bx" }
 SDR_PWR_BX = { value = 89.43, unit = "mm", comment = "Power connector bx" }
 SMA_BZ     = { value = 1.96,  unit = "mm", comment = "SMA axis height above board bottom" }
@@ -266,8 +266,8 @@ SSD_OX0 = { expr = "SSD_CX0 - SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage 
 SSD_OX1 = { expr = "SSD_CX1 + SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage ox1: cage outer face, X end" }
 SSD_FY0 = { expr = "SSD_Y0 - SSD_CLR - SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage fy0: cage front face (toward the NUC)" }
 SSD_FY1 = { expr = "SSD_GY1 + SSD_CLR + SSD_GUIDE_WALL", unit = "mm", comment = "ssd_cage fy1: cage rear face" }
-SSD_EAR_Y0 = { expr = "SSD_FY0", unit = "mm", comment = "ssd_cage top ear front end. CHANGE from heron_rack.py (D-035, 2026-10-14): the ears span the full cage so they join both guides; heron_rack.py uses ym - 27" }
-SSD_EAR_Y1 = { expr = "SSD_FY1", unit = "mm", comment = "ssd_cage top ear rear end. CHANGE from heron_rack.py (D-035, 2026-10-14); heron_rack.py uses ym + 27" }
+SSD_EAR_Y0 = { expr = "SSD_FY0", unit = "mm", comment = "ssd_cage top ear front end. CHANGE from heron_rack.py (D-087, 2026-10-14): the ears span the full cage so they join both guides; heron_rack.py uses ym - 27" }
+SSD_EAR_Y1 = { expr = "SSD_FY1", unit = "mm", comment = "ssd_cage top ear rear end. CHANGE from heron_rack.py (D-087, 2026-10-14); heron_rack.py uses ym + 27" }
 SSD_PC = { expr = "(SSD_CX0 + SSD_CX1) / 2", unit = "mm", comment = "ssd_cage pc: channel centre plane (X); the receptacle pocket is centred on it" }
 SSD_CCY = { expr = "SSD_Y0 + SSD_CONN_C", unit = "mm", comment = "ssd_cage ccy: drive connector centre along Y" }
 SSD_XL = { expr = "SSD_SX0 - SSD_CLR - SSD_GUIDE_WALL - SSD_CAGE_HOLE_OUT", unit = "mm", comment = "ssd_cage_holes: left screw column X" }
@@ -312,7 +312,7 @@ CLK_X0 = { expr = "SLOT_X0_B210_1 + CLK_X_OFF", unit = "mm", comment = "Board le
 CLK_Z0 = { expr = "CLK_TOP_Z - CLK_H", unit = "mm", comment = "Board bottom edge" }
 CLK_HOLE_INSET = { value = 4.0, unit = "mm", comment = "clk_holes: mounting hole inset from the board corners" }
 CLKREF_HOLE_D = { value = 3.2, unit = "mm", comment = "clock_board_ref: hole diameter in the PCB reference" }
-CLKREF_JST_W = { value = 7.4, unit = "mm", comment = "clock_board_ref J1: JST XH S2B-XH-A-1 body width (D-040)" }
+CLKREF_JST_W = { value = 7.4, unit = "mm", comment = "clock_board_ref J1: JST XH S2B-XH-A-1 body width (D-092)" }
 CLKREF_JST_H = { value = 11.5, unit = "mm", comment = "clock_board_ref J1: JST XH body length along Z (mouth up)" }
 CLKREF_JST_D = { value = 6.1, unit = "mm", comment = "clock_board_ref J1: JST XH body height above the board" }
 CLKREF_JST_DX = { value = -1.25, unit = "mm", comment = "clock_board_ref J1: body centre X from the KiCad origin (pin 1)" }

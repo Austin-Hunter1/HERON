@@ -1,4 +1,4 @@
-"""Add the mounting holes H5 and H6 to the rev D schematic (D-043).
+"""Add the mounting holes H5 and H6 to the rev D schematic (D-095).
 
 Why: the direct-mate SMP jacks push on the board when the SDR trays slide in.
 Two more M3 standoffs, at the middle of the top and bottom long edges (in line

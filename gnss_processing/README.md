@@ -6,9 +6,9 @@ kept here (rather than as a submodule pointing at upstream) because this project
 GitHub account does not have write access to push changes there. It carries edits
 made for HERON's UAS GNSS-R work that are not upstream:
 
-- `utils/signal_interfaces.py` -- guards `GpsL1C` registration against the
-  `submodules/gnss-tools` checkout here not yet defining the L1C constants it needs,
-  so `import utils` degrades gracefully (with a warning) instead of crashing.
+- `utils/gps_l1c.py` (new) -- GPS L1C ranging codes (L1CD, L1CP), overlay codes (L1CO), TMBOC pattern
+  and constants, for PRN 1 to 63, from `docs/icd/l1c_code_tables.json`. The pinned `gnss-tools` checkout
+  has only a part of L1C, so `GpsL1C` in `utils/signal_interfaces.py` uses this module (D-076).
 - `utils/nav/symbols.py` -- `_usable_regions` (replacing `_usable_slice`) correctly
   extracts navigation symbols from a tracking run stitched from several segments,
   rather than assuming one uninterrupted run.
@@ -18,9 +18,62 @@ made for HERON's UAS GNSS-R work that are not upstream:
   to track garbage or drop out for the rest of the run. See the module's own
   docstring for the mechanism, and `notebooks/01-acquisition-and-tracking.ipynb`
   (section 6) for how it's wired into the tracking loop.
+- `utils/gap_consensus.py` (new) -- after tracking, makes the channels of one
+  recording agree on how much time each overflow dropped. A re-acquisition
+  measures that time only modulo the PRN code period, so one channel can land on
+  a different whole-period branch than the rest (thousands of km of pseudorange
+  error for that channel). The channels vote per overflow episode; the minority
+  is moved by whole periods, and what the vote cannot settle is left alone and
+  reported. Run from `01-acquisition-and-tracking.ipynb`.
+- `utils/observables.py` -- `form_observables` can leave out the measurement
+  epochs that fall inside a hole of a lost-and-reacquired channel
+  (`max_gap_factor`, `guard_after_gap_ms`) instead of interpolating a made-up
+  code phase across it. On, in `02-navigation.ipynb`.
+- `utils/period_ambiguity.py` (new) -- when six or more satellites share an
+  epoch, finds which whole-code-period shift of each satellite's code phase makes
+  the set fit best (an integer search, scored in one matrix product) and applies
+  it only when the fit is good and clearly unique. Used by `02-navigation.ipynb`
+  before the corrections.
+- `utils/navigation.py` -- optional post-fit residual gate (`residual_gate_m`,
+  receiver autonomous integrity monitoring) that drops the worst satellite of an
+  epoch and re-solves; `solve_series` also skips a fix that is nowhere near the
+  earth instead of seeding the next epoch with it.
+- `scripts/run_notebook.py` -- runs notebook 00/01/02 headless with parameter
+  overrides (see its docstring).
+- `pipeline_gui/` (new, D-084), `scripts/run_pipeline_gui.bat` -- a desktop window
+  that runs notebooks 00, 01 and 02 on one channel and writes a PDF report.
 - `notebooks/00-raw-signal-diagnostics.ipynb`, `01-acquisition-and-tracking.ipynb`,
   `02-navigation.ipynb` -- updated to use the above, plus per-run figure saving and
   a `CHANNEL_INDEX` disambiguation fix for collects with more than one capture per band.
+
+BeiDou B2a and B1C (D-044 to D-064; plan in `docs/BDS_PORT_PLAN.md`, follow-up list
+in `docs/BDS_FOLLOW_UP.md`):
+
+- `utils/bds_b2a.py`, `utils/bds_b1c.py` (new) -- the B2a and B1C code generators and
+  signal constants. They do not use `gnss-tools`. B1C reads its code pairs from
+  `docs/icd/bds_b1c_code_tables.json`.
+- `utils/signal_interfaces.py` -- `BdsB2a` and `BdsB1C` signal classes, and their
+  acquisition and tracking policies.
+- `utils/tracking_channel.py` -- the symbol grid is tied to the overlay counter once
+  the overlay syncs (D-059). B2a acquires only modulo 1 ms, so without this the
+  epochs sit up to 4 ms from the symbol edge.
+- `utils/nav/bcnav2.py`, `utils/nav/bcnav1.py`, `utils/nav/ldpc.py`,
+  `utils/nav/ldpc_b1c_tables.py` (new) -- the B-CNAV2 (B2a) and B-CNAV1 (B1C)
+  decoders and the three 64-ary LDPC codes.
+- `utils/nav/ephemeris.py` -- `BdsEphemeris` (BeiDou orbit and clock, B2a and B1C
+  group delays). `utils/nav/symbols.py` has the BeiDou table rows.
+- `utils/time_systems.py` (new) -- GPST and BDT.
+- `utils/observables.py`, `utils/navigation.py` -- time scales per system, joining
+  several tracking runs, and a position solution with one inter-system bias for each
+  extra system, optional C/N0 weights, and a fallback bias.
+- `utils/multi_signal.py` (new) -- decodes a BeiDou tracking run into anchors and
+  ephemerides.
+- `utils/rinex3_nav.py`, `utils/bds_orbit_check.py` (new),
+  `scripts/compare_bds_orbits.py` (new) -- compare decoded BeiDou orbits with RINEX 3
+  and SP3 files. Needs CDDIS access.
+- `docs/icd/` -- the B2a and B1C interface documents and the tables made from them.
+- `notebooks/01-...ipynb` and `02-...ipynb` -- accept `BdsB2a` and `BdsB1C`. Notebook 02
+  section 10 joins GPS L5 and BeiDou runs.
 
 `submodules/gnss-tools` here is pinned to the same commit as the corresponding
 submodule inside the `gps-tracking-example` submodule elsewhere in this repo
@@ -32,6 +85,91 @@ Everything below this section is upstream's own README, kept for setup reference
 the clone instructions assume `cu-sense-lab/gps-tracking-example` directly rather
 than this folder -- clone the HERON repo with `--recurse-submodules` instead (see
 the root [README.md](../README.md)).
+
+---
+
+## BeiDou B2a and B1C: quick start
+
+B2a is on the L5 band (1176.45 MHz). B1C is on the L1 band (1575.42 MHz). Both run
+through the same three notebooks as the GPS signals.
+
+1. **Set up** as in "Getting Started" below (this folder also has a `uv.lock`, so
+   `uv sync` can build the environment). Run `pytest` to check; the known baseline
+   failures are in `docs/BDS_BASELINE_TESTS.md`. Fill in `.env` (`COLLECTS_PATH`, `OUTPUTS_PATH`,
+   `RESOURCES_PATH`). A recording needs a `metadata.yml` in its experiment folder.
+2. **Notebook 00**: check that the recording is usable. Use a channel of the right
+   band. B2a needs about 20 MHz of bandwidth; B1C needs about 4-5 MHz.
+3. **Notebook 01**: set `SIGNAL_ID = BdsB2a` (or `BdsB1C`) and the experiment and
+   channel indices that the catalog table shows. Run all cells. It writes a tracking
+   file under `OUTPUTS_PATH/tracking/`. Track at least 30 s (B2a) or 40 s (B1C).
+4. **Notebook 02**: set the same `SIGNAL_ID` and the same file. Run all cells.
+   It decodes the message, forms pseudoranges and solves the position. The
+   ephemeris comes from the signal; nothing is downloaded. Put the antenna position
+   in `RECEIVER_REFERENCE_GEO` to see the error.
+5. **Headless**: `python scripts/run_notebook.py 01 --set SIGNAL_ID=BdsB1C ...`
+   (see the docstring of `scripts/run_notebook.py` for the full commands).
+
+Limits that you should know: no ionosphere correction for BeiDou, B1C narrow-band
+only, and B1C has no real-data check yet. See `docs/BDS_FOLLOW_UP.md`.
+
+## One-click run of notebooks 00, 01 and 02 with a PDF report (D-084)
+
+`pipeline_gui/` is a desktop window that runs the three notebooks on one channel.
+
+1. Double-click `scripts/run_pipeline_gui.bat` (Windows). On Linux, run
+   `python -m pipeline_gui` in this folder with the notebook interpreter.
+2. Browse to a collects folder. The default is `COLLECTS_PATH`. Each experiment
+   in it needs a `metadata.yml`.
+3. Click one channel in the table. Set the signals, the start offset, the track
+   duration (empty = to the end of the collect) and the reference position
+   (empty = the notebook 02 default).
+4. Click **Run**. The log shows each step. **Stop** stops the running notebook.
+5. Click **Open report** when the run ends.
+
+Each run makes `<OUTPUTS_PATH>/reports/<experiment>/<collect>_<band>_<time>/` with
+`report.pdf`, `figures/<step>/`, `notebooks/` (the executed notebooks) and
+`run_settings.json`. Notebook 02 of a signal is skipped when notebook 01 of that
+signal fails. The defaults (signals per band, time limit, report layout, the text
+the report copies) are in `configs/pipeline_gui.yml`. With no window:
+`python -m pipeline_gui --experiment 9 --channel 0 --signals GpsL1CA`.
+
+To examine a weak acquisition (D-085):
+
+1. Select **Acquisition only**. Notebook 01 stops after its acquisition plots, and
+   notebook 02 does not run. A run takes about a minute.
+2. Open the report. Figure `02b_...all_prns` shows the peak of every PRN against the
+   threshold line. Figure `02c_...all_prns` shows the correlation against code delay
+   for every PRN; a PRN below the line is dotted.
+3. Do not judge a dotted curve by its shape: every noise maximum is also a triangle
+   (the BOC shape for B1C), because nearby code delays share most of their chips.
+   The dotted curves of PRNs that are not there show the noise band. Lower the
+   threshold only for a peak that stands clearly above that band, and that repeats at
+   the same code phase and Doppler with a larger **Start offset**, or that agrees with
+   the predicted Doppler of assisted acquisition. Then type the value in the
+   **acq. threshold [dB]** field of that signal (or a larger **p_fa total**), and run
+   again. The dB value wins when both fields are set.
+
+On the command line: `--acquisition-only`, `--threshold-db GpsL1CA=8.5`,
+`--p-fa BdsB1C=1e-3`.
+
+For a weak sky (indoors, under a roof, behind a wall), use **Assisted acquisition**
+(D-086):
+
+1. Type the **Reference position** (lat, lon, height). It is required.
+2. Select **Use assisted acquisition**. The time comes from the collect name; type
+   a UTC time only when the name has none. The sky mask starts as the entire sky.
+   To describe a barrier, set a minimum elevation, or type blocked sectors as
+   `az_from-az_to:up_to_elevation`, for example `300-60:60; 120-180:30`.
+3. Run (with **Acquisition only** for a quick look). Notebook 01 downloads the
+   broadcast ephemeris from CDDIS and predicts the visible satellites and their
+   Doppler. It measures the receiver clock offset on the highest few satellites,
+   then searches the others in narrow windows with a 10x longer dwell.
+4. The report shows the prediction table (section 4) and a sky plot
+   (`02d_assisted_acquisition_skyplot.png`).
+
+In notebook 01 itself, set `ASSISTED_ACQUISITION = True` and `ASSIST_POSITION_GEO`
+in section 2. On the command line: `--assisted --reference "lat, lon, h"` and the
+`--assist-*` options (`python -m pipeline_gui --help`).
 
 ---
 
@@ -100,6 +238,12 @@ RESOURCES_PATH=
 # Path to directory containing GNSS raw data collects:
 # <experiment_name>/{collect_metadata.yml, <collect_id>.<ext>}
 COLLECTS_PATH=
+
+# One `.env` for several machines: any of the three paths above may also be given
+# per platform (suffix _WINDOWS, _LINUX or _MACOS). The key for the platform running
+# now wins over the plain one; a variable set in the shell wins over both. For example:
+# COLLECTS_PATH_WINDOWS=D:/01_Data/collects
+# COLLECTS_PATH_LINUX=/media/<you>/01_Data/collects
 
 # Earthdata credentials for downloading RINEX/orbit (SP3) data from CDDIS/Earthdata.
 # helpers (gnss_tools.rinex_io.cddis_download_utils / earthdata_utils).

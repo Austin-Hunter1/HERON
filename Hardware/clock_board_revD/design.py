@@ -3,7 +3,7 @@
 Run: python3 design.py  ->  project/heron_clock.kicad_sch
 
 Signal flow
-- 5 V in (JST XH, D-040) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
+- 5 V in (JST XH, D-092) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
 - Two 3.3 V LDOs, same SOT-23-5 pinout: LP5907 for +3V3_OSC (SiT5155 only,
   low noise) and TLV75533P for +3V3_CLK (buffers; it accepts the ~13 uF on
   that rail, which is above the LP5907 10 uF limit).
@@ -16,7 +16,7 @@ Signal flow
 - J3-J10 are SMP jacks that blind-mate to the SDRs. J2 (PPS in) stays SMA
   because it takes a cable from the GNSS receiver.
 
-Rev D (D-042) uses this parts list unchanged; only the PCB is new (gen_pcb.py).
+Rev D (D-094) uses this parts list unchanged; only the PCB is new (gen_pcb.py).
 
 Rev C (D-028): the smallest parts are one size larger for easier assembly.
 All 0402 resistors and capacitors are 0603, and the TPD1E05U06 ESD diodes are
@@ -92,7 +92,7 @@ def Csh(ref, val, fp, key=None, diel=None):
 # package (the same package drawing, DYA0002A), so they share ESD_FP.
 # - TPD1E05U06: unidirectional, 0.5 pF. For the DC-coupled 0-3.3 V PPS lines.
 # - TPD1E10B06: bidirectional (+-5.5 V working, 12 pF). For the 10 MHz outputs
-#   (D-045). Why: after the DC block the 10 MHz swings about 0 V, up to
+#   (D-097). Why: after the DC block the 10 MHz swings about 0 V, up to
 #   +-1.45 V with no SDR on the jack. A unidirectional diode conducts at about
 #   -0.6 V and clips each negative half-cycle, which makes harmonics after the
 #   low-pass filter. 12 pF changes the 10 MHz level by less than 0.1 dB
@@ -157,7 +157,7 @@ def build():
     # ------------------------------------------------ A: power input
     s.text((20.32, 22.86), "POWER INPUT: 5 V from payload rail (JST XH, friction lock)", 2.0)
     j1 = s.symbol("Connector_Generic:Conn_01x02", "J1", "5V_IN", (25.4, 40.64), mirror=True,
-                  fp="Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal",   # D-040: GH header out of stock
+                  fp="Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal",   # D-092: GH header out of stock
                   fields=(("Manufacturer", "JST"), ("MPN", "S2B-XH-A-1(LF)(SN)")),
                   ref_off=(0, -3.81, "center"), val_off=(0, 6.35, "center"))
     g = j1["2"]; e1 = (g[0] + 2.54, g[1]); s.wire(g[:2], e1)
@@ -171,7 +171,7 @@ def build():
         dict(kind="P", lib="Device:D_Zener", rot=270, ref=ref("D"), value="SMF5.0A", step=12.7,
              fp="Diode_SMD:D_SOD-123F", fields=(("Manufacturer", "Littelfuse"), ("MPN", "SMF5.0A"))),
         dict(kind="S", lib="Device:D_Schottky", rot=180, ref=ref("D"), value="SS1030HEWS",
-             fp="HERON_Clock:D_SOD-323HE_Panjit",   # Panjit land, datasheet rev 06 p.3 (D-041; gen_lib.py)
+             fp="HERON_Clock:D_SOD-323HE_Panjit",   # Panjit land, datasheet rev 06 p.3 (D-093; gen_lib.py)
              fields=(("Manufacturer", "Panjit"), ("MPN", "SS1030HEWS_R1_00001"))),   # 30 V 1 A; was PMEG3020EJ (no stock)
         dict(kind="GAP", len=7.62),
         dict(kind="S", lib="Device:FerriteBead_Small", ref=ref("FB"), value="BLM18PG221", fp=L0603,
@@ -257,7 +257,7 @@ def build():
             Rsh(ref("R"), "294R"),
             R(ref("R"), "17.4R"),
             Rsh(ref("R"), "294R"),
-            ESD(ref("D"), "TPD1E10B06"),      # bidirectional: the 10 MHz is AC (D-045)
+            ESD(ref("D"), "TPD1E10B06"),      # bidirectional: the 10 MHz is AC (D-097)
             dict(kind="GAP", len=7.62),
             SMP(f"J{3+k}", f"REF_{names[k]}"),
         ])
@@ -315,7 +315,7 @@ def build():
     s.text((20.32, 223.52), "TEST POINTS / MECHANICAL", 2.0)
     for i, net in enumerate(["VIN_5V", "+3V3_OSC", "+3V3_CLK", "CLK10_IN", "OSC_OE", "PPS_BUF", "GND"]):
         tp(25.4 + 16.51 * i, 236.22, net)
-    for i in range(6):     # H5, H6 (rev D, D-043): mid-edge standoffs, second row
+    for i in range(6):     # H5, H6 (rev D, D-095): mid-edge standoffs, second row
         pins = s.symbol("Mechanical:MountingHole_Pad", ref("H"), "M3", (25.4 + 12.7 * (i % 4), 256.54 + 12.7 * (i // 4)),
                         fp="MountingHole:MountingHole_3.2mm_M3_Pad_Via", in_bom=False,
                         ref_off=(2.54, -1.27, "left"), val_off=(2.54, 1.27, "left"))

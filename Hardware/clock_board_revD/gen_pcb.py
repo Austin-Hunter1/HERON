@@ -1,12 +1,12 @@
 """Generate the HERON clock board rev D (KiCad 10, 4 layers, 118 x 60 mm).
 
-Rev D puts each jack on the SDR connector it must mate with (D-042):
+Rev D puts each jack on the SDR connector it must mate with (D-094):
 the 10 MHz jacks J3-J6 face the SDR "10MHz" SMA and the PPS jacks J7-J10
 face the "PPS" SMA. The SDR USB-B connector sits between the two, so the
 board has a hole (or, at the right edge, a notch) for each USB plug. A
 copper and part keep-out ring around each hole lets the hole grow later
 without new layout. The circuit is the rev C circuit (same schematic and
-parts, including the JST XH J1 of D-040 and the Panjit D2 land of D-041).
+parts, including the JST XH J1 of D-092 and the Panjit D2 land of D-093).
 
 Run it with the Python that comes with KiCad 10 (it needs pcbnew), from
 this folder:
@@ -95,9 +95,9 @@ PARTS = {
     # TCXO + LMK1C1104 (under the B210_2 hole)
     "U4": (55.0, 43.2, 180), "C10": (49.6, 43.0, 90), "C11": (49.6, 46.6, 90),
     "R4": (61.0, 43.4, 90), "U3": (56.5, 49.3, 180), "TP4": (49.6, 50.6, 0),
-    "TP5": (61.8, 47.6, 0),      # beside R2: H6 takes the strip under U3 (D-043)
+    "TP5": (61.8, 47.6, 0),      # beside R2: H6 takes the strip under U3 (D-095)
     # PPS buffer (right of J8)
-    "U6": (60.0, 11.0, 0), "C29": (65.6, 7.6, 90),   # U6 under H5 (D-043)
+    "U6": (60.0, 11.0, 0), "C29": (65.6, 7.6, 90),   # U6 under H5 (D-095)
     # PPS input (rev C block moved by (+3.89, -15.1), between the B200 blades)
     "J2": (94.0, 22.5, 0), "D8": (90.68, 16.1, 90), "R23": (92.25, 16.1, 90),
     "R22": (94.6, 16.1, 0), "R21": (96.95, 16.1, 90), "U5": (94.0, 11.9, 0),
@@ -199,7 +199,7 @@ def jack_leg_keepouts(g):
     """No tracks or vias in a small box round each SMP leg pad (all layers but the
     In1 plane), so the GND pour always reaches the pad with full thermal spokes.
     Why: the autorouter can pass close to a leg and starve its thermal relief
-    (the rev C D-039 items). The jack tab track runs between the boxes."""
+    (the rev C D-091 items). The jack tab track runs between the boxes."""
     for k in range(4):
         for ref in (f"J{3 + k}", f"J{7 + k}"):
             for p in g.fps[ref].Pads():

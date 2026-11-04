@@ -13,6 +13,7 @@ property of the signal rather than of the decoder:
     L2C      0 (CM)            20 ms    the CM code period IS the symbol
     L5       0 (L5I)           10 ms    NH10 overlay sync
     L1C      0 (L1CD)          10 ms    L1CD's code period; L1CO gives the frame
+    B2a      0 (B2aD)           5 ms    the 100 ms pilot overlay is 20 whole symbols
 
 The two things that make this more than a reshape:
 
@@ -53,6 +54,9 @@ DATA_COMPONENT: dict[str, int] = {
     "GPS_L2C": 0,  # CM
     "GPS_L5": 0,  # L5I
     "GPS_L1C": 0,  # L1CD
+    "BDS_B2A": 0,  # B2aD
+    "BDS_B1C": 0,  # B1CD
+    "GAL_E5A": 0,  # E5aI
 }
 
 SYMBOL_PERIOD_MS: dict[str, int] = {
@@ -60,6 +64,9 @@ SYMBOL_PERIOD_MS: dict[str, int] = {
     "GPS_L2C": 20,
     "GPS_L5": 10,
     "GPS_L1C": 10,
+    "BDS_B2A": 5,
+    "BDS_B1C": 10,
+    "GAL_E5A": 20,
 }
 
 # Whether the signal's symbol boundary is established by an overlay code.  L1 C/A
@@ -69,6 +76,14 @@ NEEDS_BIT_SYNC: dict[str, bool] = {
     "GPS_L2C": False,
     "GPS_L5": False,
     "GPS_L1C": False,
+    # The 5 ms symbol is 5 whole primary periods, and the pilot overlay (100 ms)
+    # is 20 whole symbols, so the pilot overlay sync gives the boundary.
+    "BDS_B2A": False,
+    # The 10 ms symbol is one primary period, and the pilot overlay chip is
+    # one primary period too, so the overlay sync gives the boundary.
+    "BDS_B1C": False,
+    # The 20 ms symbol is one pass of CS20_1, and the pilot overlay (100 ms) is 5 symbols.
+    "GAL_E5A": False,
 }
 
 # Whether the channel had a tiered (overlay) code to synchronise, and therefore
@@ -91,6 +106,9 @@ HAS_OVERLAY: dict[str, bool] = {
     "GPS_L2C": False,    # CM code period is the symbol
     "GPS_L5": True,      # NH10/NH20
     "GPS_L1C": True,     # L1CO, 1800 bits at one per 10 ms code period
+    "BDS_B2A": True,     # 100-chip pilot overlay and the 5-chip data overlay
+    "BDS_B1C": True,     # 1800-chip pilot overlay
+    "GAL_E5A": True,     # CS20 on the data and a 100-chip pilot overlay
 }
 
 # Whether the data component sits 90 degrees from the carrier loop's reference.
@@ -112,7 +130,72 @@ DATA_IN_QUADRATURE: dict[str, bool] = {
     "GPS_L2C": False,
     "GPS_L5": True,
     "GPS_L1C": False,
+    # Like L5 (ICD 4.2.2): the carrier loop runs on the pilot (Q), and the data
+    # component (I) is 90 degrees from it.
+    "BDS_B2A": True,
+    # Data (I) and pilot (Q) are in quadrature, and the carrier runs on the pilot.
+    "BDS_B1C": True,
+    # Like L5 and B2a: the carrier loop runs on the pilot (Q); the data (I) is 90 degrees away.
+    "GAL_E5A": True,
 }
+
+
+# Signals whose epoch-to-symbol pairing is read from the data, not from the code phase.
+#
+# Where an epoch is shorter than the symbol, `extract` has to say which epoch opens a
+# symbol.  For most signals the code phase answers it: the channel anchors its epochs on
+# multiples of the symbol period in code phase, and that lattice is tied to the data.
+# B1C is the case where it is not.  Measured on the real L1 recording (D-070): with 5 ms
+# epochs under a 10 ms symbol, every one of nine satellites has its symbol edge at code
+# phase 5 ms (mod 10), so the code-phase pairing sits half a symbol out and every symbol
+# is the sum of half of two neighbours -- no B-CNAV1 frame decodes.  The data itself is
+# unambiguous: inside a symbol the two epochs agree in sign, so the pairing with the
+# fewest sign changes inside its pairs is the right one.  The root cause of the 5 ms is
+# not found, which is why this is a per-signal switch and not the rule for everything.
+SYMBOL_PHASE_FROM_DATA: dict[str, bool] = {
+    "BDS_B1C": True,
+}
+
+# The pairing is only read from the data when it is clear.  On pure noise every pairing
+# has about half of its boundaries change sign; a real data axis separates them by a lot
+# (0.0-0.17 inside a symbol against 0.48 across, measured on B1C).
+_PHASE_MIN_EPOCHS = 40
+_PHASE_MIN_CONTRAST = 0.15
+
+
+def symbol_phase_from_data(
+    prompts: np.ndarray, epochs_per_symbol: int, *, in_quadrature: bool
+) -> int | None:
+    """
+    Which of the first `epochs_per_symbol` epochs opens a symbol, from the data alone.
+
+    A data symbol does not change sign inside itself, so across the boundary between two
+    epochs of one symbol the sign of the data axis rarely changes, and across the boundary
+    between two symbols it changes half the time (random data).  For each candidate phase
+    this counts the sign changes at the boundaries it puts INSIDE symbols, and returns the
+    phase with the fewest.  `None` when there are too few epochs, or when no phase stands
+    out from the others by `_PHASE_MIN_CONTRAST` (a noisy or unlocked stretch), so the
+    caller can fall back to the code phase instead of trusting noise.
+
+    The axis is the imaginary part when the data is in quadrature with the carrier
+    reference (B1C, L5, B2a), the real part otherwise.
+    """
+    eps = int(epochs_per_symbol)
+    if eps < 2 or len(prompts) < _PHASE_MIN_EPOCHS:
+        return None
+    axis = prompts.imag if in_quadrature else prompts.real
+    sign = np.sign(axis)
+    changed = sign[1:] != sign[:-1]
+    boundary = np.arange(len(changed))
+    rates = np.empty(eps)
+    for phase in range(eps):
+        # The boundary after epoch k lies between symbols when (k - phase) % eps == eps - 1.
+        inside = ((boundary - phase) % eps) != (eps - 1)
+        rates[phase] = changed[inside].mean()
+    best = int(np.argmin(rates))
+    if np.delete(rates, best).mean() - rates[best] < _PHASE_MIN_CONTRAST:
+        return None
+    return best
 
 
 @dataclass
@@ -410,6 +493,12 @@ def extract(
             # phase modulo the symbol period.
             offset_ms = code_phase[0] % symbol_period_ms
             phase = int(round((symbol_period_ms - offset_ms) % symbol_period_ms / epoch_ms))
+            if SYMBOL_PHASE_FROM_DATA.get(signal_type_id, False):
+                from_data = symbol_phase_from_data(
+                    prompts, eps, in_quadrature=DATA_IN_QUADRATURE[signal_type_id]
+                )
+                if from_data is not None:
+                    phase = from_data
 
         usable = (len(prompts) - phase) // eps
         if usable <= 0:

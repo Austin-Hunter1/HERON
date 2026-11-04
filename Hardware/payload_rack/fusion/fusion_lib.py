@@ -189,7 +189,7 @@ def seed_parameters(design: adsk.fusion.Design, specs: Iterable[ParamSpec]) -> i
 def create_missing_parameters(design: adsk.fusion.Design, specs: Iterable[ParamSpec]) -> List[str]:
     """Create the User Parameters that do not exist yet. Return their names.
 
-    Why: Fusion is the master model (D-035). A user may have changed a
+    Why: Fusion is the master model (D-087). A user may have changed a
     parameter in Fusion. This function never touches an existing parameter,
     not even its comment. `seed_parameters` is for a new design only.
     """
@@ -236,7 +236,7 @@ def apply_ref_look(ctx: Ctx, comp: adsk.fusion.Component) -> None:
     """Give every body of a reference component a translucent colour. No material is set.
 
     Why: reference envelopes are not made. They only show where a real part
-    goes, so they get a see-through colour and no material (D-035). The colour
+    goes, so they get a see-through colour and no material (D-087). The colour
     comes from the seed table `[ref_look]`, which copies the CadQuery ref
     colour. The appearance is made once in the design from a library
     appearance, then reused. `apply_materials.py` skips the "ref" category.

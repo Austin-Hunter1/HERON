@@ -234,17 +234,15 @@ def test_toi_consistency_catches_a_frame_sync_off_by_one():
 # ---------------------------------------------------------------------------
 
 
-def test_subframe_2_and_3_decoders_fail_loudly():
+def test_a_block_that_fails_its_crc_is_refused():
     """
-    Not a placeholder for its own sake.  A hard-decision read of an LDPC codeword
-    would return an ephemeris that looks entirely reasonable and puts the satellite
-    kilometres away, so refusing is the correct behaviour until the decoder exists.
+    A wrong ephemeris looks reasonable and puts the satellite kilometres away, so a
+    block that fails CRC-24Q must give None, not a best guess.  The default message
+    of `build_frame` has no valid CRC.
     """
     frame = cnav2.decode(cnav2.build_frame(toi=1), frame_offset=0)[0]
-    with pytest.raises(NotImplementedError, match="LDPC"):
-        cnav2.decode_subframe_2(frame)
-    with pytest.raises(NotImplementedError, match="LDPC"):
-        cnav2.decode_subframe_3(frame)
+    assert cnav2.decode_subframe_2(frame) is None
+    assert cnav2.decode_subframe_3(frame) is None
 
 
 def test_undecoded_subframe_symbols_are_still_handed_back():
@@ -258,3 +256,107 @@ def test_undecoded_subframe_symbols_are_still_handed_back():
     )[0]
     assert np.allclose(frame.subframe_2_symbols, sf2)
     assert np.allclose(frame.subframe_3_symbols, sf3)
+
+
+# ---------------------------------------------------------------------------
+# Subframes 2 and 3: systematic read plus CRC
+# ---------------------------------------------------------------------------
+
+SF2_VALUES = {
+    "wn": 2400, "itow": 61, "top": 3600.0, "health_l1c": 0, "ura_ed_index": -2,
+    "toe": 7200.0, "delta_a": 123.5, "a_dot": -0.0021, "delta_n0": 1.2e-9 * 0 + 3 * 2.0**-44,
+    "delta_n0_dot": -5 * 2.0**-57, "M0": 0.31, "e": 0.0123, "omega": -0.77, "Omega0": 0.42,
+    "i0": 0.3, "delta_Omega_dot": 2 * 2.0**-44, "i_dot": -3 * 2.0**-44,
+    "Cis": 1.0e-7, "Cic": -2.0e-7, "Crs": 55.0, "Crc": 240.0, "Cus": 3.0e-6, "Cuc": -4.0e-6,
+    "af0": -3.2e-5, "af1": 1.0e-11, "af2": 0.0, "tgd": 5.0e-9, "isc_l1cp": 1.0e-9,
+    "isc_l1cd": -2.0e-9, "wn_op": 2400 % 256,
+}
+
+
+def _symbols_for(information_bits, parity_symbols, sign=1.0, rng=None):
+    """Systematic soft symbols: the information bits, then arbitrary parity symbols."""
+    info = sign * (1.0 - 2.0 * information_bits.astype(float))
+    rng = rng or np.random.default_rng(0)
+    return np.concatenate([info, rng.normal(0.0, 1.0, parity_symbols)])
+
+
+def _frame_with(sf2_bits, sf3_bits, sign=1.0):
+    sf2 = _symbols_for(sf2_bits, cnav2.SUBFRAME_2_SYMBOLS - cnav2.SUBFRAME_2_BITS, sign)
+    sf3 = _symbols_for(sf3_bits, cnav2.SUBFRAME_3_SYMBOLS - cnav2.SUBFRAME_3_BITS, sign)
+    return cnav2.decode(cnav2.build_frame(toi=7, subframe_2=sf2, subframe_3=sf3), frame_offset=0)[0]
+
+
+def _sf3_bits():
+    rng = np.random.default_rng(11)
+    return prim.crc24q_append(rng.integers(0, 2, cnav2.SUBFRAME_3_BITS - 24).astype(np.uint8))
+
+
+def test_subframe_2_fields_round_trip_through_the_whole_frame_path():
+    frame = _frame_with(cnav2.build_subframe_2(SF2_VALUES), _sf3_bits())
+    sf2 = cnav2.decode_subframe_2(frame)
+    assert sf2 is not None and not sf2.inverted
+    for name, value in SF2_VALUES.items():
+        scale = cnav2.SUBFRAME_2_FIELDS[name][3]
+        assert sf2[name] == pytest.approx(value, abs=scale), name
+
+
+def test_subframe_3_bits_survive_and_pass_crc():
+    bits = _sf3_bits()
+    sf3 = cnav2.decode_subframe_3(_frame_with(cnav2.build_subframe_2(SF2_VALUES), bits))
+    assert sf3 is not None
+    assert np.array_equal(sf3.bits, bits)
+
+
+def test_an_inverted_polarity_is_found_by_the_crc():
+    frame = _frame_with(cnav2.build_subframe_2(SF2_VALUES), _sf3_bits(), sign=-1.0)
+    sf2 = cnav2.decode_subframe_2(frame)
+    assert sf2 is not None and sf2.inverted
+    assert sf2["itow"] == 61
+
+
+def test_one_wrong_symbol_costs_the_frame_and_nothing_is_guessed():
+    sf2_bits = cnav2.build_subframe_2(SF2_VALUES)
+    symbols = _symbols_for(sf2_bits, 600)
+    symbols[100] = -symbols[100]
+    frame = cnav2.decode(
+        cnav2.build_frame(
+            toi=7, subframe_2=symbols,
+            subframe_3=_symbols_for(_sf3_bits(), cnav2.SUBFRAME_3_SYMBOLS - 274),
+        ),
+        frame_offset=0,
+    )[0]
+    assert cnav2.decode_subframe_2(frame) is None
+    assert cnav2.decode_subframe_3(frame) is not None
+
+
+def test_the_layout_table_has_no_overlap_and_matches_the_note_anchors():
+    """toe ends at bit 49 and a_f0 begins at bit 471 (the project note); no field overlaps."""
+    spans = sorted((start, start + width - 1, name) for name, (start, width, *_r) in cnav2.SUBFRAME_2_FIELDS.items())
+    for (_, end, name), (start, _, nxt) in zip(spans, spans[1:]):
+        assert end < start, (name, nxt)
+    assert cnav2.SUBFRAME_2_FIELDS["toe"][0] + cnav2.SUBFRAME_2_FIELDS["toe"][1] - 1 == 49
+    assert cnav2.SUBFRAME_2_FIELDS["af0"][0] == 471
+    assert max(end for _, end, _ in spans) <= 574
+
+
+def test_a_field_that_does_not_fit_is_refused():
+    with pytest.raises(ValueError, match="does not fit"):
+        cnav2.build_subframe_2({"itow": 300})
+
+
+def test_frame_start_time_uses_the_previous_toi_and_this_itow():
+    previous = cnav2.decode(cnav2.build_frame(toi=100), frame_offset=0)[0]
+    this = _frame_with(cnav2.build_subframe_2(SF2_VALUES), _sf3_bits())
+    sf2 = cnav2.decode_subframe_2(this)
+    assert cnav2.frame_start_tow_s(previous, sf2) == 61 * 7200.0 + 100 * 18.0
+
+
+def test_one_subframe_2_gives_an_ephemeris_with_the_orbit_and_the_clock():
+    sf2 = cnav2.decode_subframe_2(_frame_with(cnav2.build_subframe_2(SF2_VALUES), _sf3_bits()))
+    eph = cnav2.assemble_ephemeris(sf2, "G05")
+    assert eph.sat_id == "G05" and eph.week == 2400 and eph.toe == 7200.0 and eph.toc == 7200.0
+    assert eph.e == pytest.approx(0.0123, abs=2.0**-34)
+    assert eph.isc_l1cd == pytest.approx(-2.0e-9, abs=2.0**-35)
+    # The orbit must evaluate: radius from the Earth's centre is near the GPS A_REF.
+    state = eph.orbit_state(7200.0)
+    assert 2.0e7 < float(np.linalg.norm(state.position_ecef_m)) < 3.0e7

@@ -1,6 +1,6 @@
 """Set the physical material of every rack part from its category.
 
-Why: the parts are in three material groups (laser, rigid, flex; D-035).
+Why: the parts are in three material groups (laser, rigid, flex; D-087).
 The `[materials]` table in `rack_seed.toml` gives one material for each
 group. Change the table and run this script to change all parts of a group
 at once. The script changes only materials. It does not touch geometry or

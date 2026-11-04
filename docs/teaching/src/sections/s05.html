@@ -1,0 +1,58 @@
+<section class="part" id="s05" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>From navigation message to position fix</h2>
+    <div class="meta">{{MIN}} MIN · TIME TAGS, EPHEMERIS, LEAST SQUARES</div>
+    <p class="lede">Correlation gives the code delay only modulo one code period. The navigation message gives the rest: a time stamp, the satellite orbit, and the satellite clock. Here is the path from tracked code phase to a fix.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>When was this sample sent? (GPS L1 C/A)</span><span>after Fig. 15.1, Morton et al.</span></div><canvas id="s05-time" data-aspect="0.42" data-minh="230"></canvas></div>
+      <div class="controls" id="s05-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>Count bits, codes and chips</h3>
+      <p>The message stamps the start of each subframe with the time of week \(t_b\). The receiver then counts down the hierarchy: which bit, which code period inside the bit, and which chip inside the code.</p>
+      <div class="eq">
+        $$t_{tx}=t_b+(N-1)\,20\,\text{ms}+(M-1)\,1\,\text{ms}+\tau$$
+        <div class="where">\(N\): bit in the subframe (1 to 300). \(M\): code period in the bit (1 to 20). \(\tau\): code phase from tracking. <span class="src">Eq. 15.1</span></div>
+      </div>
+      <p>Bit sync finds \(M\). Frame sync (the preamble) finds \(N\) and \(t_b\). Tracking finds \(\tau\) continuously. Without bit and frame sync you know \(t_{tx}\) only modulo 1 ms, which is the 300 km ambiguity of Part 04.</p>
+      <dl class="readouts" id="s05-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <div class="tablewrap">
+      <table class="t">
+        <thead><tr><th>Signal</th><th>Message</th><th>Symbol rate</th><th>Unit and length</th><th>Frame</th><th>Ephemeris in</th><th>Time to first ephemeris (typical)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L1 C/A</td><td>LNAV</td><td class="num">50 bit/s, no FEC</td><td>subframe 6 s (300 bits)</td><td class="num">30 s · 12.5 min all pages</td><td>subframes 1–3</td><td class="num">18–30 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L1C</td><td>CNAV-2</td><td class="num">100 sym/s, LDPC</td><td>frame of 3 subframes</td><td class="num">18 s</td><td>subframe 2</td><td class="num">18 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--gal)"></span>Galileo E1-B</td><td>I/NAV</td><td class="num">250 sym/s, FEC ½</td><td>page 2 s (two 1 s halves)</td><td class="num">subframe 30 s</td><td>words 1–4</td><td class="num">≈ 30 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--bds)"></span>BeiDou B1C</td><td>B-CNAV1</td><td class="num">100 sym/s, LDPC</td><td>frame of 3 subframes</td><td class="num">18 s</td><td>subframe 2</td><td class="num">18 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--gps)"></span>GPS L5</td><td>CNAV</td><td class="num">100 sym/s, FEC ½</td><td>message 6 s (300 bits)</td><td class="num">variable order</td><td>types 10, 11 + clock type 30–37</td><td class="num">≥ 18 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--gal)"></span>Galileo E5a</td><td>F/NAV</td><td class="num">50 sym/s, FEC ½</td><td>page 10 s</td><td class="num">subframe 50 s</td><td>page types 1–4</td><td class="num">≈ 50 s</td></tr>
+          <tr><td><span class="sys" style="background:var(--bds)"></span>BeiDou B2a</td><td>B-CNAV2</td><td class="num">200 sym/s, LDPC</td><td>message 3 s</td><td class="num">variable order</td><td>types 10, 11 + clock type 30</td><td class="num">≥ 9 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">Sources: IS-GPS-200, IS-GPS-705, IS-GPS-800, Galileo OS SIS ICD, BDS-SIS-ICD (B1C, B2a). A 120 s HERON collect is long enough for every signal in this table.</p>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="steps"><button>1 · Code phase</button><button>2 · Bit and frame sync</button><button>3 · Pseudorange</button><button>4 · Satellite position</button><button>5 · Least squares</button></div>
+      <div class="fig"><div class="cap"><span id="s05-cap">Step</span></div><canvas id="s05-step" data-aspect="0.5" data-minh="240"></canvas></div>
+    </div>
+    <div class="notes">
+      <div data-step="0" class="stepbody"><h3>Tracking gives a fraction of a millisecond</h3><p>For each satellite the DLL reports the code phase \(\tau_i\in[0,1)\) ms. The integer part of the travel time is still unknown. All satellites show a value between 0 and 1 ms.</p></div>
+      <div data-step="1" class="stepbody"><h3>The message gives the whole number</h3><p>Bit sync and frame sync give \(N\), \(M\) and \(t_b\), so the receiver knows the full transmit time. GPS travel times are 65 to 90 ms, so the integer part adds 65 to 89 ms.</p><div class="eq">$$t_{tx}=t_b+(N-1)\,20\,\text{ms}+(M-1)\,1\,\text{ms}+\tau$$<div class="where">\(t_b\) and \(N\) come from frame sync, \(M\) from bit sync, \(\tau\) from the DLL. <span class="src">Eq. 15.1</span></div></div></div>
+      <div data-step="2" class="stepbody"><h3>Pseudorange</h3><div class="eq">$$\rho_i=c\,\big(t_{rx}-t_{tx,i}\big)$$<div class="where">\(t_{rx}\) is read from the receiver clock, so \(\rho_i\) contains \(c\,\delta t_u\). That is why we call it a <em>pseudo</em>range.</div></div></div>
+      <div data-step="3" class="stepbody"><h3>Place the satellites</h3><p>The ephemeris is a set of Kepler elements plus small correction terms, valid for about 4 hours. The receiver evaluates them at \(t_{tx}\), not at \(t_{rx}\).</p><div class="eq">$$M=M_0+n\,(t_{tx}-t_{oe}),\quad E-e\sin E=M,\quad r=a(1-e\cos E)$$<div class="where">Then rotate by \(\omega\), \(i\) and \(\Omega\) into ECEF. Correct for Earth rotation during the 70 ms travel time (up to about 30 m).</div></div></div>
+      <div data-step="4" class="stepbody"><h3>Place the receiver</h3><div class="eq">$$\delta\boldsymbol\rho=\mathbf G\,\delta\mathbf x,\qquad \mathbf G=\begin{bmatrix}-\hat{\mathbf u}_1^{T}&1\\ \vdots&\vdots\\ -\hat{\mathbf u}_n^{T}&1\end{bmatrix},\qquad \delta\mathbf x=(\mathbf G^{T}\mathbf G)^{-1}\mathbf G^{T}\delta\boldsymbol\rho$$<div class="where">Start at the centre of the Earth. Iterate. It converges in 4 to 6 steps. \(\text{GDOP}=\sqrt{\operatorname{tr}(\mathbf G^{T}\mathbf G)^{-1}}\) scales range error into position error.</div></div></div>
+      <dl class="readouts" id="s05-ro2"></dl>
+    </div>
+  </div>
+</section>

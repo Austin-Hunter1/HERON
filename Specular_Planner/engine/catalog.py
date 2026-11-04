@@ -97,7 +97,8 @@ SOURCES = [
         "id": "bkg-rinex",
         "name": "IGS mixed nav",
         "agency": "BKG / IGS",
-        "used": None,
+        "used": "BeiDou satellite numbers (matched to the TLEs)",
+        "planning": True,
         "kind": "binary",
         "page": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/",
         "rel": "gnss/BRDC*.rnx.gz",
@@ -157,13 +158,22 @@ def galileo_remote() -> tuple[str, str]:
     return "https://www.gsc-europa.eu" + rel, f"galileo_{stamp}.xml"
 
 
+def _bkg_day(day: dt.datetime) -> tuple[str, str]:
+    doy = f"{day.timetuple().tm_yday:03d}"
+    name = f"BRDC00WRD_S_{day.year}{doy}0000_01D_MN.rnx.gz"
+    return f"https://igs.bkg.bund.de/root_ftp/IGS/BRDC/{day.year}/{doy}/{name}", name
+
+
 def bkg_remote() -> tuple[str, str]:
+    """Today's merged nav file, or yesterday's if today's is not posted yet."""
     now = dt.datetime.now(dt.timezone.utc)
-    doy = f"{now.timetuple().tm_yday:03d}"
-    year = now.year
-    name = f"BRDC00WRD_S_{year}{doy}0000_01D_MN.rnx.gz"
-    url = f"https://igs.bkg.bund.de/root_ftp/IGS/BRDC/{year}/{doy}/{name}"
-    return url, name
+    url, name = _bkg_day(now)
+    try:
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": UA})
+        urllib.request.urlopen(req, context=CTX, timeout=30).close()
+        return url, name
+    except Exception:
+        return _bkg_day(now - dt.timedelta(days=1))
 
 
 def remote_for(src: dict) -> tuple[str, str]:
@@ -277,6 +287,10 @@ def _write_source(src: dict, name: str, data: bytes) -> Path:
     dest = _safe_under_data(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
+    if src["id"] == "bkg-rinex":
+        for old in GNSS.glob(src["glob"]):
+            if old != dest:
+                old.unlink()
     return dest
 
 

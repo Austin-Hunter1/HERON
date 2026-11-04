@@ -9,8 +9,8 @@ size larger.
   package to the SOD-523 (DYA, 1.6 x 0.8 mm) package of the same TI part.
   The pinout is the same: pin 1 = I/O, pin 2 = GND (TI datasheet Table 4-1).
 - J1 (power input) changes from JST-GH (SMD) to JST XH (through-hole),
-  because the GH header is out of stock (D-040). power_conn.py does it.
-- D2 gets the Panjit SOD-323HE land in place of SOD-323F (D-041).
+  because the GH header is out of stock (D-092). power_conn.py does it.
+- D2 gets the Panjit SOD-323HE land in place of SOD-323F (D-093).
   d2_land.py does it.
 
 Why a script and not the generators: the rev B KiCad files were edited after
@@ -668,8 +668,8 @@ def main():
     drop_blocked_stitch_vias(board)
     prune_dangling(board, keep)
     set_revision_text(board)
-    power_conn.apply_board(board, swap_footprint)   # J1: JST-GH -> JST XH (D-040)
-    d2_land.apply_board(board, swap_footprint)      # D2: Panjit SOD-323HE land (D-041)
+    power_conn.apply_board(board, swap_footprint)   # J1: JST-GH -> JST XH (D-092)
+    d2_land.apply_board(board, swap_footprint)      # D2: Panjit SOD-323HE land (D-093)
     add_silk_art(board)
     hidden = place_labels(board)
     if hidden:

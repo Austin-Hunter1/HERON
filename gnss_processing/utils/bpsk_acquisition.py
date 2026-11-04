@@ -728,6 +728,7 @@ def run_acquisition(
     print_progress: bool = False,
     noise_var_method: str = "abscorrmean",
     save_corr_doppler_window_bins: Optional[int] = 1,
+    detection_threshold_db: Optional[float] = None,
 ) -> Dict[str, AcquisitionResult]:
     """
     Perform BPSK acquisition on the given sample block for all signals defined in code_parameters.
@@ -776,6 +777,13 @@ def run_acquisition(
     worst-case Doppler error falls to `1/k` of half a bin, at `k` times the cost.
     It matters whenever the seed would otherwise be looser than the tracking loop
     can pull in from.
+
+    `detection_threshold_db` sets the threshold directly, in dB above the expected
+    noise level -- the scale of `AcquisitionResult.peak_snr_db` and of the dashed
+    line on the acquisition plots (D-085).  Use it to admit a peak that a plot shows
+    just under the line.  It replaces `prob_false_alarm_total`, which is then not
+    checked; the results carry the false-alarm total that this threshold implies,
+    so the two stay consistent.  `None` (the default) keeps the p_fa behaviour.
     """
     acquisition_results: Dict[str, AcquisitionResult] = {}
 
@@ -818,16 +826,31 @@ def run_acquisition(
     num_detection_cells = (
         acq_config.num_doppler_hypotheses * acq_config.replica_length_samples
     )
-    if not 0.0 < prob_false_alarm_total < 1.0:
-        raise ValueError(
-            f"prob_false_alarm_total must be in (0, 1), got {prob_false_alarm_total}"
+    if detection_threshold_db is None:
+        if not 0.0 < prob_false_alarm_total < 1.0:
+            raise ValueError(
+                f"prob_false_alarm_total must be in (0, 1), got {prob_false_alarm_total}"
+            )
+        prob_false_alarm_per_cell = -np.expm1(
+            np.log1p(-prob_false_alarm_total) / num_detection_cells
         )
-    prob_false_alarm_per_cell = -np.expm1(
-        np.log1p(-prob_false_alarm_total) / num_detection_cells
-    )
-    # The threshold depends only on the per-cell rate and the number of blocks, so
-    # it is one number for the whole sweep rather than a per-signal quantity.
-    detection_threshold = float(scipy.stats.chi2(df=2 * M).isf(prob_false_alarm_per_cell))
+        # The threshold depends only on the per-cell rate and the number of blocks, so
+        # it is one number for the whole sweep rather than a per-signal quantity.
+        detection_threshold = float(scipy.stats.chi2(df=2 * M).isf(prob_false_alarm_per_cell))
+    else:
+        if not np.isfinite(detection_threshold_db):
+            raise ValueError(
+                f"detection_threshold_db must be a finite number, got {detection_threshold_db}"
+            )
+        # The inverse of the dB scale below: 0 dB is the noise mean, 2M.
+        detection_threshold = float(2 * M * 10.0 ** (detection_threshold_db / 10.0))
+        # The same Sidak relation run backwards, so the result still states what
+        # this threshold costs in false alarms.  sf can underflow to 0 for a very
+        # high threshold; a total of 0 then says "no false alarm" honestly.
+        prob_false_alarm_per_cell = float(scipy.stats.chi2(df=2 * M).sf(detection_threshold))
+        prob_false_alarm_total = float(
+            -np.expm1(num_detection_cells * np.log1p(-prob_false_alarm_per_cell))
+        )
     threshold_db = 10.0 * np.log10(detection_threshold / (2 * M))
     # Compute conjugated FFT of blocks, once per sub-bin Doppler hypothesis.
     # Blocks are combined non-coherently below, so applying the same phase ramp
@@ -853,9 +876,10 @@ def run_acquisition(
         ambiguity = (
             f", mod {code_lengths_chips.pop():,}" if len(code_lengths_chips) == 1 else ""
         )
+        source = "set directly, " if detection_threshold_db is not None else ""
         print(
             f"Detection threshold: {threshold_db:.2f} dB above noise "
-            f"(p_fa {prob_false_alarm_total:g} over {num_detection_cells:,} cells/PRN)"
+            f"({source}p_fa {prob_false_alarm_total:g} over {num_detection_cells:,} cells/PRN)"
         )
         print()
         # With a fine search configured every column carries `coarse => fine`, so

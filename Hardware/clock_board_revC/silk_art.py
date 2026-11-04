@@ -63,7 +63,7 @@ FRONT_TEXT = [
     ("10 MHz + PPS to 4 SDRs", (66.5, 39.5), 0.9),
     ("Rev C - 10/2026", (66.5, 41.5), 0.9),
     # Input limit, left of J1 (free area x 18.1-30.5, y 0.5-6.5; J1 moved right
-    # in D-040). Why: U1 and U2 (LP5907, TLV755) have a 5.5 V absolute maximum input.
+    # in D-092). Why: U1 and U2 (LP5907, TLV755) have a 5.5 V absolute maximum input.
     ("+5V IN", (27.4, 2.3), 0.9),
     ("5.5V MAX", (27.4, 3.8), 0.9),
     # R23 note, right of J2 (free area x 94.6-110.2, y 35.0-43.6). Why: R23 is DNP.

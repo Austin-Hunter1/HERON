@@ -166,6 +166,7 @@ def build_truth(
     num_epochs: int = 5,
     epoch_interval_s: float = 1.0,
     apply_satellite_clock: bool = True,
+    satellite_count: int = 6,
 ):
     """
     A complete synthetic scenario: ephemerides, observables, and the truth.
@@ -173,8 +174,15 @@ def build_truth(
     The receiver clock is offset from GPS time by `receiver_clock_bias_m / c` and
     optionally drifts, which is exactly the situation a real sampled front end is
     in -- its uptime counter is not GPS time.
+
+    `satellite_count` matters beyond "more points": a RAIM exclusion test needs
+    enough redundancy to reliably identify the ACTUAL bad satellite rather than
+    a leverage point elsewhere in the geometry -- 6 satellites (2 degrees of
+    redundancy over the 4 unknowns) is not always enough for that (see
+    `test_raim_excludes_one_bad_satellite_and_recovers_the_fix`), which is a
+    property of least squares with marginal redundancy, not a bug.
     """
-    ephemerides = visible_constellation()
+    ephemerides = visible_constellation(satellite_count)
     sat_ids = sorted(ephemerides)
     n, m = num_epochs, len(sat_ids)
 
@@ -748,3 +756,188 @@ def test_sagnac_transit_does_not_import_the_receiver_clock_bias():
     ]
     moved = np.linalg.norm(from_clock[0] - from_clock[1], axis=2)
     assert moved.min() > 5.0, f"expected metres of movement, saw {moved.min():.3f} m"
+
+
+# ---------------------------------------------------------------------------
+# RAIM-style post-fit residual screening (solve_epoch_with_raim)
+# ---------------------------------------------------------------------------
+
+
+def test_raim_excludes_one_bad_satellite_and_recovers_the_fix():
+    """
+    One satellite's corrected pseudorange is bumped by 10 km -- the scale a
+    reacquisition that seeded an inconsistent code phase could plausibly
+    produce (see `utils/tracking_supervisor.py`). Left in, the fit is dragged
+    off by it; `solve_epoch_with_raim` must drop that satellite and land close
+    to the truth, the same way the unbiased fit already does.
+
+    9 satellites, not the usual 6: with only 2 degrees of redundancy (6 sats,
+    4 unknowns), excluding the single worst post-fit residual does not
+    reliably point at the satellite that was actually biased -- a real,
+    well-known property of least squares with marginal redundancy (a biased
+    measurement can become a "leverage point" whose OWN residual shrinks while
+    others grow), confirmed empirically against this fixture. More redundancy
+    is what makes single-fault RAIM exclusion reliable in the first place, so
+    this test is only meaningful with enough of it.
+    """
+    ephemerides, observables, _, _ = build_truth(satellite_count=9)
+    corrected, _ = nav.correct_pseudoranges(
+        observables, ephemerides, signal_type_id="GPS_L5",
+        settings=nav.CorrectionSettings(True, True, True, False, False),
+    )
+    positions = nav.satellite_positions(observables, ephemerides)
+
+    clean = nav.solve_epoch(corrected[0], positions[0], observables.sat_ids)
+    assert clean is not None and clean.converged
+
+    biased = corrected[0].copy()
+    bad_sat = observables.sat_ids[0]
+    biased[0] += 10_000.0  # 10 km -- not subtle, not a measurement noise question
+
+    unscreened = nav.solve_epoch(biased, positions[0], observables.sat_ids)
+    assert unscreened is not None and unscreened.converged
+    unscreened_error = np.linalg.norm(unscreened.position_ecef_m - clean.position_ecef_m)
+    assert unscreened_error > 50.0, "fixture must actually be wrecked by the bias"
+
+    screened, excluded = nav.solve_epoch_with_raim(
+        biased, positions[0], observables.sat_ids, residual_gate_m=100.0,
+    )
+    assert excluded == [bad_sat]
+    assert screened is not None and screened.converged
+    screened_error = np.linalg.norm(screened.position_ecef_m - clean.position_ecef_m)
+    assert screened_error < 1.0, f"RAIM-screened fix is still {screened_error:.1f} m off"
+
+
+def test_raim_does_not_fire_when_everything_is_consistent():
+    ephemerides, observables, _, _ = build_truth()
+    corrected, _ = nav.correct_pseudoranges(
+        observables, ephemerides, signal_type_id="GPS_L5",
+        settings=nav.CorrectionSettings(True, True, True, False, False),
+    )
+    positions = nav.satellite_positions(observables, ephemerides)
+    solution, excluded = nav.solve_epoch_with_raim(
+        corrected[0], positions[0], observables.sat_ids, residual_gate_m=100.0,
+    )
+    assert excluded == []
+    assert solution is not None and solution.num_satellites == len(observables.sat_ids)
+
+
+def test_raim_leaves_an_under_determined_fit_alone():
+    """Four satellites: excluding one would leave three, which cannot solve for
+    four unknowns at all -- `solve_epoch_with_raim` must not try."""
+    ephemerides, observables, _, _ = build_truth()
+    corrected, _ = nav.correct_pseudoranges(
+        observables, ephemerides, signal_type_id="GPS_L5",
+        settings=nav.CorrectionSettings(True, True, True, False, False),
+    )
+    positions = nav.satellite_positions(observables, ephemerides)
+    biased = corrected[0][:4].copy()
+    biased[0] += 10_000.0
+    solution, excluded = nav.solve_epoch_with_raim(
+        biased, positions[0][:4], observables.sat_ids[:4], residual_gate_m=100.0,
+    )
+    assert excluded == [], "four satellites is too few to exclude from"
+    assert solution is not None  # still returns the (poor) 4-satellite fit, unscreened
+
+
+def test_raim_does_not_fire_on_a_non_converged_epoch():
+    """All-NaN residuals never exceed a finite gate -- documented, not accidental
+    (see `solve_epoch_with_raim`'s docstring)."""
+    ephemerides, observables, _, _ = build_truth()
+    positions = nav.satellite_positions(observables, ephemerides)
+    solution, excluded = nav.solve_epoch_with_raim(
+        observables.pseudorange_m[0][:3], positions[0][:3], observables.sat_ids[:3],
+        residual_gate_m=100.0,
+    )
+    assert solution is None
+    assert excluded == []
+
+
+def test_solve_series_residual_gate_is_off_by_default():
+    """Calling `solve_series` exactly as every pre-existing caller does (no
+    `residual_gate_m` argument at all) must still work and never exclude
+    anything -- the backward-compatibility guarantee the RAIM gate's `None`
+    default exists for."""
+    ephemerides, observables, _, _ = build_truth()
+    settings = nav.CorrectionSettings(True, True, True, False, False)
+    without_gate = nav.solve_series(
+        observables, ephemerides, signal_type_id="GPS_L5",
+        settings=settings, initial_position_ecef_m=REFERENCE_ECEF,
+    )
+    assert len(without_gate.excluded_sat_ids) == len(observables.epoch_uptime_ms)
+    assert all(excluded == [] for excluded in without_gate.excluded_sat_ids)
+    error = np.linalg.norm(without_gate.position_ecef_m - REFERENCE_ECEF, axis=1)
+    assert error.max() < 0.1
+
+
+def test_solve_series_records_exclusions_per_epoch():
+    ephemerides, observables, _, _ = build_truth(num_epochs=3, satellite_count=9)
+    bad_sat = observables.sat_ids[0]
+    bad_index = observables.sat_ids.index(bad_sat)
+    biased = dataclasses.replace(
+        observables,
+        pseudorange_m=observables.pseudorange_m.copy(),
+    )
+    biased.pseudorange_m[:, bad_index] += 10_000.0
+
+    series = nav.solve_series(
+        biased, ephemerides, signal_type_id="GPS_L5",
+        settings=nav.CorrectionSettings(True, True, True, False, False),
+        initial_position_ecef_m=REFERENCE_ECEF,
+        residual_gate_m=100.0,
+    )
+    assert len(series.excluded_sat_ids) == 3
+    assert all(excl == [bad_sat] for excl in series.excluded_sat_ids)
+    error = np.linalg.norm(series.position_ecef_m - REFERENCE_ECEF, axis=1)
+    assert error.max() < 1.0
+
+
+def test_solve_clock_series_still_constructs_with_the_new_field():
+    """`SolutionSeries.excluded_sat_ids` has a default so `solve_clock_series` --
+    which never calls `solve_epoch_with_raim` at all -- still constructs, and
+    fills it with one empty list per epoch like every other per-epoch field."""
+    ephemerides, observables, _, _ = build_truth(num_epochs=4)
+    series = nav.solve_clock_series(
+        observables, ephemerides, REFERENCE_ECEF, signal_type_id="GPS_L5",
+    )
+    assert len(series.excluded_sat_ids) == len(observables.epoch_uptime_ms) == 4
+    assert all(excl == [] for excl in series.excluded_sat_ids)
+
+
+def test_a_diverged_epoch_is_skipped_and_does_not_poison_the_seed(monkeypatch):
+    """
+    A least-squares iteration that runs away to a position nowhere near the earth
+    is finite, so it counts as converged -- and `solve_series` used to seed every
+    later epoch with it, so one bad epoch lost the rest of the run.
+    """
+    ephemerides, observables, _, _ = build_truth(num_epochs=3)
+    real = nav.compute_least_squares_position_and_clock
+    calls = {"n": 0}
+
+    def runaway_once(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return np.array([4.2e65, 1.0, 1.0]), 0.0
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(nav, "compute_least_squares_position_and_clock", runaway_once)
+    series = nav.solve_series(
+        observables, ephemerides, signal_type_id="GPS_L5",
+        settings=nav.CorrectionSettings(True, True, True, False, False),
+        initial_position_ecef_m=REFERENCE_ECEF,
+    )
+    assert list(series.valid) == [False, True, True]
+    error = np.linalg.norm(series.position_ecef_m[1:] - REFERENCE_ECEF, axis=1)
+    assert error.max() < 1.0
+
+
+def test_is_plausible_fix_rejects_a_position_far_from_the_earth():
+    near = nav.EpochSolution(
+        position_ecef_m=REFERENCE_ECEF, clock_bias_m=0.0, residuals_m=np.zeros(5),
+        sat_ids=[], geometry_matrix=np.zeros((5, 4)), converged=True,
+    )
+    far = dataclasses.replace(near, position_ecef_m=np.array([4.2e65, 1.0, 1.0]))
+    nan = dataclasses.replace(near, position_ecef_m=np.full(3, np.nan))
+    assert nav.is_plausible_fix(near)
+    assert not nav.is_plausible_fix(far)
+    assert not nav.is_plausible_fix(nan)

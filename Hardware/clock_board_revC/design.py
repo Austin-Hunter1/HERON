@@ -3,7 +3,7 @@
 Run: python3 design.py  ->  project/heron_clock.kicad_sch
 
 Signal flow
-- 5 V in (JST XH, D-040) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
+- 5 V in (JST XH, D-092) -> PTC fuse -> TVS -> Schottky -> ferrite -> VIN_5V.
 - Two 3.3 V LDOs, same SOT-23-5 pinout: LP5907 for +3V3_OSC (SiT5155 only,
   low noise) and TLV75533P for +3V3_CLK (buffers; it accepts the ~13 uF on
   that rail, which is above the LP5907 10 uF limit).
@@ -143,7 +143,7 @@ def build():
     # ------------------------------------------------ A: power input
     s.text((20.32, 22.86), "POWER INPUT: 5 V from payload rail (JST XH, friction lock)", 2.0)
     j1 = s.symbol("Connector_Generic:Conn_01x02", "J1", "5V_IN", (25.4, 40.64), mirror=True,
-                  fp="Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal",   # D-040: GH header out of stock
+                  fp="Connector_JST:JST_XH_S2B-XH-A-1_1x02_P2.50mm_Horizontal",   # D-092: GH header out of stock
                   fields=(("Manufacturer", "JST"), ("MPN", "S2B-XH-A-1(LF)(SN)")),
                   ref_off=(0, -3.81, "center"), val_off=(0, 6.35, "center"))
     g = j1["2"]; e1 = (g[0] + 2.54, g[1]); s.wire(g[:2], e1)
@@ -157,7 +157,7 @@ def build():
         dict(kind="P", lib="Device:D_Zener", rot=270, ref=ref("D"), value="SMF5.0A", step=12.7,
              fp="Diode_SMD:D_SOD-123F", fields=(("Manufacturer", "Littelfuse"), ("MPN", "SMF5.0A"))),
         dict(kind="S", lib="Device:D_Schottky", rot=180, ref=ref("D"), value="SS1030HEWS",
-             fp="HERON_Clock:D_SOD-323HE_Panjit",   # Panjit land, datasheet rev 06 p.3 (D-041; gen_lib.py)
+             fp="HERON_Clock:D_SOD-323HE_Panjit",   # Panjit land, datasheet rev 06 p.3 (D-093; gen_lib.py)
              fields=(("Manufacturer", "Panjit"), ("MPN", "SS1030HEWS_R1_00001"))),   # 30 V 1 A; was PMEG3020EJ (no stock)
         dict(kind="GAP", len=7.62),
         dict(kind="S", lib="Device:FerriteBead_Small", ref=ref("FB"), value="BLM18PG221", fp=L0603,

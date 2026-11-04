@@ -30,7 +30,7 @@ def _holes():
     """Return the 6 mounting hole centres as (x, z) expressions. Same as `clk_holes` in heron_rack.py."""
     xl, xr = "CLK_X0 + CLK_HOLE_INSET", "CLK_X0 + CLK_W - CLK_HOLE_INSET"
     zt, zb = "CLK_TOP_Z - CLK_HOLE_INSET", "CLK_Z0 + CLK_HOLE_INSET"
-    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-043): middle of the long edges
+    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-095): middle of the long edges
     return [(xl, zt), (xr, zt), (xl, zb), (xr, zb), (xm, zt), (xm, zb)]
 
 
@@ -84,7 +84,7 @@ def build(ctx):
     for hx, hz in _holes():
         fl.sk_circle(ctx, sk, hx, hz, "CLKREF_HOLE_D")
     fl.extrude(comp, sk, None, op="cut", through=True, name="pcb_holes")
-    # 2b. USB holes (rev D, D-042): one on each SDR USB-B axis; the last one runs off the board edge (notch)
+    # 2b. USB holes (rev D, D-094): one on each SDR USB-B axis; the last one runs off the board edge (notch)
     sk = fl.plane_sketch(comp, "usb_holes")
     for slot in ctx.slots:
         if slot["kind"] not in ("b210", "b200"):

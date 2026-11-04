@@ -146,9 +146,9 @@ def ssd_rows() -> List[dict]:
 def ref_rows(slots: Iterable[dict]) -> List[dict]:
     """Make the reference rows: the clock board, 8 SMP adapters, the NUC envelope and the SSD.
 
-    All are rigid joints at the ROOT (D-035 open question: a NUC envelope in
+    All are rigid joints at the ROOT (D-087 open question: a NUC envelope in
     BLADE_nuc, or the SSD on the sled, is not decided). The SDR board stand-ins
-    REF_B210_1 ... REF_B200_2 are boxes (D-048), because the Ettus STEP files
+    REF_B210_1 ... REF_B200_2 are boxes (D-100), because the Ettus STEP files
     are missing.
       clock board  local frame = the rear plate frame; origin on the board REAR face
                    (CLK_Y0 + CLK_PCB_T), so the board lies toward -Y from it.
@@ -286,7 +286,7 @@ def extend(design, parts: Iterable[str], labels: Iterable[str], cfg=None,
            log: Callable[[str], None] = print) -> Dict[str, List[str]]:
     """Add parts and placements to a design that is already built.
 
-    Fusion is master (D-035): this function CREATES missing User Parameters
+    Fusion is master (D-087): this function CREATES missing User Parameters
     and never updates an existing one. It builds only listed parts that are
     not in the design and adds only listed placements that are not in it.
     Rails that exist as hidden root occurrences are reused: the blade nests

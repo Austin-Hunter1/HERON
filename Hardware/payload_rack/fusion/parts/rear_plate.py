@@ -4,7 +4,7 @@ Mirror of `rear_plate_local` in heron_rack.py. Local frame: x = world X
 (0..W), y = world Z (0..H), sheet thickness along z (0..T). Tabs reach to
 -T and H + T in y, and to -T and W + T in x.
 
-USB openings sit on each SDR USB-B axis (clock board rev D, D-042).
+USB openings sit on each SDR USB-B axis (clock board rev D, D-094).
 
 Solder windows use the clock board jack positions. The jack to SDR pairing
 comes from `kicad_clock.mate_pairs` at build time (static). The window sizes
@@ -26,7 +26,7 @@ def _clock_holes():
     """Return the 6 clock board mounting hole centres as (x, z) expressions."""
     xl, xr = "CLK_X0 + CLK_HOLE_INSET", "CLK_X0 + CLK_W - CLK_HOLE_INSET"
     zt, zb = "CLK_TOP_Z - CLK_HOLE_INSET", "CLK_Z0 + CLK_HOLE_INSET"
-    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-043): middle of the long edges
+    xm = "CLK_X0 + CLK_W / 2"          # H5, H6 (rev D, D-095): middle of the long edges
     return [(xl, zt), (xr, zt), (xl, zb), (xr, zb), (xm, zt), (xm, zb)]
 
 
@@ -66,7 +66,7 @@ def _solder_windows(ctx, comp) -> None:
 
 def usb_openings(ctx, comp):
     """Cut one opening on each SDR USB-B axis: the SDR USB cable passes through
-    the clock board and this plate (clock board rev D, D-042).
+    the clock board and this plate (clock board rev D, D-094).
 
     Why a separate function: update_revd.py adds this feature to a rear plate
     that is already built (Fusion is master, so the plate is not rebuilt)."""
@@ -79,7 +79,7 @@ def usb_openings(ctx, comp):
 
 
 def center_holes(ctx, comp):
-    """Cut the 2 mid-edge clock board holes (H5, H6, D-043) in a rear plate that is
+    """Cut the 2 mid-edge clock board holes (H5, H6, D-095) in a rear plate that is
     already built with 4 holes. A new build cuts all 6 in `slots_and_holes`.
     No keep-out disc is needed: at x = CLK_X0 + CLK_W / 2 the plate is solid."""
     sk = fl.plane_sketch(comp, "clock_center_holes")

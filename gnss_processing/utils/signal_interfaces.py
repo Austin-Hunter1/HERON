@@ -9,7 +9,7 @@ link's nominal frequency for a BOC sidelobe -- not the case for any signal
 built here yet, but `Signal.carrier_freq_hz` is independent of `Link` for when
 it is.
 
-A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5` -- IS the class-based
+A `Signal` subclass -- `GpsL1CA`, `GpsL2C`, `GpsL5`, `BdsB2a`, `BdsB1C`, `GalE5a` -- IS the class-based
 definition of one signal: instantiating it for a PRN builds that satellite's
 spreading-code components (see `utils.code_components`) into a `CodeSet`.
 Acquisition and tracking are configured separately, in `ACQUISITION_POLICIES`
@@ -38,13 +38,16 @@ from typing import ClassVar, Iterable
 
 import numpy as np
 
-import gnss_tools.signals.gps_l1c as gps_l1c
 import gnss_tools.signals.gps_l1ca as gps_l1ca
 import gnss_tools.signals.gps_l2c as gps_l2c
 import gnss_tools.signals.gps_l5 as gps_l5
 
 from . import ambiguity_resolution
+from . import bds_b1c
+from . import bds_b2a
+from . import gps_l1c
 from . import bpsk_acquisition
+from . import gal_e5a
 from . import sample_streaming
 from . import secondary_code
 from . import tracking_channel
@@ -119,6 +122,19 @@ def _tiered_code(primary: np.ndarray, overlay: np.ndarray) -> np.ndarray:
     return np.concatenate([primary * int(sign) for sign in overlay]).astype(np.int8)
 
 
+@dataclass(frozen=True)
+class SignalOptions:
+    """
+    Choices that change how a signal is modelled, not what it is.
+
+    `boc61`: model the BOC(6,1) part of the pilot (B1C QMBOC, L1C TMBOC).  `None`
+    keeps the default of the signal.  Kept as a record so that new switches can
+    join without a change to every caller.
+    """
+
+    boc61: bool | None = None
+
+
 class Signal(ABC):
     """
     A particular signal definition on a link, for one satellite.
@@ -142,14 +158,67 @@ class Signal(ABC):
     # Duration of one full pass through the primary code. Tiered-code
     # integration accumulates in units of it.
     primary_period_ms: ClassVar[int] = 1
+    # First letter of the per-satellite id ("G01", "C01"): RINEX constellation
+    # letter.  GPS is the default so that the GPS signals need no change.
+    sat_id_prefix: ClassVar[str] = "G"
+    # PRNs `build_signals` makes when the caller names none.
+    default_prns: ClassVar[tuple[int, ...]] = tuple(range(1, 33))
+
+    # BOC(6,1) toggle (D-077).  A signal that carries a BOC(6,1) part sets
+    # `supports_boc61`, and says in `default_boc61` whether its plain class models
+    # that part.  `boc61_enabled` is what THIS class models; `with_options` makes
+    # a subclass that changes it.
+    supports_boc61: ClassVar[bool] = False
+    default_boc61: ClassVar[bool] = False
+    boc61_enabled: ClassVar[bool] = False
 
     def __init__(self, prn: int) -> None:
         self.prn = prn
-        self.signal_id = f"G{prn:02d}"
+        self.signal_id = f"{self.sat_id_prefix}{prn:02d}"
         self.code_set: CodeSet = build_code_set(
             self._build_components(prn),
             chip_rate_hz=self.tracking_code_rate_chips_per_sec,
         )
+
+    @classmethod
+    def with_options(cls, options: "SignalOptions | None" = None) -> "type[Signal]":
+        """
+        The signal class that models `options`.
+
+        Why a subclass: every function here takes a signal TYPE, so a variant that
+        is a type needs no new argument anywhere.  The variant keeps
+        `signal_type_id`, so the message tables and decoders, which key on it, stay
+        valid.  When the options equal the default, `cls` itself comes back, so a
+        default run is the same object as before the toggle existed.
+        """
+        wanted = None if options is None else options.boc61
+        if wanted is None or wanted == cls.boc61_enabled:
+            return cls
+        if not cls.supports_boc61:
+            raise ValueError(
+                f"{cls.signal_type_id} has no BOC(6,1) part, so boc61={wanted} has no meaning"
+            )
+        return type(
+            f"{cls.__name__}{'Wb' if wanted else 'Nb'}", (cls,), {"boc61_enabled": wanted}
+        )
+
+    @classmethod
+    def variant_tag(cls) -> str:
+        """
+        "" for the default model; "wb" or "nb" (wide band, narrow band) otherwise.
+
+        The tracking file name carries it, so a comparison run never overwrites
+        the default file.
+        """
+        if cls.boc61_enabled == cls.default_boc61:
+            return ""
+        return "wb" if cls.boc61_enabled else "nb"
+
+    @classmethod
+    def policy_key(cls) -> str:
+        """Key into the policy tables: the type id, plus the variant when there is one."""
+        tag = cls.variant_tag()
+        return f"{cls.signal_type_id}:{tag}" if tag else cls.signal_type_id
 
     @staticmethod
     @abstractmethod
@@ -258,82 +327,239 @@ class GpsL5(Signal):
         ]
 
 
-try:
-    class GpsL1C(Signal):
-        """
-        GPS L1C: a data component and a pilot, co-located on every chip at 1.023 Mcps
-        and -- unlike L5's I/Q -- in the SAME carrier phase (IS-GPS-800J 3.2.1.6.1).
-        They are separated by their codes and by a 25/75 power split, nothing else.
+class BdsB2a(Signal):
+    """
+    BeiDou B2a (open service): a data component on I and a dataless pilot on
+    Q, a QPSK pair at 10.23 Mcps with equal power (ICD Table 4-2).  Like
+    GPS L5 it is two BPSK(10) codes 90 degrees apart, so the same correlator
+    serves both.
 
-        Both carry a subcarrier, which is what makes L1C the first signal here needing
-        more than the BPSK correlator: L1CD is BOC(1,1) throughout, and L1CP is
-        TMBOC(6,1,4/33) -- BOC(6,1) on 4 of every 33 chips, BOC(1,1) on the rest.
+    Each carries a secondary code that advances one chip per 1 ms primary
+    period.  The data code ``00010`` is exactly one 5 ms symbol long, so the
+    symbol edge is known once the pilot's 100-chip overlay is locked.  MEO
+    and IGSO satellites send B2a (PRN 1 to 63); GEO satellites do not.
+    """
 
-        The pilot carries the 1800-bit L1CO overlay, one bit per 10 ms code period, so
-        it repeats only every 18 s.  That is 90 times L5's NH20 and is why the overlay
-        search is FFT-based here and runs on a window far shorter than one period.
-        """
+    signal_type_id = "BDS_B2A"
+    link = LINKS[LinkId.L5]
+    carrier_freq_hz = bds_b2a.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = bds_b2a.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = bds_b2a.PRIMARY_PERIOD_MS
+    sat_id_prefix = "C"
+    default_prns = tuple(range(bds_b2a.FIRST_PRN, bds_b2a.LAST_PRN + 1))
 
-        signal_type_id = "GPS_L1C"
-        link = LINKS[LinkId.L1]
-        carrier_freq_hz = gps_l1c.CARRIER_FREQ
-        tracking_code_rate_chips_per_sec = gps_l1c.CODE_RATE
-        # 10230 chips at 1.023 Mcps.  The first signal here whose primary period is
-        # longer than one correlation interval while also carrying an overlay -- see
-        # `TrackingChannel._intervals_per_primary_period`.
-        primary_period_ms = gps_l1c.PRIMARY_PERIOD_MS
+    @staticmethod
+    def _build_components(prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        code_d = bds_b2a.generate_data_code(prn).copy()
+        code_p = bds_b2a.generate_pilot_code(prn).copy()
+        return [
+            CodeComponent(
+                name="B2aD", sequence=code_d, branch=Branch.I,
+                overlay=bds_b2a.data_secondary_code(),
+                symbol_period_ms=bds_b2a.DATA_SYMBOL_PERIOD_MS,
+            ),
+            # The pilot is dataless: no symbol period.  Its 100-chip overlay
+            # is the long code the overlay search locks.
+            CodeComponent(
+                name="B2aP", sequence=code_p, branch=Branch.Q,
+                overlay=bds_b2a.generate_pilot_secondary_code(prn),
+            ),
+        ]
 
-        @staticmethod
-        def _build_components(prn: int) -> list[CodeComponent]:
-            code_d = (1 - 2 * gps_l1c.get_GPS_L1CD_code_sequence(prn)).astype(np.int8)
-            code_p = (1 - 2 * gps_l1c.get_GPS_L1CP_code_sequence(prn)).astype(np.int8)
-            overlay_p = (1 - 2 * gps_l1c.get_GPS_L1CO_overlay_sequence(prn)).astype(np.int8)
-            return [
+
+class GalE5a(Signal):
+    """
+    Galileo E5a, processed on its own as a QPSK signal (Galileo OS SIS ICD 2.3.1.2): a data
+    component E5a-I (F/NAV) on I and a dataless pilot E5a-Q on Q, both BPSK(10) at 10.23 Mcps
+    with equal power.  It is on the carrier of GPS L5 and BeiDou B2a.
+
+    Each component has a secondary code that advances one chip per 1 ms primary period.  The
+    data code CS20_1 (20 chips, the same for every satellite) lasts 20 ms, which is exactly one
+    F/NAV symbol, so the symbol edge is known once the pilot's 100-chip overlay (CS100_n, one
+    for each satellite) is locked.  E5a-QP is not part of this signal (D-067).
+    """
+
+    signal_type_id = "GAL_E5A"
+    link = LINKS[LinkId.L5]
+    carrier_freq_hz = gal_e5a.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = gal_e5a.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = gal_e5a.PRIMARY_PERIOD_MS
+    sat_id_prefix = "E"
+    # SVID 1 to 36 are assigned (ICD 3.6).  Codes exist up to 50; ask for them with `prns=`.
+    default_prns = tuple(range(gal_e5a.FIRST_PRN, gal_e5a.LAST_ASSIGNED_PRN + 1))
+
+    @staticmethod
+    def _build_components(prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        return [
+            CodeComponent(
+                name="E5aI", sequence=gal_e5a.generate_data_code(prn).copy(), branch=Branch.I,
+                overlay=gal_e5a.data_secondary_code().copy(),
+                symbol_period_ms=gal_e5a.DATA_SYMBOL_PERIOD_MS,
+            ),
+            # The pilot is dataless: no symbol period.  Its 100-chip overlay is the long code
+            # that the overlay search locks.
+            CodeComponent(
+                name="E5aQ", sequence=gal_e5a.generate_pilot_code(prn).copy(), branch=Branch.Q,
+                overlay=gal_e5a.generate_pilot_secondary_code(prn).copy(),
+            ),
+        ]
+
+
+class BdsB1C(Signal):
+    """
+    BeiDou B1C (open service), narrow-band model: a data component on I and
+    the BOC(1,1) part of the pilot on Q, both at 1.023 Mcps (ICD Table 4-2).
+
+    Unlike GPS L1C the two components are in carrier quadrature (data 0
+    degrees, pilot 90 degrees), so the pilot carrier loop sees the data on
+    its imaginary axis, as on L5 and B2a.  The data has no secondary code.
+    The pilot carries a 1800-chip overlay, one chip per 10 ms primary period,
+    so it repeats every 18 s; the overlay search is FFT-based, as for L1C.
+
+    The BOC(6,1) part of the pilot (1/11 of the power, in phase with the
+    data) is not modelled (D-062).  The sample rate must be at least about
+    4 Msps for the BOC(1,1) lobes.  MEO and IGSO satellites send B1C (PRN 1
+    to 63).
+    """
+
+    signal_type_id = "BDS_B1C"
+    link = LINKS[LinkId.L1]
+    carrier_freq_hz = bds_b1c.CARRIER_FREQ_HZ
+    tracking_code_rate_chips_per_sec = bds_b1c.CODE_RATE_CHIPS_PER_SEC
+    primary_period_ms = bds_b1c.PRIMARY_PERIOD_MS
+    sat_id_prefix = "C"
+    default_prns = tuple(range(bds_b1c.FIRST_PRN, bds_b1c.LAST_PRN + 1))
+    # Narrow band by default (D-062).  `with_options(SignalOptions(boc61=True))`
+    # adds the BOC(6,1) part as a third component, `B1CP61` (D-077).
+    supports_boc61 = True
+    default_boc61 = False
+
+    @classmethod
+    def _build_components(cls, prn: int) -> list[CodeComponent]:
+        # The cached codes are read-only; the component gets its own copy.
+        code_d = bds_b1c.generate_data_code(prn).copy()
+        code_p = bds_b1c.generate_pilot_code(prn).copy()
+        overlay_p = bds_b1c.generate_pilot_secondary_code(prn).copy()
+        # ICD 4.2.2: sign(sin(2 pi f t)), the first half-chip positive.  This
+        # is `BOC_SIN`.  The subcarrier is evaluated by the correlator; it is
+        # not part of the code array (see `code_components`).
+        subcarrier = Subcarrier(
+            kind=SubcarrierKind.BOC_SIN, rate_hz=bds_b1c.BOC11_SUBCARRIER_RATE_HZ
+        )
+        components = [
+            CodeComponent(
+                name="B1CD", sequence=code_d, branch=Branch.I,
+                power_weight=bds_b1c.DATA_POWER_FRACTION,
+                # One B-CNAV1 symbol is one 10 ms primary period.
+                symbol_period_ms=bds_b1c.DATA_SYMBOL_PERIOD_MS,
+                subcarrier=subcarrier,
+            ),
+            # The pilot is dataless: no symbol period.  Its 1800-chip overlay
+            # is the long code the overlay search locks.
+            CodeComponent(
+                name="B1CP", sequence=code_p, branch=Branch.Q, overlay=overlay_p,
+                power_weight=bds_b1c.PILOT_BOC11_POWER_FRACTION,
+                subcarrier=subcarrier,
+            ),
+        ]
+        if cls.boc61_enabled:
+            # QMBOC: the BOC(6,1) part uses the pilot code and overlay, and is in
+            # quadrature with the BOC(1,1) part -- so it lies on the I branch,
+            # with the data (ICD Table 4-2).  Wide band only: it needs a sample
+            # rate far above the 4 Msps that BOC(1,1) needs.
+            components.append(
                 CodeComponent(
-                    name="L1CD", sequence=code_d, branch=Branch.I,
-                    power_weight=gps_l1c.L1CD_POWER_FRACTION,
-                    # One CNAV-2 symbol is exactly one code period, so a symbol flip
-                    # never lands inside a code period -- and 10 ms is the ceiling on
-                    # coherent integration for the whole signal, pilot included, since
-                    # one epoch serves every component.
-                    symbol_period_ms=_symbol_period_ms(gps_l1c),
+                    name="B1CP61", sequence=code_p, branch=Branch.I, overlay=overlay_p,
+                    power_weight=bds_b1c.PILOT_BOC61_POWER_FRACTION,
                     subcarrier=Subcarrier(
-                        kind=SubcarrierKind.BOC_SIN, rate_hz=gps_l1c.BOC_SUBCARRIER_RATE
+                        kind=SubcarrierKind.BOC_SIN,
+                        rate_hz=bds_b1c.BOC61_SUBCARRIER_RATE_HZ,
                     ),
+                )
+            )
+        return components
+
+
+class GpsL1C(Signal):
+    """
+    GPS L1C: a data component and a pilot, co-located on every chip at 1.023 Mcps
+    and -- unlike L5's I/Q -- in the SAME carrier phase (IS-GPS-800J 3.2.1.6.1).
+    They are separated by their codes and by a 25/75 power split, nothing else.
+
+    Both carry a subcarrier, which is what makes L1C the first signal here needing
+    more than the BPSK correlator: L1CD is BOC(1,1) throughout, and L1CP is
+    TMBOC(6,1,4/33) -- BOC(6,1) on 4 of every 33 chips, BOC(1,1) on the rest.
+
+    The pilot carries the 1800-bit L1CO overlay, one bit per 10 ms code period, so
+    it repeats only every 18 s.  That is 90 times L5's NH20 and is why the overlay
+    search is FFT-based here and runs on a window far shorter than one period.
+    """
+
+    signal_type_id = "GPS_L1C"
+    link = LINKS[LinkId.L1]
+    carrier_freq_hz = gps_l1c.CARRIER_FREQ
+    tracking_code_rate_chips_per_sec = gps_l1c.CODE_RATE
+    # 10230 chips at 1.023 Mcps.  The first signal here whose primary period is
+    # longer than one correlation interval while also carrying an overlay -- see
+    # `TrackingChannel._intervals_per_primary_period`.
+    primary_period_ms = gps_l1c.PRIMARY_PERIOD_MS
+    # Full TMBOC by default, as already written.  `boc61=False` models the pilot
+    # as BOC(1,1) on every chip (narrow band, D-077).
+    supports_boc61 = True
+    default_boc61 = True
+    boc61_enabled = True
+
+    @classmethod
+    def _build_components(cls, prn: int) -> list[CodeComponent]:
+        code_d = (1 - 2 * gps_l1c.get_GPS_L1CD_code_sequence(prn)).astype(np.int8)
+        code_p = (1 - 2 * gps_l1c.get_GPS_L1CP_code_sequence(prn)).astype(np.int8)
+        overlay_p = (1 - 2 * gps_l1c.get_GPS_L1CO_overlay_sequence(prn)).astype(np.int8)
+        return [
+            CodeComponent(
+                name="L1CD", sequence=code_d, branch=Branch.I,
+                power_weight=gps_l1c.L1CD_POWER_FRACTION,
+                # One CNAV-2 symbol is exactly one code period, so a symbol flip
+                # never lands inside a code period -- and 10 ms is the ceiling on
+                # coherent integration for the whole signal, pilot included, since
+                # one epoch serves every component.
+                symbol_period_ms=_symbol_period_ms(gps_l1c),
+                subcarrier=Subcarrier(
+                    kind=SubcarrierKind.BOC_SIN, rate_hz=gps_l1c.BOC_SUBCARRIER_RATE
                 ),
-                # The dataless pilot, at three times the data component's power.  Same
-                # branch as L1CD, so the carrier loop could be handed between them
-                # phase-continuously; it starts on the pilot and stays there.
-                CodeComponent(
-                    name="L1CP", sequence=code_p, branch=Branch.I, overlay=overlay_p,
-                    power_weight=gps_l1c.L1CP_POWER_FRACTION,
-                    subcarrier=Subcarrier(
+            ),
+            # The dataless pilot, at three times the data component's power.  Same
+            # branch as L1CD, so the carrier loop could be handed between them
+            # phase-continuously; it starts on the pilot and stays there.
+            CodeComponent(
+                name="L1CP", sequence=code_p, branch=Branch.I, overlay=overlay_p,
+                power_weight=gps_l1c.L1CP_POWER_FRACTION,
+                subcarrier=(
+                    Subcarrier(
                         kind=SubcarrierKind.TMBOC,
                         rate_hz=gps_l1c.BOC_SUBCARRIER_RATE,
                         pattern=gps_l1c.TMBOC_PATTERN,
                         pattern_rate_hz=gps_l1c.TMBOC_SUBCARRIER_RATE,
-                    ),
+                    )
+                    if cls.boc61_enabled
+                    else Subcarrier(
+                        kind=SubcarrierKind.BOC_SIN, rate_hz=gps_l1c.BOC_SUBCARRIER_RATE
+                    )
                 ),
-            ]
-except AttributeError as _gps_l1c_error:
-    # The checked-out gnss-tools submodule commit doesn't implement the L1C
-    # constants/code generators this class needs yet (see gps_l1c.py's own
-    # "INCOMPLETE" docstring). Degrade to skipping L1C rather than breaking
-    # `import utils` for every signal.
-    warnings.warn(
-        "GPS L1C signal definition unavailable in the current gnss-tools "
-        f"submodule checkout ({_gps_l1c_error}); skipping GpsL1C registration."
-    )
-    GpsL1C = None
+            ),
+        ]
 
 
 SIGNALS: dict[str, type[Signal]] = {
     GpsL1CA.signal_type_id: GpsL1CA,
     GpsL2C.signal_type_id: GpsL2C,
     GpsL5.signal_type_id: GpsL5,
+    BdsB2a.signal_type_id: BdsB2a,
+    BdsB1C.signal_type_id: BdsB1C,
+    GalE5a.signal_type_id: GalE5a,
 }
-if GpsL1C is not None:
-    SIGNALS[GpsL1C.signal_type_id] = GpsL1C
+SIGNALS[GpsL1C.signal_type_id] = GpsL1C
 
 
 # --------------------------------------------------------------------------
@@ -399,8 +625,35 @@ ACQUISITION_POLICIES: dict[str, AcquisitionPolicy] = {
     # Nothing is left ambiguous in the `ambiguous_component` sense: both components
     # are 10230 chips, so locating one locates the other.
 }
-if GpsL1C is not None:
-    ACQUISITION_POLICIES["GPS_L1C"] = AcquisitionPolicy(component_name="L1CP")
+ACQUISITION_POLICIES["GPS_L1C"] = AcquisitionPolicy(component_name="L1CP")
+
+# B2a: acquire on the pilot (OQ-4: pilot only first; summing data and pilot would
+# add about 3 dB and can be added later).  The pilot is dataless, so no symbol
+# flip breaks the dwell.
+#
+# The overlay is NOT folded in.  Its period is 100 ms, so a folded replica would
+# be 100 ms long: a 10 Hz Doppler bin and 100 times the search grid.  Like L1C,
+# acquisition then pins the code phase only modulo one 1 ms primary period and
+# the overlay phase comes from the post-lock search (`utils.secondary_code`).
+# Each 1 ms block is still a whole primary period, so the overlay can only flip
+# the sign between blocks; it cannot break a block.  Sum blocks non-coherently.
+#
+# Nothing is left ambiguous in the `ambiguous_component` sense: data and pilot
+# are both 10230 chips, so locating one locates the other.
+ACQUISITION_POLICIES["BDS_B2A"] = AcquisitionPolicy(component_name="B2aP")
+
+# E5a: as B2a.  The pilot E5aQ is dataless, and its 100 ms overlay is not folded into the replica
+# (a 100 ms replica would make a 10 Hz Doppler bin and 100 times the search grid).  Acquisition
+# pins the code phase modulo one 1 ms primary period; the overlay phase comes from the post-lock
+# search.
+ACQUISITION_POLICIES["GAL_E5A"] = AcquisitionPolicy(component_name="E5aQ")
+
+# B1C: acquire on the pilot's BOC(1,1) part.  It has 29/44 of the power against
+# 1/4 for the data, and it is dataless inside one 10 ms period.  The 1800-chip
+# overlay (18 s) is not folded in, as for L1C: acquisition pins the code phase
+# modulo 10 ms and the post-lock FFT search finds the overlay phase.  Data and
+# pilot are both 10230 chips, so nothing is left ambiguous.
+ACQUISITION_POLICIES["BDS_B1C"] = AcquisitionPolicy(component_name="B1CP")
 
 
 @dataclass(frozen=True)
@@ -500,45 +753,127 @@ TRACKING_POLICIES: dict[str, TrackingPolicy] = {
         # decoder wants.
     ),
 }
-if GpsL1C is not None:
-    TRACKING_POLICIES["GPS_L1C"] = TrackingPolicy(
-        # Carrier on L1CP, the pilot, from the start -- three times L1CD's power.
-        # Unlike L5 there is no quadrature penalty for choosing either, since both
-        # components are in the same carrier phase; the pilot is simply stronger
-        # and eventually dataless.
-        #
-        # The delay discriminator combines both, weighted 75/25 by
-        # `power_weight` -- the first signal here where that weighting is not
-        # uniform, and the reason `_combine_code_magnitude` weights at all.
-        #
-        # Costas stays on until the overlay is stripped: L1CO flips L1CP's sign
-        # every 10 ms, so the pilot is not yet effectively dataless.
-        discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
-            carrier_component=1, code_components=(0, 1), costas=True
-        ),
-        # Once L1CO is wiped off, L1CP really is dataless and the phase
-        # discriminator can use the full four-quadrant angle.  That is the whole
-        # prize here -- about 6 dB.
-        synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
-            carrier_component=1, code_components=(0, 1), costas=False
-        ),
-        # The ceiling here is also 10 ms, and the reason is worth stating because
-        # it differs from L5's: the binding limit is L1CD's CNAV-2 symbol, not the
-        # overlay.  One epoch serves every component, so integrating past 10 ms
-        # would leave the pilot happy and quietly cancel the data component.
-        # Stripping L1CO therefore buys a better discriminator, not a longer
-        # accumulation.
-        # 1800 offsets is where brute force stops being sensible, and four whole
-        # periods would be 72 seconds of tracking before the first attempt.  200
-        # prompts is 2 s, and at 40 dB-Hz a 10 ms prompt already carries ~20 dB.
-        overlay_search=secondary_code.fft_search,
-        overlay_prompts_to_observe=200,
-    )
+# B2a follows the L5 recipe, because the ICD gives it the same structure: two
+# equal-power BPSK(10) components 90 degrees apart, a 1 ms primary period, a
+# secondary code on each, and data on I only.  What differs is only the numbers.
+TRACKING_POLICIES["BDS_B2A"] = TrackingPolicy(
+    # Carrier on B2aP (component 1), the pilot, from the start.  The pilot is in
+    # quadrature with the data, so switching components later would force a
+    # re-pull.  Costas stays on until the 100-chip pilot overlay is stripped:
+    # until then it flips the pilot's sign every 1 ms.
+    #
+    # The delay discriminator combines both components non-coherently.  They have
+    # equal power (ICD Table 4-2), so this is worth about 3 dB.
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    # Overlay stripped: the pilot is really dataless, so the carrier loop uses the
+    # full four-quadrant angle.
+    #
+    # The coherent ceiling is read off the code set, not written here (see
+    # `coherent_duration_limits_ms`): B2aD's 5 ms symbol sets it, so 5 ms at most
+    # on this signal against 10 ms on L5.  The default overlay search is used: 100
+    # offsets is cheap for brute force, and the default window of whole overlay
+    # periods is 0.4 s of tracking.
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+)
+
+# E5a follows the B2a recipe: two equal-power BPSK(10) components in carrier quadrature, a 1 ms
+# primary period, a secondary code on each, data on I only.  Carrier on the pilot (component 1)
+# from the start; Costas until the 100-chip pilot overlay is stripped; both components in the
+# delay loop.  The coherent ceiling is read off the code set: E5aI's 20 ms symbol sets it.
+TRACKING_POLICIES["GAL_E5A"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+)
+
+
+# B1C: pilot carrier, as B2a, because the pilot is in quadrature with the data
+# (ICD Table 4-2) and a later switch would need a quarter-cycle re-pull.  The
+# delay discriminator uses both components, weighted by `power_weight`
+# (data 1/4, pilot 29/44).  Costas stays on while the 1800-chip overlay flips
+# the pilot sign every 10 ms.  The coherent ceiling is 10 ms (one data symbol).
+# The overlay search is the FFT search of L1C: 1800 offsets is too many for
+# brute force, and 200 prompts is 2 s of tracking.
+TRACKING_POLICIES["BDS_B1C"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+    overlay_search=secondary_code.fft_search,
+    overlay_prompts_to_observe=200,
+)
+
+# Wide-band B1C (D-077): the BOC(6,1) component joins the delay loop.  The carrier
+# stays on the BOC(1,1) pilot.  Whether the narrow BOC(6,1) peak needs a smaller
+# early-late spacing is tested in `tests/test_boc61_b1c.py`.
+TRACKING_POLICIES["BDS_B1C:wb"] = TrackingPolicy(
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1, 2), costas=True
+    ),
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1, 2), costas=False
+    ),
+    overlay_search=secondary_code.fft_search,
+    overlay_prompts_to_observe=200,
+)
+
+TRACKING_POLICIES["GPS_L1C"] = TrackingPolicy(
+    # Carrier on L1CP, the pilot, from the start -- three times L1CD's power.
+    # Unlike L5 there is no quadrature penalty for choosing either, since both
+    # components are in the same carrier phase; the pilot is simply stronger
+    # and eventually dataless.
+    #
+    # The delay discriminator combines both, weighted 75/25 by
+    # `power_weight` -- the first signal here where that weighting is not
+    # uniform, and the reason `_combine_code_magnitude` weights at all.
+    #
+    # Costas stays on until the overlay is stripped: L1CO flips L1CP's sign
+    # every 10 ms, so the pilot is not yet effectively dataless.
+    discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=True
+    ),
+    # Once L1CO is wiped off, L1CP really is dataless and the phase
+    # discriminator can use the full four-quadrant angle.  That is the whole
+    # prize here -- about 6 dB.
+    synced_discriminator_policy=tracking_channel.LoopDiscriminatorPolicy(
+        carrier_component=1, code_components=(0, 1), costas=False
+    ),
+    # The ceiling here is also 10 ms, and the reason is worth stating because
+    # it differs from L5's: the binding limit is L1CD's CNAV-2 symbol, not the
+    # overlay.  One epoch serves every component, so integrating past 10 ms
+    # would leave the pilot happy and quietly cancel the data component.
+    # Stripping L1CO therefore buys a better discriminator, not a longer
+    # accumulation.
+    # 1800 offsets is where brute force stops being sensible, and four whole
+    # periods would be 72 seconds of tracking before the first attempt.  200
+    # prompts is 2 s, and at 40 dB-Hz a 10 ms prompt already carries ~20 dB.
+    overlay_search=secondary_code.fft_search,
+    overlay_prompts_to_observe=200,
+)
 
 
 # --------------------------------------------------------------------------
 # What acquisition leaves ambiguous, and how it is resolved.
 # --------------------------------------------------------------------------
+
+
+def policy_for(table: dict, signal_type: type[Signal]):
+    """
+    The row of a policy table for `signal_type`.
+
+    A variant (see `Signal.with_options`) looks first for its own row, then falls
+    back to the row of its type.  So a variant needs a row only when it must differ.
+    """
+    return table.get(signal_type.policy_key(), table[signal_type.signal_type_id])
 
 
 @dataclass(frozen=True)
@@ -561,13 +896,13 @@ class AmbiguitySearchPlan:
 
 
 def _acquisition_component(signal_type: type[Signal], signal: Signal) -> CodeComponent:
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     return signal.code_set.components[signal.code_set.index_of(policy.component_name)]
 
 
 def acquisition_code(signal_type: type[Signal], signal: Signal) -> np.ndarray:
     """The replica sequence acquisition correlates against, on its own chip clock."""
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     component = _acquisition_component(signal_type, signal)
 
     sequence = component.sequence
@@ -614,7 +949,7 @@ def build_ambiguity_search(
     combined clock -- a partial view of the signal, which is what
     `allow_partial_coverage` is for.
     """
-    policy = ACQUISITION_POLICIES[signal_type.signal_type_id]
+    policy = policy_for(ACQUISITION_POLICIES, signal_type)
     if policy.ambiguous_component is None:
         return None
 
@@ -680,8 +1015,18 @@ class TrackingChannelAdapter:
         return self.outputs.late_corr[self.outputs.valid, component]
 
 
-def build_signals(signal_type: type[Signal], prns: Iterable[int] = range(1, 33)) -> dict[str, Signal]:
-    return {f"G{prn:02d}": signal_type(prn) for prn in prns}
+def build_signals(
+    signal_type: type[Signal], prns: Iterable[int] | None = None
+) -> dict[str, Signal]:
+    """Build one `Signal` per PRN, keyed by its satellite id.
+
+    With no `prns` the signal type's own `default_prns` are used (1-32 for GPS,
+    1-63 for BeiDou).
+    """
+    if prns is None:
+        prns = signal_type.default_prns
+    signals = (signal_type(prn) for prn in prns)
+    return {signal.signal_id: signal for signal in signals}
 
 
 def build_acquisition_code_params(
@@ -845,7 +1190,7 @@ def create_tracking_channels(
     cn0_params: tracking_channel.CN0EstimatorParameters | None = None,
     code_phase_ms_overrides: dict[str, float] | None = None,
 ) -> dict[str, TrackingChannelAdapter]:
-    tracking_policy = TRACKING_POLICIES[signal_type.signal_type_id]
+    tracking_policy = policy_for(TRACKING_POLICIES, signal_type)
 
     # EVERY signal starts at one correlation interval and extends afterwards.  The
     # requested duration is therefore the duration to extend TO, never the one the

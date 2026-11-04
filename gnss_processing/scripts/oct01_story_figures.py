@@ -368,7 +368,7 @@ def run_navigation(config: dict, collects_dir: Path, outputs_path: Path, run_cfg
     iono_alpha = iono_beta = None
     for result in decodes.values():
         if message_format == "CNAV":
-            clocks = [m for m in result.messages if 30 <= m.message_type <= 37]
+            clocks = result.of_type(30)
             if clocks:
                 parsed = cnav.parse_type_30(clocks[0])
                 iono_alpha, iono_beta = parsed.alpha, parsed.beta

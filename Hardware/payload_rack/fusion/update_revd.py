@@ -1,6 +1,6 @@
-"""MCP script text: bring `flight_rack_asm` up to date with clock board rev D (D-040, D-042).
+"""MCP script text: bring `flight_rack_asm` up to date with clock board rev D (D-092, D-094).
 
-Why this file exists: Fusion is the master model (D-035), so the design is
+Why this file exists: Fusion is the master model (D-087), so the design is
 not rebuilt. This script changes only what the clock board changes need:
 
 Phase "params":
@@ -15,7 +15,7 @@ Phase "params":
 Phase "parts":
   6. Replaces REF_clock_board_revC with REF_clock_board_revD (USB holes, J1 offset).
   7. Adds the USB openings to the existing rear plate (rear_plate.usb_openings).
-Phase "holes" (D-043, after the mid-edge holes H5, H6 were added to rev D):
+Phase "holes" (D-095, after the mid-edge holes H5, H6 were added to rev D):
   8. Rebuilds REF_clock_board_revD (now with 6 mounting holes).
   9. Cuts the 2 mid-edge holes in the existing rear plate (rear_plate.center_holes).
 

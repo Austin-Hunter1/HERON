@@ -1,4 +1,4 @@
-"""Give D2 (Panjit SS1030HEWS, SOD-323HE) its own land pattern (D-041).
+"""Give D2 (Panjit SS1030HEWS, SOD-323HE) its own land pattern (D-093).
 
 Why: D2 had the stock SOD-323F land, two 0.5 x 0.5 mm pads 2.2 mm apart.
 The SOD-323HE cathode is a large tab under the body (1.15-1.55 mm long).

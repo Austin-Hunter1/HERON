@@ -20,7 +20,7 @@ FUSION_DIR = "/Users/nathan/Documents/GitHub/HERON/Hardware/payload_rack/fusion"
 REQUIRED_DOC = "flight_rack_asm"   # the only document name that this script accepts
 REQUIRE_UNMODIFIED = True          # refuse a document with unsaved changes (set False only in a test)
 LOG_PATH = "/private/tmp/claude-501/-Users-nathan-Documents-GitHub-HERON/a5eebd81-23b1-4c63-afdc-ac7892e0b5cd/scratchpad/extend_sdr_refs.log"
-# Last run (2026-10-26, D-048): the SDR board stand-ins. One component, REF_SDR_envelope,
+# Last run (2026-10-26, D-100): the SDR board stand-ins. One component, REF_SDR_envelope,
 # placed 4 times as REF_B210_1 ... REF_B200_2. Earlier run: the clock board, the NUC
 # envelope, the SSD and the 8 SMP adapters (phase 5).
 PARTS = ["REF_SDR_envelope"]
