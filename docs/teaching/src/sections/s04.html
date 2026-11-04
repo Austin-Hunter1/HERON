@@ -1,0 +1,61 @@
+<section class="part" id="s04" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>Codes and correlation: many satellites, one frequency</h2>
+    <div class="meta">{{MIN}} MIN · CDMA, PROCESSING GAIN, AMBIGUITY</div>
+    <p class="lede">In the forest each tower had its own tone. GNSS does it differently. Every GPS satellite sends on the same frequency, and each one has a different ±1 code. A code matches itself very well, and it matches every other code very badly. That one property separates the satellites, gives range, and pulls the signal out of the noise.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>First 64 chips of each code</span></div><canvas id="s04-chips" data-aspect="0.16" data-minh="90"></canvas></div>
+      <div class="fig"><div class="cap"><span>Auto-correlation of PRN A, two code periods</span><span>lag in chips (top: km)</span></div><canvas id="s04-auto" data-aspect="0.32" data-minh="170"></canvas></div>
+      <div class="fig"><div class="cap"><span>Cross-correlation: PRN A replica against PRN B signal</span></div><canvas id="s04-cross" data-aspect="0.26" data-minh="150"></canvas></div>
+    </div>
+    <div class="notes">
+      <h3>Auto- and cross-correlation</h3>
+      <div class="eq">
+        $$R_{AB}(k)=\frac{1}{N}\sum_{n=0}^{N-1} c_A[n]\;c_B[(n+k)\bmod N],\qquad N=1023$$
+        <div class="where">\(R_{AA}(0)=1\). All other values of a Gold code stay at \(-1/N\), \(-65/N\) or \(+63/N\): at most −24 dB.</div>
+      </div>
+      <ul>
+        <li><strong>Range:</strong> the lag of the peak is the code delay. One chip is 293 m.</li>
+        <li><strong>Identity:</strong> the replica of PRN A finds nothing in PRN B (bottom plot).</li>
+        <li><strong>Ambiguity:</strong> the code repeats every 1 ms, so the peak repeats every 1023 chips = 300 km. Correlation gives range modulo 300 km. The data bits and the time stamp remove this ambiguity (Part 05).</li>
+      </ul>
+      <div class="controls" id="s04-ctl"></div>
+      <dl class="readouts" id="s04-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Received samples (first 120 chips)</span><span>black-grey: noisy input · colour: clean code</span></div><canvas id="s04-rx" data-aspect="0.22" data-minh="140"></canvas></div>
+      <div class="fig"><div class="cap"><span>Correlate with the PRN A replica, all 1023 lags</span></div><canvas id="s04-corr" data-aspect="0.34" data-minh="180"></canvas></div>
+    </div>
+    <div class="notes">
+      <h3>Finding a signal below the noise</h3>
+      <p>Lower the input SNR to −20 dB. You cannot see the code in the samples any more, but the correlation peak is still clear. Each chip adds the signal coherently. The noise adds randomly. So the sum of \(N\) chips gains a factor \(N\) in SNR.</p>
+      <div class="eq">
+        $$\text{SNR}_\text{out}=\text{SNR}_\text{in}+10\log_{10}(N\,K)\;\text{dB}$$
+        <div class="where">\(N=1023\) chips per ms, \(K\) = ms summed coherently. One ms gives 30.1 dB. Input SNR per chip relates to carrier-to-noise density by \(C/N_0=\text{SNR}_\text{chip}+10\log_{10}(1.023\,\text{MHz})\).</div>
+      </div>
+      <p><strong>In real receivers</strong> we do not loop over each lag. A circular correlation is a product in the frequency domain:</p>
+      <div class="eq">
+        $$R=\mathcal{F}^{-1}\!\left\{\mathcal{F}\{x\}\cdot\mathcal{F}\{c\}^{*}\right\}$$
+        <div class="where">Direct: \(M^2\) multiplies for \(M\) samples. FFT: about \(3M\log_2 M\). For \(M=5000\) samples (1 ms at 5 MS/s): 25 million vs. 0.18 million, for each Doppler bin.</div>
+      </div>
+      <div class="controls" id="s04-ctl2"></div>
+      <dl class="readouts" id="s04-ro2"></dl>
+    </div>
+  </div>
+
+  <div class="panel rev">
+    <div class="notes">
+      <h3>HERON data: the satellites are in there</h3>
+      <p>This is the power spectrum of raw L5 samples from the HERON collect. Six or more satellites are inside this band. You cannot see one of them. The curve is the receiver noise and the front-end filter shape. The narrow spikes are interference. The satellites appear only after correlation.</p>
+      <div class="ask"><b>ASK THE ROOM</b>If the signal is 20 dB below the noise, how would you check that the antenna is connected at all, before you run acquisition?</div>
+    </div>
+    <div class="viz"><div class="fig"><div class="cap"><span>HERON · raw L5 samples · Welch PSD</span><span>20261013_Jiawei_Testing_x2</span></div><img id="s04-psd" alt="Welch power spectral density of raw L5 samples from the HERON collect. The spectrum is the receiver noise shape with no visible satellite signals."></div></div>
+  </div>
+</section>

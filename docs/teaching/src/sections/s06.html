@@ -1,0 +1,65 @@
+<section class="part" id="s06" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>Acquisition: search for code delay and Doppler</h2>
+    <div class="meta">{{MIN}} MIN · SEARCH SPACE, DETECTION THRESHOLD, COARSE TO FINE</div>
+    <p class="lede">Before the receiver can track a satellite, it must find it. It does not know the code delay (1023 options for C/A) or the Doppler (about ±5 kHz). So it tests every pair, and it accepts a pair only when the correlation is above a threshold that noise seldom crosses.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Search space · 3D</span><span>drag to rotate</span></div><canvas id="s06-3d" data-aspect="0.85" data-minh="260"></canvas></div>
+        <div class="fig"><div class="cap"><span>Search space · top view</span><span id="s06-win"></span></div><canvas id="s06-heat" data-aspect="0.85" data-minh="260"></canvas></div>
+      </div>
+      <div class="controls" id="s06-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>The cell test</h3>
+      <p>Each cell is one code delay \(\hat\tau\) and one Doppler \(\hat f_D\). The receiver wipes off the carrier at \(\hat f_D\), correlates with the code at \(\hat\tau\), sums coherently for \(T\), then adds \(K\) of these powers.</p>
+      <div class="eq">
+        $$S(\hat\tau,\hat f_D)=\sum_{k=1}^{K}\Big|\sum_{n\in T_k}x[n]\,c[n-\hat\tau]\,e^{-j2\pi \hat f_D nT_s}\Big|^{2}$$
+        $$\mathbb E\,|z|^2\propto \underbrace{\Lambda^2(\delta\tau)}_{\text{code}}\;\underbrace{\operatorname{sinc}^2(\delta f\,T)}_{\text{Doppler}}\;\tfrac{C}{N_0}T+1$$
+        <div class="where">The code response is a triangle 2 chips wide. The Doppler response is a sinc with first nulls at \(\pm1/T\). So the Doppler bin spacing must be about \(1/(2T)\). A longer \(T\) gives more gain but more Doppler bins.</div>
+      </div>
+      <div class="eq">
+        $$P_{fa,\text{cell}}=Q_K(\gamma)=e^{-\gamma}\sum_{i=0}^{K-1}\frac{\gamma^i}{i!},\qquad P_{fa,\text{cell}}\approx \frac{P_{fa}}{N_\text{cells}}$$
+        <div class="where">With noise only, \(S\) is a sum of \(K\) unit exponentials (power normalised to the noise). Pick the threshold \(\gamma\) from the false-alarm rate you accept over the whole search.</div>
+      </div>
+      <dl class="readouts" id="s06-ro"></dl>
+      <div class="btnrow"><button class="btn" id="s06-redo">New noise</button><button class="btn" id="s06-full">Show whole code range</button></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Doppler slice through the peak</span></div><canvas id="s06-dop" data-aspect="0.7" data-minh="220"></canvas></div>
+        <div class="fig"><div class="cap"><span>Code slice and 3-point peak fit</span></div><canvas id="s06-code" data-aspect="0.7" data-minh="220"></canvas></div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>Coarse, then fine</h3>
+      <p><strong>Coarse:</strong> short \(T\), wide bins, whole search space. It is fast, and it finds the peak to within half a bin and half a chip.</p>
+      <p><strong>Fine:</strong> a longer \(T\) around the coarse peak only. The Doppler response narrows (left plot), so the receiver can use bins 10 times smaller. Then it fits a parabola through the three code samples nearest the peak (right plot).</p>
+      <div class="eq">
+        $$\hat\delta=\frac{y_{-1}-y_{+1}}{2\,(y_{-1}-2y_0+y_{+1})}\;\text{bins}$$
+        <div class="where">The tracking loops need the Doppler to within about a third of the PLL/FLL pull-in range and the code to within the DLL spacing (Part 07).</div>
+      </div>
+      <div class="controls" id="s06-ctl2"></div>
+      <dl class="readouts" id="s06-ro2"></dl>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <h3>HERON data: GPS L1 C/A acquisition, Jiawei x2 collect</h3>
+    <div class="figrow">
+      <div class="fig"><div class="cap"><span>Dwell plan: 4 × 5 ms coherent, 200 Hz grid</span></div><img id="s06-img-dwell" alt="HERON acquisition dwell layout: four blocks of five millisecond coherent integration, and the Doppler response against the 200 Hz search grid."></div>
+    </div>
+    <div class="figrow">
+      <div class="fig"><div class="cap"><span>Code slices: faded = coarse, solid = fine</span></div><img id="s06-img-slices" alt="HERON acquisition correlation against code delay for each satellite, coarse and fine, with detection thresholds."></div>
+      <div class="fig"><div class="cap"><span>Peak power vs. per-PRN threshold: 10 of 11 found</span></div><img id="s06-img-peaks" alt="HERON acquisition peak power per PRN with detection thresholds. G08 is below threshold."></div>
+    </div>
+    <p class="tech">Read the plots with the model above. Each peak is a triangle about 2 chips wide. The thresholds (dashed) differ between PRNs because the dwell differs: the assisted search uses longer dwells for the satellites that it expects to be weak. G08 stays below its threshold, so the receiver does not track it. The fine search raises most peaks by 1 to 3 dB because the bins are closer to the true values.</p>
+  </div>
+</section>

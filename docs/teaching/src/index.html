@@ -1,0 +1,46 @@
+<title>HERON GNSS Signal Course</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Interactive lecture: trilateration, GNSS signals, acquisition, tracking, the pseudorange model and GNSS-R geometry, with HERON data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>/*KATEX_CSS*/</style>
+<style>/*COURSE_CSS*/</style>
+
+<div class="shell">
+  <nav class="side" aria-label="Course parts">
+    <div class="brand"><b>HERON · GNSS-R</b><span>Signal processing course</span></div>
+    <ol class="toc">
+      <!--TOC-->
+    </ol>
+    <div class="tools">
+      <button class="btn" id="present-btn" title="Shortcut: P. Arrow keys step through panels.">Present (P)</button>
+      <button class="btn" id="theme-btn">Theme: system</button>
+    </div>
+  </nav>
+  <main>
+    <div class="wrap">
+      <header class="hero">
+        <div>
+          <div class="eyebrow">HERON team session · about 90 minutes</div>
+          <h1>From forest chimes to water reflections</h1>
+          <p>We start with a person lost in a forest, listening to chimes. Then we build up everything a GNSS receiver must do to turn faint radio noise into a position. We finish with the geometry that lets HERON measure water from a drone. Every figure is live. Move the sliders while we talk. The tracking and acquisition results come from the HERON <code>20261013_Jiawei_Testing_x2</code> collect.</p>
+        </div>
+        <div class="agenda" aria-label="Agenda">
+          <!--AGENDA-->
+        </div>
+      </header>
+      <nav class="mob-toc" aria-label="Course parts"><!--MOBTOC--></nav>
+      <!--SECTIONS-->
+      <footer class="tech" style="border-top:1px solid var(--line);padding-top:16px">
+        Built from <code>docs/teaching/src/</code> with <code>docs/teaching/build.py</code>. Equations follow Morton et al., <i>Position, Navigation, and Timing Technologies in the 21st Century</i>, Ch. 15 (2021), and the public ICDs (IS-GPS-200, IS-GPS-705, IS-GPS-800, Galileo OS SIS ICD, BDS-SIS-ICD B1C/B2a). Real data: HERON tracking and acquisition outputs, collect <code>20261013_Jiawei_Testing_x2</code>.
+      </footer>
+    </div>
+  </main>
+</div>
+<div class="timer" aria-live="off"><span class="clk">0:00</span><span class="bar"><i></i></span><button class="btn" id="timer-reset">Reset</button></div>
+
+<script type="application/json" id="heron-data">/*HERON_DATA*/</script>
+<script>/*KATEX_JS*/</script>
+<script>/*KATEX_AUTORENDER*/</script>
+<script>/*CORE_JS*/</script>
+<!--SECTION_SCRIPTS-->

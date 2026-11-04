@@ -1,0 +1,62 @@
+<section class="part" id="s10" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>GNSS-R geometry and open-loop modelling</h2>
+    <div class="meta">{{MIN}} MIN · DIRECT + REFLECTED · PATH DIFFERENCE · FRESNEL ZONE</div>
+    <p class="lede">HERON receives each satellite twice: once directly with the up-looking antenna, and once after the signal bounces off the surface with the down-looking antenna. The difference between the two paths carries the height of the drone above the reflecting surface. The strength and coherence of the reflection tell us if the surface is water.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Side view · to scale in angle</span><span>image method</span></div><canvas id="s10-geo" data-aspect="0.55" data-minh="280"></canvas></div>
+      <div class="controls" id="s10-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>Derive the path difference</h3>
+      <div class="steps"><button>a · Specular point</button><button>b · Image antenna</button><button>c · Sensitivity</button></div>
+      <div data-step="0" class="stepbody"><p>The law of reflection makes the angle in equal to the angle out. The reflected ray leaves the surface at the satellite elevation \(e\). The antenna, the point below it, and the specular point make a right triangle.</p><div class="eq">$$d=\frac{h}{\tan e},\qquad \overline{SA}=\frac{h}{\sin e}$$</div></div>
+      <div data-step="1" class="stepbody"><p>Mirror the antenna through the surface. The reflected path is as long as a straight line from the satellite to the image antenna. The satellite is far away, so all rays are parallel. The extra length is the projection of the antenna-to-image vector (length \(2h\), straight down) on the ray direction.</p><div class="eq">$$\Delta\rho=\rho_R-\rho_D=2h\sin e$$<div class="where">Plus a lever-arm term for the separation between the two antenna phase centres, and an Earth-curvature term that is negligible below a few km.</div></div></div>
+      <div data-step="2" class="stepbody"><p>Differentiate to see how well we must measure the delay to get the height.</p><div class="eq">$$\frac{\partial\Delta\rho}{\partial h}=2\sin e,\qquad \sigma_h=\frac{\sigma_{\Delta\rho}}{2\sin e}$$<div class="where">High elevations are best. Grazing angles carry almost no height information. With carrier phase, \(\sigma_{\Delta\rho}\) is millimetres, so \(\sigma_h\) is millimetres to centimetres, if the reflection stays coherent.</div></div></div>
+      <dl class="readouts" id="s10-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel rev">
+    <div class="notes">
+      <h3>The first Fresnel zone</h3>
+      <p>Points near the specular point reflect with almost the same path length. Their signals add in phase. Move away until the extra path reaches half a wavelength: from there the contributions start to cancel. That boundary is the first Fresnel zone. It is the footprint of a coherent reflection, and it sets the smallest water body that HERON can resolve.</p>
+      <div class="eq">
+        $$\delta(x,y)\approx\frac{x^2\sin^2 e+y^2}{2\,h/\sin e}=\frac{\lambda}{2}$$
+        $$b=\sqrt{\frac{\lambda h}{\sin e}},\qquad a=\frac{b}{\sin e}$$
+        <div class="where">\(x\) is along the satellite azimuth and \(y\) is across it. The linear terms cancel at the specular point, which is what makes it specular. The colours show the exact extra path. Each band is one more half-wavelength.</div>
+      </div>
+      <dl class="readouts" id="s10-ro2"></dl>
+    </div>
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Top view around the specular point</span><span>Fresnel zones, exact path</span></div><canvas id="s10-fz" data-aspect="0.75" data-minh="280"></canvas></div>
+      <div class="controls" id="s10-ctl2"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Delay waveforms: direct and reflected</span><span>open-loop window on the model delay</span></div><canvas id="s10-wf" data-aspect="0.5" data-minh="240"></canvas></div>
+      <div class="fig"><div class="cap"><span>Coherent part of the reflection vs. surface roughness</span></div><canvas id="s10-coh" data-aspect="0.42" data-minh="200"></canvas></div>
+      <div class="controls" id="s10-ctl3"></div>
+    </div>
+    <div class="notes">
+      <h3>Open-loop modelling</h3>
+      <p>The reflected signal is weak and it fades, so a closed loop on it loses lock. Instead the receiver tracks the strong direct signal and <strong>predicts</strong> where the reflection must be. It then places a bank of correlators around that prediction. This is open-loop tracking.</p>
+      <div class="eq">
+        $$\hat\tau_R=\hat\tau_D+\frac{\Delta\rho_\text{model}}{c},\qquad \hat f_R=\hat f_D-\frac{1}{\lambda}\frac{d\Delta\rho}{dt}=\hat f_D-\frac{2}{\lambda}\big(\dot h\sin e+h\,\dot e\cos e\big)$$
+      </div>
+      <p>Apply the pseudorange model of Part 09 to both paths and subtract:</p>
+      <div class="eq">
+        $$\rho_R-\rho_D=2h\sin e+\Delta T+\Delta b_\text{rx}+\Delta\mathbf{L}\cdot\hat{\mathbf u}+\Delta M+\Delta\varepsilon$$
+        <div class="where">Cancels: satellite clock, receiver clock (shared 10 MHz + PPS clock board, D-025), ionosphere (both paths pass the same ionosphere), orbit error. <strong>Does not cancel:</strong> the extra troposphere along the extra path \(\Delta T\), the inter-channel hardware delay \(\Delta b_\text{rx}\) (cables, front ends, PPS alignment), the antenna lever arm \(\Delta\mathbf L\), multipath and noise.</div>
+      </div>
+      <dl class="readouts" id="s10-ro3"></dl>
+      <div class="ask"><b>ASK THE ROOM</b>A 1 ns difference in cable delay between the two channels is 30 cm of path. How large is that as a height error at 45° elevation, and how would we calibrate it on the ground?</div>
+    </div>
+  </div>
+</section>

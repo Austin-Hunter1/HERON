@@ -1,0 +1,32 @@
+<section class="part" id="s03" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>The signal: carrier × code × data</h2>
+    <div class="meta">{{MIN}} MIN · THREE LAYERS, THREE TIME SCALES</div>
+    <p class="lede">A GNSS signal has three layers multiplied together. A fast carrier puts the signal at the RF frequency, a medium-rate code gives each satellite its identity and gives range, and a slow data stream carries the navigation message. Zoom from nanoseconds to tens of milliseconds to see each layer.</p>
+  </header>
+  <div class="heron"><b>HERON</b><span>For all demonstrations we use the two HERON bands: L1 at 1575.42 MHz (GPS L1 C/A, L1C, Galileo E1, BeiDou B1C) and L5 at 1176.45 MHz (GPS L5, Galileo E5a, BeiDou B2a).</span></div>
+  <div class="panel">
+    <div class="viz">
+      <div class="fig">
+        <div class="cap"><span id="s03-title">GPS L1 C/A, PRN 1</span><span id="s03-span"></span></div>
+        <canvas id="s03-wave" data-aspect="0.62" data-minh="330"></canvas>
+      </div>
+      <div class="controls" id="s03-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>Multiply the layers</h3>
+      <div class="eq">
+        $$s_{L1}(t)=\sqrt{2P}\;D(t)\;C(t)\;\cos\!\left(2\pi f_{L1}t+\theta\right)$$
+        <div class="where">\(D\): navigation data (±1, 50 bit/s). \(C\): C/A code (±1, 1.023 Mchip/s, 1023 chips, 1 ms). \(f_{L1}=154\,f_0\), with \(f_0=10.23\) MHz.</div>
+      </div>
+      <div class="eq">
+        $$s_{L5}(t)=\sqrt{2P}\big[D\,N\!H_{10}\,C_I\cos(2\pi f_{L5}t)-N\!H_{20}\,C_Q\sin(2\pi f_{L5}t)\big]$$
+        <div class="where">L5 has a data channel (I) and a data-free pilot channel (Q), 90° apart. Codes run at 10.23 Mchip/s. Neuman-Hofman overlay codes \(N\!H_{10}\), \(N\!H_{20}\) extend the 1 ms code. \(f_{L5}=115\,f_0\).</div>
+      </div>
+      <p>Multiplying by ±1 flips the carrier phase by 180°. That is binary phase shift keying (BPSK). Zoom to about 2 µs and look for the phase flips on the bottom trace.</p>
+      <dl class="readouts" id="s03-ro"></dl>
+      <div class="ask"><b>ASK THE ROOM</b>One carrier cycle at L1 is 19 cm long. One C/A chip is 293 m long. Which one gives the more precise range, and why do we need both?</div>
+    </div>
+  </div>
+</section>

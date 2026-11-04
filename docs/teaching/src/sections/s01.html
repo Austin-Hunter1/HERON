@@ -1,0 +1,68 @@
+<section class="part" id="s01" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>Trilateration: chimes in a forest</h2>
+    <div class="meta">{{MIN}} MIN · GEOMETRY BEFORE SIGNALS</div>
+    <p class="lede">You are lost in a forest. Three bell towers ring at the same instant on the hour, and each tower has its own tone. You hear three chimes at three different times. Can you find where you are?</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig">
+        <div class="cap"><span>Forest map, 1 km × 0.6 km</span><span>drag the listener</span></div>
+        <canvas id="s01-map" data-aspect="0.6"></canvas>
+      </div>
+      <div class="fig">
+        <div class="cap"><span>What the listener hears: time vs. frequency</span><span>listener's watch</span></div>
+        <canvas id="s01-tf" data-aspect="0.32" data-minh="150"></canvas>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>Each arrival time is a distance</h3>
+      <p>Sound travels at about 343 m/s. If you know when the bells rang, each arrival time gives a circle of possible positions around that tower. Two circles meet at two points. The third circle picks one.</p>
+      <p><strong>The catch:</strong> your watch is wrong by an unknown amount \(b\). Then every circle is too big or too small by the same distance \(v\,b\). Slide the <em>assumed watch error</em>: the circles meet at one point only when your guess is correct.</p>
+      <div class="eq">
+        $$t_i = \frac{\lVert \mathbf{x} - \mathbf{x}_i \rVert}{v} + b, \qquad i = 1,2,3$$
+        <div class="where">Unknowns: \(x, y, b\). Three unknowns need three towers. The tones tell you which tower is which. This is <strong>frequency division</strong> (FDMA).</div>
+      </div>
+      <div class="controls" id="s01-ctl"></div>
+      <div class="btnrow"><button class="btn primary" id="s01-play">Play the chimes</button><button class="btn" id="s01-solve">Solve x, y, b</button></div>
+      <dl class="readouts" id="s01-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig">
+        <div class="cap"><span>Same problem in orbit: four or more satellites, one receiver</span><span>drag to rotate</span></div>
+        <canvas id="s01-globe" data-aspect="0.62"></canvas>
+      </div>
+      <div class="figrow">
+        <div class="fig">
+          <div class="cap"><span>Received RF pulses: time vs. frequency</span></div>
+          <canvas id="s01-pulse" data-aspect="0.62" data-minh="190"></canvas>
+        </div>
+        <div class="fig">
+          <div class="cap"><span>Fit residual and position error vs. assumed clock bias</span></div>
+          <canvas id="s01-resid" data-aspect="0.62" data-minh="190"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>Why a GNSS receiver needs four satellites</h3>
+      <p>Now the towers are satellites about 20 000 km away and the chimes are RF pulses at the speed of light. Each satellite sends at a known time. The receiver measures arrival times with its own cheap clock.</p>
+      <div class="eq">
+        $$\rho_i = \lVert \mathbf{r}^{(i)} - \mathbf{r}_u \rVert + c\,\delta t_u$$
+        <div class="where">Unknowns: \(x_u, y_u, z_u, \delta t_u\). Four unknowns need at least four satellites. A 1 ms clock error is 300 km of range.</div>
+      </div>
+      <p>For each assumed clock bias, the receiver finds the best position and checks how well the ranges agree: the <strong>fit residual</strong> (solid line, right plot). The receiver can compute this. The dashed line is the <strong>position error</strong>. Only we can compute it, because we know the truth.</p>
+      <ul>
+        <li><strong>3 satellites:</strong> the residual is zero for <em>every</em> bias. This is correct, not a bug: 3 equations always fit 3 position unknowns exactly. But the position error is zero at one bias only. The receiver cannot see which one. A whole curve of positions fits (the red line on the globe). You cannot tell which one is correct. The curve runs mostly up and down: a clock error looks like a height error, because all satellites are above you. This is why GNSS height is less precise than horizontal position.</li>
+        <li><strong>4 or more satellites:</strong> the residual is zero at one bias only, and that bias gives the true position.</li>
+      </ul>
+      <p>Turn on Doppler: each satellite moves at about 3.9 km/s. The line-of-sight part of that motion shifts every pulse in frequency by up to about ±5 kHz at L1. The receiver must search for this shift (Part 06).</p>
+      <div class="controls" id="s01-ctl2"></div>
+      <dl class="readouts" id="s01-ro2"></dl>
+    </div>
+  </div>
+</section>

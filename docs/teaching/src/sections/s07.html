@@ -1,0 +1,197 @@
+<section class="part" id="s07" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>Tracking: closed loops for code and carrier</h2>
+    <div class="meta">{{MIN}} MIN · DLL, FLL, PLL · MORTON ET AL. CH. 15</div>
+    <p class="lede">Acquisition gives a rough code delay and Doppler once. Tracking keeps them accurate at every epoch while the satellite and the drone move. Each loop does three things: it correlates, it measures the error with a discriminator, and it filters the error to steer a local replica.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig">
+        <div class="cap"><span>Generic tracking loop</span><span>after Fig. 15.3</span></div>
+        <svg viewBox="0 0 760 300" role="img" aria-label="Block diagram: correlators feed a carrier discriminator and a code discriminator; each goes through a loop filter to a carrier or code reference, which feeds back to the correlators." style="width:100%;height:auto;display:block">
+          <style>
+            .bx{fill:var(--surface);stroke:var(--ink3);stroke-width:1.4}
+            .bx2{fill:var(--eqbg);stroke:var(--accent);stroke-width:1.6}
+            .tx{font:13px var(--ff-b);fill:var(--ink);text-anchor:middle}
+            .ts{font:11px var(--ff-m);fill:var(--ink2);text-anchor:middle}
+            .ar{stroke:var(--ink2);stroke-width:1.5;fill:none;marker-end:url(#s07ah)}
+            .ac{stroke:var(--gps);stroke-width:1.8;fill:none;marker-end:url(#s07ah)}
+            .ad{stroke:var(--gal);stroke-width:1.8;fill:none;marker-end:url(#s07ah)}
+          </style>
+          <defs><marker id="s07ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--ink2)"/></marker></defs>
+          <text class="ts" x="70" y="24">x_b(t): IF samples</text>
+          <path class="ar" d="M70,32 V60"/>
+          <rect class="bx2" x="10" y="62" width="120" height="70" rx="6"/><text class="tx" x="70" y="92">Carrier</text><text class="tx" x="70" y="110">wipe-off</text>
+          <rect class="bx2" x="10" y="168" width="120" height="70" rx="6"/><text class="tx" x="70" y="198">Code wipe-off</text><text class="ts" x="70" y="216">E · P · L</text>
+          <path class="ar" d="M70,132 V166"/>
+          <rect class="bx" x="200" y="62" width="130" height="56" rx="6"/><text class="tx" x="265" y="86">Carrier</text><text class="tx" x="265" y="104">discriminator</text>
+          <rect class="bx" x="200" y="182" width="130" height="56" rx="6"/><text class="tx" x="265" y="206">Code</text><text class="tx" x="265" y="224">discriminator</text>
+          <path class="ac" d="M130,215 H160 V90 H198"/><text class="ts" x="176" y="80">Z_P</text>
+          <path class="ad" d="M130,210 H198"/><text class="ts" x="164" y="202">Z_E, Z_L</text>
+          <rect class="bx" x="390" y="62" width="120" height="56" rx="6"/><text class="tx" x="450" y="86">Carrier loop</text><text class="tx" x="450" y="104">filter (2nd/3rd)</text>
+          <rect class="bx" x="390" y="182" width="120" height="56" rx="6"/><text class="tx" x="450" y="206">Code loop</text><text class="tx" x="450" y="224">filter (1st)</text>
+          <path class="ac" d="M330,90 H388"/><text class="ts" x="360" y="80">δφ+N</text>
+          <path class="ad" d="M330,210 H388"/><text class="ts" x="360" y="200">δτ+N</text>
+          <rect class="bx" x="570" y="62" width="140" height="56" rx="6"/><text class="tx" x="640" y="86">Carrier NCO</text><text class="ts" x="640" y="104">φ̂, f̂_D</text>
+          <rect class="bx" x="570" y="182" width="140" height="56" rx="6"/><text class="tx" x="640" y="206">Code NCO</text><text class="ts" x="640" y="224">τ̂</text>
+          <path class="ac" d="M510,90 H568"/><path class="ad" d="M510,210 H568"/>
+          <path class="ac" d="M640,118 V150 H600 V180" stroke-dasharray="4 3"/><text class="ts" x="690" y="150">Doppler aiding</text>
+          <path class="ac" d="M710,90 H740 V20 H100 V60"/>
+          <path class="ad" d="M640,238 V280 H40 V240"/>
+          <text class="ts" x="420" y="16">carrier replica → wipe-off</text><text class="ts" x="380" y="294">code replica (E, P, L) → correlators</text>
+        </svg>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>What tracking estimates</h3>
+      <ol><li>Code phase \(\tau\) → pseudorange</li><li>Carrier Doppler \(f_D\) → range rate</li><li>Carrier phase \(\phi\) → precise range change</li><li>\(C/N_0\) → signal quality</li><li>Data bit edges → navigation message</li></ol>
+      <div class="eq">
+        $$x_b(t)=A\,D\,C(t+\tau)\,e^{j(\omega_d t+\phi_0)}+N_x$$
+        $$Z(\delta\tau)=A\,D\,T\,R(\delta\tau)\,e^{\,j\phi_0-j(\hat\omega_d-\omega_d)T/2}+N_Z$$
+        <div class="where">When the replica matches, correlation removes the code and the carrier. What is left is the amplitude, the data bit, and the residual phase. <span class="src">Eqs. 15.3, 15.7</span></div>
+      </div>
+      <p>The carrier loop runs every 1 to 20 ms. The code loop can be much slower because the carrier loop aids it: code Doppler = carrier Doppler / 1540 at L1.</p>
+    </div>
+  </div>
+
+  <!-- ===================== DLL ===================== -->
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Correlation function with E, P, L taps</span></div><canvas id="s07-dll-r" data-aspect="0.72" data-minh="230"></canvas></div>
+        <div class="fig"><div class="cap"><span>Discriminator S-curve</span><span>click: new noise</span></div><canvas id="s07-dll-s" data-aspect="0.72" data-minh="230"></canvas></div>
+      </div>
+      <div class="controls" id="s07-dll-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>DLL: delay lock loop</h3>
+      <p>Three replicas are offset by \(-d\), 0 and \(+d\) from the prompt. When the prompt sits on the peak, early and late are equal. When the prompt is late, the early tap is higher. The difference is the error signal.</p>
+      <div class="eq">
+        $$Z_{E,P,L}=\alpha\,R(\delta\tau\mp d,\,0)+N_{E,P,L},\qquad R(\delta\tau)=1-\frac{|\delta\tau|}{T_c}$$
+        $$l_\tau=\frac{|Z_E|-|Z_L|}{|Z_E|+|Z_L|}\;\;\text{(normalised)}\qquad l_\tau\approx\beta\,\delta\tau\ \text{ for } |\delta\tau|\lt d$$
+        <div class="where">Pick other discriminators in the menu (Eq. 15.24 a–f). The linear region ends at \(\pm d\): wide spacing pulls in from far away, narrow spacing is less noisy and less sensitive to multipath. <span class="src">Eqs. 15.11–15.25</span></div>
+      </div>
+      <div class="eq">
+        $$\sigma_\tau=\frac{T_c}{2}\sqrt{\frac{1}{T\,C/N_0}}\ \ \text{(one epoch)},\qquad \sigma_{\tau,\text{loop}}\approx T_c\sqrt{\frac{B_{n}\,D}{2\,C/N_0}\Big(1+\frac{2}{T\,C/N_0\,(2-D)}\Big)}$$
+        <div class="where">\(D=2d/T_c\) is the early-to-late spacing in chips, \(B_n\) the loop noise bandwidth. Less noise: shorter chip, longer \(T\), stronger signal, narrower loop. <span class="src">Eq. 15.23; Kaplan &amp; Hegarty</span></div>
+      </div>
+      <p><strong>The dots</strong> on the S-curve are 120 real discriminator outputs at the present \(\delta\tau\), one for each integration period, with noise at the set C/N0. One output alone is too noisy to steer the replica. The loop filter averages many of them, so the loop jitter is much smaller than the spread of the dots. Lower the C/N0 and watch the cloud grow.</p>
+      <dl class="readouts" id="s07-dll-ro"></dl>
+    </div>
+  </div>
+
+  <!-- ===================== FLL ===================== -->
+  <div class="panel rev">
+    <div class="notes">
+      <h3>FLL: frequency lock loop</h3>
+      <p>A frequency error makes the prompt phasor turn by the same angle each epoch. The FLL measures that turn between two consecutive epochs and divides by the time.</p>
+      <div class="eq">
+        $$l_f=\frac{\operatorname{atan2}\!\big(Q_2,I_2\big)-\operatorname{atan2}\!\big(Q_1,I_1\big)}{2\pi\,(t_2-t_1)}=\delta f+N_f$$
+        <div class="where">The angle wraps at ±π, so the FLL is correct only for \(|\delta f|<1/(2T)\): ±500 Hz at 1 ms, ±25 Hz at 20 ms. A data bit flip between the two epochs adds π. Use the cross/dot form \(\operatorname{atan}(\text{cross}/\text{dot})\) to remove it, at the cost of half the range. <span class="src">Eq. 15.80</span></div>
+      </div>
+      <p>The FLL does not care about the absolute phase, so it tolerates high dynamics and large initial errors. That is why a receiver starts with a wide FLL and hands over to a PLL (Fig. 15.28).</p>
+      <dl class="readouts" id="s07-fll-ro"></dl>
+    </div>
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Prompt phasor, epochs k and k+1</span></div><canvas id="s07-fll-p" data-aspect="1" data-minh="230"></canvas></div>
+        <div class="fig"><div class="cap"><span>FLL output vs. true frequency error</span></div><canvas id="s07-fll-s" data-aspect="1" data-minh="230"></canvas></div>
+      </div>
+      <div class="controls" id="s07-fll-ctl"></div>
+    </div>
+  </div>
+
+  <!-- ===================== PLL ===================== -->
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Prompt on the I/Q plane</span><span>data bit flips the vector</span></div><canvas id="s07-pll-iq" data-aspect="1" data-minh="230"></canvas></div>
+        <div class="fig"><div class="cap"><span>Phase discriminators (Table 15.1)</span></div><canvas id="s07-pll-d" data-aspect="1" data-minh="230"></canvas></div>
+      </div>
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>2nd-order loop: unit step response</span></div><canvas id="s07-pll-step" data-aspect="0.62" data-minh="200"></canvas></div>
+        <div class="fig"><div class="cap"><span>Phase jitter budget vs. C/N0</span><span>3σ + dynamic error</span></div><canvas id="s07-pll-jit" data-aspect="0.62" data-minh="200"></canvas></div>
+      </div>
+      <div class="controls" id="s07-pll-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>PLL: phase lock loop</h3>
+      <p>At lock the prompt lies on the I axis: I holds the data bit, Q holds only noise. Any residual phase error rotates the vector toward Q.</p>
+      <div class="eq">
+        $$l_{\phi}=\operatorname{atan}\!\frac{Q_P}{I_P}\ \ (\text{Costas})\qquad l_{\phi}=\operatorname{atan2}(Q_P,I_P)\ \ (\text{coherent})$$
+        <div class="where">Costas is blind to the data bit, so it has a 180° ambiguity. Pilot channels (L5-Q, E1-C, B1C/B2a pilot, L1C-P) let the receiver use the coherent atan2 with the full ±180° range. <span class="src">Eqs. 15.60–15.63</span></div>
+      </div>
+      <div class="eq">
+        $$H_\phi(s)=\frac{2\zeta\omega_n s+\omega_n^2}{s^2+2\zeta\omega_n s+\omega_n^2},\qquad B_n=\frac{\omega_n}{4}\Big(2\zeta+\frac{1}{2\zeta}\Big)$$
+        $$\sigma_{\phi}^2=\frac{B_n}{C/N_0}\Big(1+\frac{1}{2T\,C/N_0}\Big)\ \text{rad}^2,\qquad \theta_e=\frac{2\pi\,a/\lambda}{\omega_n^{2}}\ \text{rad}$$
+        <div class="where">A 2nd-order loop follows a constant velocity with no error, but a constant line-of-sight acceleration \(a\) leaves the error \(\theta_e\). Wide \(B_n\) follows dynamics; narrow \(B_n\) rejects noise. Rule of thumb: keep \(3\sigma_\phi+\theta_e<45°\). <span class="src">Eqs. 15.64–15.72</span></div>
+      </div>
+      <dl class="readouts" id="s07-pll-ro"></dl>
+    </div>
+  </div>
+
+  <!-- ===================== live closed loop ===================== -->
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Prompt I/Q, last 250 epochs</span><span id="s07-sim-mode"></span></div><canvas id="s07-sim-iq" data-aspect="1" data-minh="240"></canvas></div>
+        <div class="fig"><div class="cap"><span>Loop errors over time</span></div><canvas id="s07-sim-t" data-aspect="1" data-minh="240"></canvas></div>
+      </div>
+      <div class="btnrow"><button class="btn primary" id="s07-run">Run</button><button class="btn" id="s07-reset">Reset</button></div>
+      <div class="controls" id="s07-sim-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>Simulated closed-loop tracking, GPS L1 C/A</h3>
+      <p>This runs all three loops together at 1 ms epochs: a wideband FLL pulls in the frequency, then a PLL takes over; a 1st-order DLL with carrier aiding follows the code. The correlator model is Eq. 15.7 with complex white noise at your \(C/N_0\).</p>
+      <ul>
+        <li>Start with a 60 Hz error and watch the I/Q cloud stop spinning.</li>
+        <li>Drop \(C/N_0\) to 24 dB-Hz: the PLL slips cycles.</li>
+        <li>Choose "5 g acceleration" with \(B_{PLL}=5\) Hz: the dynamic error breaks lock. Raise \(B_{PLL}\) to 18 Hz.</li>
+      </ul>
+      <div class="eq">
+        $$\hat\tau[n]=\hat\tau[n-1]+T\Big(\underbrace{\tfrac{\hat f_D}{1540}}_{\text{carrier aiding}}+4B_{DLL}\,l_\tau[n]\Big)$$
+        <div class="where">Carrier-aided DLL update (after Eq. 15.57). The FLL-to-PLL hand-over follows Fig. 15.28.</div>
+      </div>
+      <dl class="readouts" id="s07-sim-ro"></dl>
+    </div>
+  </div>
+
+  <!-- ===================== HERON real data ===================== -->
+  <div class="panel wide">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between">
+      <div><div class="eyebrow">HERON DATA</div><h3>Real tracking results, Jiawei x2 collect (120 s, NovAtel antenna)</h3></div>
+    </div>
+    <div class="controls" id="s07-real-ctl"></div>
+    <div class="panel" style="gap:16px">
+      <div class="viz">
+        <div class="figrow">
+          <div class="fig"><div class="cap"><span>Prompt I/Q (normalised)</span><span id="s07-real-win"></span></div><canvas id="s07-real-iq" data-aspect="1" data-minh="240"></canvas></div>
+          <div class="fig"><div class="cap"><span>C/N0 (dB-Hz)</span></div><canvas id="s07-real-cn0" data-aspect="1" data-minh="240"></canvas></div>
+        </div>
+        <div class="figrow">
+          <div class="fig"><div class="cap"><span>Doppler (Hz)</span></div><canvas id="s07-real-dop" data-aspect="0.6" data-minh="190"></canvas></div>
+          <div class="fig"><div class="cap"><span>Range change from carrier (km)</span></div><canvas id="s07-real-rng" data-aspect="0.6" data-minh="190"></canvas></div>
+        </div>
+        <div class="figrow">
+          <div class="fig"><div class="cap"><span>DLL discriminator output (chips)</span><span>0.25 s means</span></div><canvas id="s07-real-cerr" data-aspect="0.6" data-minh="190"></canvas></div>
+          <div class="fig"><div class="cap"><span>PLL discriminator output (cycles)</span><span>0.25 s means</span></div><canvas id="s07-real-perr" data-aspect="0.6" data-minh="190"></canvas></div>
+        </div>
+      </div>
+      <div class="notes">
+        <h3>What the loops give us</h3>
+        <div class="eq">
+          $$\rho=c\,\big(t_{rx}-t_{tx}(\hat\tau)\big),\qquad \Phi=\lambda\,\hat\phi_{acc},\qquad \dot\rho=-\lambda\,\hat f_D$$
+          <div class="where">The code gives an absolute but noisy range. The carrier gives a precise range <em>change</em> with an unknown whole number of cycles \(N\).</div>
+        </div>
+        <p><strong>Pull-in vs. steady state:</strong> select "first 3 s" to see the loop start. The I/Q points sweep before the PLL locks. At 60 s they sit in tight clusters.</p>
+        <p><strong>Which component carries data?</strong> Two-component signals show two plots. The data component has two clusters (±1 bits). The pilot has one.</p>
+        <p><strong>Doppler</strong> changes slowly as the satellite geometry changes. Its integral is the range change, which is tens of km in 120 s.</p>
+        <dl class="readouts" id="s07-real-ro"></dl>
+        <div class="ask"><b>ASK THE ROOM</b>The code noise is about 0.02 chips and the carrier noise about 0.01 cycles. Convert both to metres for L1 and L5. Which measurement do we use for GNSS-R height, and what do we lose?</div>
+      </div>
+    </div>
+    <div class="fig"><div class="cap"><span>HERON · G01 code delay residual and Doppler, 45 s run</span><span>report figure</span></div><img id="s07-img-cd" alt="HERON report figure: detrended code delay residual (metres) and Doppler (hertz) for G01 over 45 seconds."></div>
+  </div>
+</section>

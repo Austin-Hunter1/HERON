@@ -1,0 +1,59 @@
+<section class="part" id="s09" data-min="{{MIN}}">
+  <header class="part-h">
+    <div class="num">{{NUM}}</div>
+    <h2>The pseudorange and carrier phase models</h2>
+    <div class="meta">{{MIN}} MIN · ERROR TERMS AND DUAL-FREQUENCY CORRECTION</div>
+    <p class="lede">A pseudorange is not a clean distance. It is the distance plus every delay that the signal met on its way, plus the clock errors at both ends. GNSS-R works by modelling or cancelling these terms, so we must know each one and its size.</p>
+  </header>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="fig"><div class="cap"><span>Size of each term (log scale)</span><span>bar: typical range · dot: value for your settings</span></div><canvas id="s09-bars" data-aspect="0.62" data-minh="330"></canvas></div>
+      <div class="controls" id="s09-ctl"></div>
+    </div>
+    <div class="notes">
+      <h3>Code and carrier observation equations</h3>
+      <div class="eq">
+        $$\rho=r+c\,(\delta t_u-\delta t^s)+I_\rho+T+M_\rho+\varepsilon_\rho$$
+        $$\Phi=r+c\,(\delta t_u-\delta t^s)-I_\Phi+T+\lambda N+M_\Phi+\varepsilon_\Phi$$
+        <div class="where">\(r\): geometric range (with orbit error). \(\delta t_u, \delta t^s\): receiver and satellite clock errors. \(I\): ionosphere. \(T\): troposphere. \(N\): integer ambiguity. \(M\): multipath. \(\varepsilon\): noise. Both equations also hold satellite and receiver hardware delays; we fold them into the clock terms here.</div>
+      </div>
+      <p>The ionosphere is dispersive: it <strong>delays the code</strong> and <strong>advances the carrier</strong> by the same amount. The troposphere is not dispersive: it delays both equally, at all GNSS frequencies.</p>
+      <div class="eq">
+        $$I_\rho=I_\Phi=\frac{40.3\;\text{TEC}}{f^2}\ \text{m}\qquad(\text{TEC in electrons/m}^2,\ 1\ \text{TECU}=10^{16})$$
+        <div class="where">At L1, 1 TECU = 0.162 m. At L5, 1 TECU = 0.291 m.</div>
+      </div>
+      <dl class="readouts" id="s09-ro"></dl>
+    </div>
+  </div>
+
+  <div class="panel rev">
+    <div class="notes">
+      <h3>Code and carrier diverge</h3>
+      <p>Over a satellite pass the slant TEC changes with elevation. The code range grows by \(+I\) and the carrier range shrinks by \(-I\). Code minus carrier is therefore \(2I + \lambda N\) plus noise and multipath. This drift is why carrier smoothing of the code must be done with care.</p>
+      <div class="eq">$$\rho-\Phi=2I-\lambda N+(M_\rho-M_\Phi)+(\varepsilon_\rho-\varepsilon_\Phi)$$</div>
+    </div>
+    <div class="viz"><div class="fig"><div class="cap"><span>One simulated pass, L1</span><span>vertical TEC from the slider</span></div><canvas id="s09-pass" data-aspect="0.55" data-minh="240"></canvas></div></div>
+  </div>
+
+  <div class="panel">
+    <div class="viz">
+      <div class="figrow">
+        <div class="fig"><div class="cap"><span>Before and after the iono-free combination</span></div><canvas id="s09-if" data-aspect="0.72" data-minh="230"></canvas></div>
+        <div class="fig"><div class="cap"><span>Geometry-free combination measures TEC</span></div><canvas id="s09-gf" data-aspect="0.72" data-minh="230"></canvas></div>
+      </div>
+      <div class="controls" id="s09-ctl2"></div>
+    </div>
+    <div class="notes">
+      <h3>Dual frequency: remove the ionosphere</h3>
+      <div class="eq">
+        $$\rho_{IF}=\frac{f_1^2\,\rho_1-f_5^2\,\rho_5}{f_1^2-f_5^2}=2.261\,\rho_1-1.261\,\rho_5$$
+        $$\rho_{GF}=\rho_5-\rho_1=(\gamma-1)\,I_1,\qquad \gamma=\Big(\frac{f_1}{f_5}\Big)^2=1.793$$
+        <div class="where">The iono-free combination removes 99.9 % of the ionosphere (the first-order term). Everything that is not dispersive stays: range, clocks, troposphere. The noise grows: with equal noise on both signals, \(\sigma_{IF}=\sqrt{2.261^2+1.261^2}\,\sigma=2.59\,\sigma\).</div>
+      </div>
+      <p>All seven HERON signals sit on only two carriers (1575.42 and 1176.45 MHz). So one pair of coefficients works for GPS, Galileo and BeiDou.</p>
+      <p><strong>For GNSS-R:</strong> the direct and reflected paths go through the same ionosphere, so the iono term cancels in their difference with no dual-frequency step. Part 10 shows which terms do <em>not</em> cancel.</p>
+      <dl class="readouts" id="s09-ro2"></dl>
+    </div>
+  </div>
+</section>
