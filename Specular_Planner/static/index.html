@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/static/style.css?v=gold1" />
   <link rel="stylesheet" href="/static/flight.css?v=flyhold3" />
   <link rel="stylesheet" href="/static/payload-strip.css?v=2" />
+  <link rel="stylesheet" href="/static/rtk-strip.css?v=6" />
 </head>
 <body class="click-wps" data-view="plan">
   <header id="appbar">
@@ -344,6 +345,75 @@
       </div>
     </div>
 
+    <div id="rtkStrip" class="rtk" data-state="off" data-fix="none" data-acc="none" role="region" aria-label="RTK corrections">
+      <button id="rtkOpen" type="button" class="rtk-bar" aria-expanded="false" aria-controls="rtkPanel">
+        <span id="rtkBadge" class="rtk-badge">RTK off</span>
+        <span class="rtk-line"><b id="rtkState">No base station</b><small id="rtkSub">Set up a base to send corrections</small></span>
+        <span class="rtk-figure" title="Horizontal accuracy the drone's GPS reports"><b id="rtkAcc">—</b><small>drone accuracy</small></span>
+        <svg class="rtk-chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 1.5 6 6l4.5-4.5"/></svg>
+      </button>
+
+      <div id="rtkPanel" class="rtk-panel" hidden>
+        <ol class="rtk-chain" aria-label="Correction path">
+          <li id="rtkNodeBase" class="node"><i></i><b>Base</b><small id="rtkNodeBaseText">Off</small></li>
+          <li id="rtkLinkIn" class="link"><span id="rtkLinkInText"></span></li>
+          <li class="node on"><i></i><b>HERON</b><small>This laptop</small></li>
+          <li id="rtkLinkOut" class="link"><span id="rtkLinkOutText"></span></li>
+          <li id="rtkNodeDrone" class="node"><i></i><b>Drone</b><small id="rtkNodeDroneText">Not connected</small></li>
+        </ol>
+
+        <div id="rtkSurvey" class="rtk-survey" hidden>
+          <div class="meter"><span>Time</span><div class="track"><i id="rtkTimeBar"></i></div><b id="rtkTimeText">0:00</b></div>
+          <div class="meter"><span>Accuracy</span><div class="track"><i id="rtkAccBar"></i></div><b id="rtkAccText">—</b></div>
+        </div>
+
+        <div id="rtkSetup">
+        <section class="rtk-section">
+          <h4>Receiver</h4>
+          <div class="rtk-port">
+            <select id="rtkPort" aria-label="Base station port"></select>
+            <button id="rtkPortRefresh" type="button" class="rtk-icon" title="Look for ports again" aria-label="Look for ports again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+            <select id="rtkBaud" aria-label="Baud rate" title="Only matters for a serial adapter; USB ignores it"><option value="9600">9600</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200" selected>115200</option><option value="230400">230400</option><option value="460800">460800</option></select>
+          </div>
+        </section>
+
+        <section class="rtk-section">
+          <h4>Base position</h4>
+          <div id="rtkMode" class="rtk-options" role="radiogroup" aria-label="Base position">
+            <label class="opt"><input type="radio" name="rtkMode" value="survey" checked />
+              <span><b>Survey here</b><small>The base measures its own position, then starts sending.</small></span></label>
+            <div id="rtkSurveyRow" class="opt-detail">
+              <label><span>At least</span><span class="unit"><input id="rtkMinS" type="number" inputmode="decimal" min="0.5" max="1440" step="any" value="2" /><em>min</em></span></label>
+              <label><span>Until within</span><span class="unit"><input id="rtkAccM" type="number" inputmode="decimal" min="0.01" max="50" step="any" value="2" /><em>m</em></span></label>
+            </div>
+            <label class="opt"><input type="radio" name="rtkMode" value="saved" />
+              <span><b>Saved position</b><small>Starts at once. Set the antenna on the same mark as before.</small></span></label>
+            <div id="rtkSavedRow" class="opt-detail">
+              <ul id="rtkSpots" class="rtk-spots" aria-label="Saved positions"></ul>
+              <p id="rtkSavedEmpty" class="rtk-empty">Nothing saved yet. After a survey finishes, save it below.</p>
+            </div>
+            <label class="opt"><input type="radio" name="rtkMode" value="as_is" />
+              <span><b>Use the receiver's settings</b><small>HERON changes nothing on the base.</small></span></label>
+          </div>
+        </section>
+        </div>
+
+        <div id="rtkSaveRow" class="rtk-save" hidden>
+          <input id="rtkSpotName" maxlength="40" placeholder="Name this position" aria-label="Name for this base position" />
+          <button id="rtkSave" type="button" class="rtk-btn">Save position</button>
+        </div>
+
+        <p id="rtkNote" class="rtk-note" role="status"></p>
+
+        <footer class="rtk-foot">
+          <small id="rtkMsgs"></small>
+          <button id="rtkEdit" type="button" class="rtk-btn">Change setup</button>
+          <button id="rtkStop" type="button" class="rtk-btn">Stop</button>
+          <button id="rtkStart" type="button" class="rtk-btn primary">Start base</button>
+        </footer>
+      </div>
+    </div>
+
     <section id="deckLog" class="deck-log deck-card" aria-label="Messages">
       <header class="log-head">
         <b>Messages</b>
@@ -427,7 +497,8 @@
   <script src="/static/vendor/leaflet/leaflet.js"></script>
   <script src="/static/app.js?v=tiles1"></script>
   <script src="/static/instruments.js?v=2"></script>
-  <script src="/static/flight.js?v=home2"></script>
+  <script src="/static/flight.js?v=rtk1"></script>
   <script src="/static/payload-strip.js?v=2"></script>
+  <script src="/static/rtk-strip.js?v=7"></script>
 </body>
 </html>

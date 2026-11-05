@@ -433,7 +433,8 @@
     const mode = el("abMode");
     mode.textContent = connected ? tel.mode || "—" : "—";
     const gps = el("abGps");
-    gps.textContent = connected && tel.fresh?.gps ? `${tel.gps_fix >= 3 ? "3D" : "No fix"} · ${tel.satellites}` : "—";
+    const fixName = { 3: "3D", 4: "DGPS", 5: "RTK Float", 6: "RTK Fixed" }[tel.gps_fix] || "No fix";
+    gps.textContent = connected && tel.fresh?.gps ? `${fixName} · ${tel.satellites}` : "—";
     gps.className = connected && tel.fresh?.gps ? (tel.gps_fix >= 3 && tel.satellites >= 6 ? "good" : "warn") : "";
     const batt = el("abBatt");
     const pct = connected && tel.fresh?.battery && tel.battery_pct >= 0 ? tel.battery_pct : null;

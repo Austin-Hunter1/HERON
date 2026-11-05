@@ -187,6 +187,59 @@ The service remains bound to localhost. Flight API mutations require a per-proce
 token and same-origin requests; do not expose it through a proxy or public server.
 MAVLink signing and multi-aircraft control are not implemented.
 
+## RTK base station (Fly tab)
+
+HERON can send RTK corrections from a GNSS base station plugged into this laptop to the drone,
+the same job as Mission Planner's **RTK/GPS Inject**. Corrections ride the normal MAVLink link
+(telemetry radio or Herelink) as `GPS_RTCM_DATA`; ArduPilot hands them to the Here4 over DroneCAN.
+
+```
+base receiver --USB--> laptop (HERON) --telemetry radio--> Cube Orange --DroneCAN--> Here4
+```
+
+**Aircraft parameters** (check once, Mission Planner → Config → Full Parameter List):
+
+| Param | Set to | Why |
+|---|---|---|
+| `GPS_INJECT_TO` | 127 | Send corrections to every GPS (already set on the X6) |
+| `GPS_TYPE` | 9 | DroneCAN GPS (Here4) — already set |
+| `GPS_POS1_X/Y/Z` | Antenna offset from the centre of gravity, m (X fwd, Y right, Z down) | At cm accuracy an unset offset shows up as error when the drone tilts |
+| `EK3_SRC1_POSZ` | Leave at 1 (baro) | RTK height can jump if the fix drops to float; use RTK altitude from the log in post-processing |
+
+**Try it with no hardware**
+
+```bash
+.venv/bin/python scripts/rtk_demo.py --show-packets
+```
+
+Opens the planner with a simulated u-blox base and a simulated drone. In Fly, open the RTK bar, pick
+*Simulated base (demo)*, Start base. The survey runs 4x faster; then the drone goes 3D fix -> RTK Float ->
+RTK Fixed while complete corrections keep arriving. `--show-packets` prints every `GPS_RTCM_DATA` the
+planner sends and the RTCM message the drone rebuilt from it. The RTCM contents are filler (real framing
+and checksums, no satellite data), and the rest of the Fly page still waits for a real aircraft.
+
+**At the field**
+
+1. Put the base antenna on a tripod with a clear sky view, 10 m+ from the takeoff spot. Plug the base into the laptop.
+2. Fly tab → **Set up base** on the RTK strip. Pick the base's port.
+3. Choose how the base gets its position:
+   - **Survey-in** (u-blox F9P bases): the base averages its position for at least the minimum time and until it reaches the target accuracy (2 m in about 2–5 min). Then it starts sending.
+   - **Saved spot**: reuse a position you surveyed and saved before. The antenna must go back on the exact same mark. Corrections start immediately.
+   - **As-is**: HERON sends no settings. Use this for a base you set up in u-center or Mission Planner, or one that isn't a u-blox.
+4. Press **Start**. The strip shows the base's progress, then the drone's fix: **3D fix → RTK Float → RTK Fixed** (usually 1–5 min). The top bar GPS readout shows the same.
+5. After a survey-in finishes, **Save this base position** with a name so next time you can use **Saved spot**.
+
+Relative accuracy (drone vs base) is cm-level right away. Absolute accuracy is only as good as the base position: a 2 m survey-in shifts the whole flight by up to ~2 m. For repeatable heights across days, survey once for a long time (or post-process the base), save it, and always set the antenna on the same mark.
+
+**Checks after the flight** (in the `.bin` log): `GPS.Status` 6 = RTK fixed (5 = float, 3 = no RTK), `GPA.HAcc` about 0.01–0.05 m.
+
+Notes:
+- u-blox settings go to the receiver's RAM and battery-backed RAM, never its flash.
+- HERON keeps aircraft auto-connect off the base's port while the base is running.
+- Corrections use about 1–2 kB/s. A 57600 SiK radio or Herelink is fine; ELRS MAVLink may be too slow.
+- Saved spots live in `data/rtk_base.json`.
+- Code: `engine/rtk.py` (RTCM framing, `GPS_RTCM_DATA` fragmenting, u-blox setup), `static/rtk-strip.js`. Tests: `tests/test_rtk.py`.
+
 ## Orbit files
 
 A copy of GPS YUMA, Galileo XML, and BeiDou TLEs ships in `data/`. The app also checks for updates about once a day while it is running.

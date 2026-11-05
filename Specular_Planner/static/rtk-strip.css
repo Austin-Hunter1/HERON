@@ -1,0 +1,221 @@
+/* RTK corrections bar + panel on the Fly deck. Uses the deck tokens from flight.css.
+   The bar is the panel's header: opening it extends the same surface downward instead of
+   floating a second card over the map. */
+.rtk {
+  --rtk-w: 440px;
+  --rtk-fix: var(--deck-faint);
+  position: absolute;
+  top: 74px;
+  left: 0;
+  right: 0;
+  width: var(--rtk-w);
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  z-index: 6;
+  color: var(--deck-ink);
+  font-variant-numeric: tabular-nums;
+}
+body:not([data-view="fly"]) .rtk { display: none; }
+/* Before the drone connects the deck shows only its "Looking for your aircraft" card. Keep RTK
+   reachable there so the base can start (and survey) before the drone is powered. */
+body[data-view="fly"] #deck:not(.attached) > #rtkStrip.rtk { display: block !important; top: 16px; }
+body[data-view="fly"] #deck:not(.attached) > #rtkStrip .rtk-bar { background: var(--deck-solid); }
+.rtk[data-acc="none"] .rtk-figure { display: none; }
+.rtk[data-acc="none"] .rtk-bar { grid-template-columns: auto 1fr 14px; }
+
+.rtk[data-fix="fixed"] { --rtk-fix: var(--live); }
+.rtk[data-fix="float"] { --rtk-fix: var(--warn); }
+.rtk[data-fix="base"] { --rtk-fix: var(--info); }
+.rtk[data-fix="bad"] { --rtk-fix: var(--bad); }
+
+/* ---- bar */
+#deck .rtk-bar {
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto 1fr auto 14px;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px 8px 10px;
+  text-align: left;
+  color: inherit;
+  background: var(--deck);
+  border: 1px solid var(--deck-line);
+  border-radius: 14px;
+  box-shadow: var(--deck-shadow);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  cursor: pointer;
+}
+#deck .rtk-bar:hover:not(:disabled) { color: inherit; background: rgba(19, 28, 38, 0.94); border-color: var(--deck-line-strong); }
+.rtk.open #rtkOpen.rtk-bar { background: var(--deck-solid); }
+.rtk.open .rtk-bar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+
+.rtk-badge {
+  min-width: 74px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  color: var(--rtk-fix);
+  background: color-mix(in srgb, var(--rtk-fix) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rtk-fix) 38%, transparent);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: center;
+  white-space: nowrap;
+}
+.rtk[data-fix="none"] .rtk-badge { color: var(--deck-muted); background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--deck-line-strong); }
+
+.rtk-line { min-width: 0; }
+.rtk-line b { display: block; font-size: 13.5px; font-weight: 650; line-height: 1.25; }
+.rtk-line small {
+  display: block; overflow: hidden; color: var(--deck-muted); font-size: 12px; line-height: 1.35;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.rtk-line small.err { color: var(--bad); }
+
+.rtk-figure { padding-left: 14px; border-left: 1px solid var(--deck-line); text-align: right; }
+.rtk-figure b { display: block; font-size: 17px; font-weight: 650; line-height: 1.1; letter-spacing: -0.01em; }
+.rtk-figure small { display: block; color: var(--deck-faint); font-size: 10.5px; }
+.rtk[data-fix="fixed"] .rtk-figure b { color: var(--live); }
+
+.rtk-chev { width: 12px; height: 8px; fill: none; stroke: var(--deck-muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease; }
+.rtk.open .rtk-chev { transform: rotate(180deg); }
+
+/* ---- panel */
+.rtk-panel {
+  padding: 4px 16px 14px;
+  background: var(--deck-solid);
+  border: 1px solid var(--deck-line);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  box-shadow: var(--deck-shadow);
+  max-height: calc(100vh - var(--bar-h) - 120px);
+  overflow-y: auto;
+}
+.rtk-panel[hidden] { display: none; }
+.rtk.open .rtk-panel { animation: rtk-open 160ms ease-out; }
+@keyframes rtk-open { from { opacity: 0; transform: translateY(-4px); } }
+
+/* The correction path: base -> laptop -> drone. The one place that moves. */
+.rtk-chain {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto;
+  align-items: start;
+  margin: 0 0 14px;
+  padding: 10px 4px 14px;
+  list-style: none;
+  border-bottom: 1px solid var(--deck-line);
+}
+.rtk-chain .node { display: grid; justify-items: center; gap: 3px; min-width: 74px; text-align: center; }
+.rtk-chain .node i {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--deck-solid); box-shadow: inset 0 0 0 2px var(--deck-faint);
+}
+.rtk-chain .node b { margin-top: 3px; font-size: 12.5px; font-weight: 650; }
+.rtk-chain .node small { color: var(--deck-muted); font-size: 11px; white-space: nowrap; }
+.rtk-chain .node.on i { background: var(--live); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live) 18%, transparent); }
+.rtk-chain .node.wait i { background: var(--info); box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 18%, transparent); }
+.rtk-chain .node.warn i { background: var(--warn); }
+.rtk-chain .node.bad i { background: var(--bad); }
+.rtk-chain .node.float i { background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 18%, transparent); }
+
+.rtk-chain .link { position: relative; height: 12px; margin: 0 -4px; }
+.rtk-chain .link::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 2px;
+  background: repeating-linear-gradient(90deg, var(--deck-line-strong) 0 4px, transparent 4px 8px);
+}
+.rtk-chain .link.on::before {
+  background: repeating-linear-gradient(90deg, var(--live) 0 6px, transparent 6px 12px);
+  background-size: 12px 2px;
+  animation: rtk-flow 0.9s linear infinite;
+}
+.rtk-chain .link span {
+  position: absolute; left: 0; right: 0; top: 14px; color: var(--deck-faint); font-size: 10.5px; text-align: center; white-space: nowrap;
+}
+.rtk-chain .link.on span { color: var(--deck-muted); }
+@keyframes rtk-flow { to { background-position: 12px 0; } }
+
+/* Survey progress */
+.rtk-survey { display: grid; gap: 8px; margin: 0 0 16px; }
+.rtk-survey[hidden] { display: none; }
+.meter { display: grid; grid-template-columns: 64px 1fr 92px; align-items: center; gap: 10px; font-size: 12px; }
+.meter span { color: var(--deck-muted); }
+.meter b { font-weight: 600; text-align: right; white-space: nowrap; }
+.meter .track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.meter .track i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--info); transition: width 600ms ease; }
+.meter .track i.done { background: var(--live); }
+
+/* Sections */
+.rtk-section { margin: 0 0 14px; }
+.rtk-section h4 { margin: 0 0 8px; color: var(--deck-muted); font-size: 12px; font-weight: 600; }
+
+.rtk-panel select,
+.rtk-panel input:not([type="radio"]) {
+  height: 34px; padding: 0 10px; border: 1px solid var(--deck-line-strong); border-radius: 8px;
+  background: #0d151c; color: var(--deck-ink); font: 500 13px/1 inherit; font-family: inherit;
+}
+.rtk-panel select:focus-visible,
+.rtk-panel input:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+
+.rtk-port { display: grid; grid-template-columns: 1fr 34px 96px; gap: 6px; }
+.rtk-port select { min-width: 0; }
+#deck .rtk-icon { width: 34px; min-height: 34px; padding: 0; display: grid; place-items: center; }
+.rtk-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.rtk-options { display: grid; border: 1px solid var(--deck-line); border-radius: 10px; overflow: hidden; }
+.rtk-options .opt {
+  display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  padding: 11px 12px; cursor: pointer; border-top: 1px solid var(--deck-line);
+}
+.rtk-options .opt:first-child { border-top: 0; }
+.rtk-options .opt:hover { background: rgba(255, 255, 255, 0.03); }
+.rtk-options .opt:has(input:checked) { background: rgba(255, 255, 255, 0.05); }
+.rtk-options .opt input { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--live); }
+.rtk-options .opt b { display: block; font-size: 13px; font-weight: 600; }
+.rtk-options .opt small { display: block; margin-top: 2px; color: var(--deck-muted); font-size: 12px; line-height: 1.4; }
+.opt-detail { display: none; padding: 0 12px 12px 40px; background: rgba(255, 255, 255, 0.05); }
+.rtk-options .opt:has(input:checked) + .opt-detail { display: grid; }
+#rtkSurveyRow { grid-template-columns: 1fr 1fr; gap: 10px; }
+#rtkSurveyRow label > span:first-child { display: block; margin-bottom: 4px; color: var(--deck-muted); font-size: 11.5px; }
+.unit { position: relative; display: block; }
+.rtk-panel .unit input { width: 100%; padding-right: 40px; box-sizing: border-box; -moz-appearance: textfield; }
+.unit input::-webkit-outer-spin-button, .unit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.unit em { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: var(--deck-faint); font-size: 12.5px; font-style: normal; pointer-events: none; }
+.unit input:invalid { border-color: var(--bad); }
+
+.rtk-spots { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rtk-spots li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+#deck .rtk-spots button.pick {
+  display: grid; gap: 1px; min-height: 40px; padding: 6px 10px; text-align: left;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+}
+#deck .rtk-spots button.pick[aria-pressed="true"] { background: rgba(61, 220, 151, 0.08); border-color: rgba(61, 220, 151, 0.45); }
+.rtk-spots .pick b { font-size: 12.5px; font-weight: 600; }
+.rtk-spots .pick small { color: var(--deck-muted); font-size: 11px; }
+#deck .rtk-spots button.forget { min-height: 28px; padding: 0 8px; background: transparent; border-color: transparent; color: var(--deck-faint); font-size: 11.5px; cursor: pointer; }
+#deck .rtk-spots button.forget:hover { color: var(--bad); background: transparent; }
+.rtk-empty { margin: 0; color: var(--deck-muted); font-size: 12px; }
+.rtk-empty[hidden] { display: none; }
+
+.rtk-save { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 0 0 14px; padding: 12px; border-radius: 10px; background: rgba(61, 220, 151, 0.07); box-shadow: inset 0 0 0 1px rgba(61, 220, 151, 0.28); }
+.rtk-save[hidden] { display: none; }
+.rtk-save input { min-width: 0; }
+.rtk-save input::placeholder { color: var(--deck-faint); }
+
+.rtk-note { min-height: 0; margin: 0 0 10px; color: var(--deck-muted); font-size: 12px; line-height: 1.45; }
+.rtk-note:empty { display: none; }
+.rtk-note.err { color: var(--bad); }
+
+.rtk-foot { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--deck-line); }
+.rtk-foot small { overflow: hidden; color: var(--deck-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+#deck .rtk-btn { min-height: 34px; padding: 0 14px; border-radius: 8px; font-size: 12.5px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+#deck .rtk-btn.primary { color: #06140d; background: var(--live); border-color: transparent; }
+#deck .rtk-btn.primary:hover:not(:disabled) { color: #06140d; background: #5ee8ab; }
+#deck .rtk-btn[hidden], #rtkSetup[hidden] { display: none; }
+
+@media (max-width: 1180px) { .rtk { --rtk-w: 400px; } .rtk-figure small { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .rtk-chain .link.on::before, .rtk.open .rtk-panel { animation: none; }
+  .meter .track i, .rtk-chev { transition: none; }
+}

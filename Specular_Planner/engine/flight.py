@@ -238,6 +238,8 @@ class FlightService:
         self.auto = {"enabled": False, "status": "", "paused": None, "ports": []}
         self.auto_retry = {}
         self.auto_wake = threading.Event()
+        # Serial ports another part of HERON owns (the RTK base). Auto-connect never opens these.
+        self.reserved_ports = set()
 
     def event(self, message, source="heron", severity=HERON_INFO):
         with self.events_lock:
@@ -284,7 +286,7 @@ class FlightService:
             self.auto.update(ports=[], status="Install requirements.txt to use USB.")
             return
         self.auto["ports"] = ports
-        found = [p["device"] for p in ports if p["autopilot"]]
+        found = [p["device"] for p in ports if p["autopilot"] and p["device"] not in self.reserved_ports]
         if self.auto["paused"] not in found:
             self.auto["paused"] = None
         link = self.link
@@ -1049,6 +1051,10 @@ class MavlinkLink:
                 raise FlightError("Aircraft heartbeat expired; no further commands sent.")
             getattr(self.conn.mav, method)(*args)
 
+    def send_rtcm(self, flags, length, data):
+        """GPS_RTCM_DATA for RTK corrections (engine/rtk.py). ArduPilot forwards it to the GPS."""
+        self._send("gps_rtcm_data_send", flags, length, data)
+
     def _receive(self):
         heartbeat_at = 0
         try:
@@ -1110,6 +1116,9 @@ class MavlinkLink:
             # Course over ground is meaningless when hovering; ArduPilot sends it once moving on a 3D fix.
             s.update(gps_fix=m.fix_type, satellites=0 if m.satellites_visible == 255 else m.satellites_visible,
                      course=m.cog / 100 if m.fix_type >= 3 and m.cog != 65535 and 50 <= m.vel != 65535 else None)
+            # MAVLink 2 extensions, in mm; 0 means the GPS did not report it. Fix type 5 = RTK float, 6 = RTK fixed.
+            h_acc, v_acc = getattr(m, "h_acc", 0), getattr(m, "v_acc", 0)
+            s.update(gps_h_acc=h_acc / 1000 if h_acc else None, gps_v_acc=v_acc / 1000 if v_acc else None)
             self.stamps["gps"] = now
         elif kind == "SYS_STATUS":
             needed = m.onboard_control_sensors_enabled & m.onboard_control_sensors_present

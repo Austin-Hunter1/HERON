@@ -60,6 +60,7 @@ STATIC = ROOT / "static"
 OUTPUT = ROOT / "output"
 
 from engine.payload import payload_api
+from engine.rtk import RtkService, rtk_api
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
 flight = FlightService(LIVE_TRANSPORTS, DATA / "launch_checks_fly.json", DEFAULT_SKIPPED_CHECKS)
@@ -67,6 +68,9 @@ sim = FlightService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_C
 app.register_blueprint(flight_api(flight))
 app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
 app.register_blueprint(payload_api(flight, sim))
+# RTK base station: forwards corrections from a base on this laptop to the real aircraft (Fly only).
+rtk = RtkService(flight, DATA / "rtk_base.json")
+app.register_blueprint(rtk_api(rtk))
 
 _SATS = None
 _LAKE = None
