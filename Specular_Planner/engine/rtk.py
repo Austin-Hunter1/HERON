@@ -341,6 +341,7 @@ class RtkService:
         self.sent_frames = 0
         self.unsent_frames = 0
         self.station = None              # {"ecef", "lat", "lon", "h"}
+        self.early = None                # survey stopped by hand: {"ecef", "acc_m", "duration_s"}
         self.svin = None
         self.acks = {"ack": 0, "nak": 0, "sent": 0}
         self.config_at = None
@@ -368,7 +369,9 @@ class RtkService:
         if not name:
             raise RtkError("Give the spot a name, e.g. 'Reservoir north lot'.")
         with self.lock:
-            if self.svin and self.svin["valid"]:
+            if self.early:
+                ecef, acc, source = self.early["ecef"], self.early["acc_m"], "survey-in (stopped early)"
+            elif self.svin and self.svin["valid"]:
                 ecef, acc, source = self.svin["ecef"], self.svin["acc_m"], "survey-in"
             elif self.station:
                 ecef, acc, source = self.station["ecef"], None, "base report"
@@ -380,6 +383,30 @@ class RtkService:
                              "lat": round(lat, 8), "lon": round(lon, 8), "h_m": round(h, 3), "source": source,
                              "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
         self._store(positions[:20])
+        return self.snapshot()
+
+    def finish_survey(self):
+        """Stop a survey-in now and send corrections from the position averaged so far.
+
+        Only the absolute position of the whole flight depends on this; the drone's position
+        relative to the base is RTK-accurate either way.
+        """
+        with self.lock:
+            sv = self.svin
+            if not (self.running and self.port is not None and sv and sv["active"] and sv["duration_s"] >= 10):
+                raise RtkError("There is no survey in progress to finish yet.")
+            ecef, acc = sv["ecef"], max(sv["acc_m"], 0.01)
+            blob = (legacy_setup("saved", ecef=ecef, fixed_acc_m=acc) if self.receiver == "m8"
+                    else fixed_setup(ecef, acc))
+            try:
+                self.port.write(blob)
+            except Exception as exc:
+                raise RtkError(f"Could not reach the base: {exc}") from exc
+            self.early = {"ecef": ecef, "acc_m": acc, "duration_s": sv["duration_s"]}
+            self.svin = dict(sv, active=False, valid=True)
+            self.acks = {"ack": 0, "nak": 0, "sent": _count_cfg(blob)}
+            self.config_at = self.clock()
+            self.legacy = b""
         return self.snapshot()
 
     def forget_position(self, name):
@@ -510,7 +537,11 @@ class RtkService:
             _, (cls, mid), payload = item
             with self.lock:
                 if (cls, mid) == (0x01, 0x3B):
-                    self.svin = parse_nav_svin(payload)
+                    sv = parse_nav_svin(payload)
+                    if self.early and sv and not sv["active"]:
+                        sv = dict(sv, ecef=self.early["ecef"], acc_m=self.early["acc_m"],
+                                  duration_s=self.early["duration_s"], valid=True)
+                    self.svin = sv
                 elif cls == 0x05 and len(payload) >= 2 and payload[0] == 0x06 and payload[1] in CFG_IDS:
                     if mid == 0x01:
                         self.acks["ack"] += 1
@@ -616,6 +647,8 @@ class RtkService:
                 "sent_frames": self.sent_frames, "unsent_frames": self.unsent_frames,
                 "aircraft": aircraft, "saved": self._load(),
                 "can_save": bool((self.svin and self.svin["valid"]) or self.station),
+                "finished_early": self.early is not None,
+                "can_finish": bool(self.running and self.svin and self.svin["active"] and self.svin["duration_s"] >= 10),
             }
 
 
@@ -680,6 +713,10 @@ def rtk_api(service, prefix="/api/rtk"):
     @bp.post("/save")
     def save():
         return jsonify(service.save_position((request.get_json() or {}).get("name")))
+
+    @bp.post("/finish")
+    def finish():
+        return jsonify(service.finish_survey())
 
     @bp.post("/forget")
     def forget():

@@ -1,13 +1,13 @@
 // RTK corrections bar + panel for the Fly deck. A base station on this laptop sends RTCM corrections;
 // engine/rtk.py forwards them to the drone over the MAVLink link. The bar shows the drone's fix;
-// the panel shows the path base -> HERON -> drone and the base's setup.
+// the panel holds the base's setup and one action bar (text actions left, one primary action right).
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const root = $("rtkStrip");
   if (!root) return;
 
-  let token = "", last = null, busy = false, open = false, noteUntil = 0, portsKey = "", spot = null, editing = false;
+  let token = "", last = null, busy = false, open = false, noteUntil = 0, portsKey = "", spot = null, editing = false, naming = false;
 
   const flying = () => document.body.dataset.view === "fly";
   const clock = (s) => {
@@ -71,8 +71,8 @@
       return { fix: "base", badge: "Survey", title: `Base surveying  ${clock(sv.duration_s)}`, sub: `Within ${metres(sv.acc_m)} so far, target ${metres(Number(s.options?.acc_m))}` };
     }
     if (base === "silent") return { fix: "bad", badge: "Base", title: "No data from the base", sub: s.rx_age_s == null ? "Check the port and that the base is outputting RTCM." : `Nothing for ${Math.round(s.rx_age_s)} s` };
-    if (!a.connected) return { fix: "base", badge: "Ready", title: "Base ready", sub: "Corrections start when the drone connects" };
-    if (a.fix === 6) return { fix: "fixed", badge: "Fixed", title: "RTK fixed", sub: `Sending ${rate(s.rate_bps)}${a.baseline_m ? ", " + distance(a.baseline_m) + " from base" : ""}` };
+    if (!a.connected) return { fix: "base", badge: "Ready", title: "Base ready", sub: s.finished_early ? `Survey stopped early, base within ${metres(s.survey?.acc_m)}` : "Corrections start when the drone connects" };
+    if (a.fix === 6) return { fix: "fixed", badge: "Fixed", title: "RTK fixed", sub: a.baseline_m ? `${distance(a.baseline_m)} from base, ${rate(s.rate_bps)}` : `Sending ${rate(s.rate_bps)}` };
     if (a.fix === 5) return { fix: "float", badge: "Float", title: "RTK float", sub: "Converging. Usually fixed within a few minutes." };
     return { fix: "base", badge: a.fix_name === "—" ? "No GPS" : a.fix_name.replace(" fix", ""), title: "Waiting for RTK", sub: `Sending ${rate(s.rate_bps) || "corrections"}. The drone needs a clear sky view.` };
   }
@@ -91,29 +91,29 @@
     $("rtkAcc").textContent = a.h_acc_m != null ? metres(a.h_acc_m) : "—";
     root.dataset.acc = a.h_acc_m != null ? "some" : "none";
     if (open) renderPanel();
+    align();
   }
 
   function renderPanel() {
     const s = last || {}, a = s.aircraft || {}, base = s.base_state, running = !!s.running;
+    const sv = s.survey;
+    const surveying = running && base === "surveying" && sv;
+    const showSetup = !running || editing;
+    if (!running || surveying || !s.can_save) naming = false;
 
-    // Correction path
-    const baseNode = $("rtkNodeBase");
-    baseNode.className = "node " + ({ surveying: "wait", receiving: "on", sending: "on", silent: "warn", error: "bad" }[base] || "");
-    $("rtkNodeBaseText").textContent = { off: "Off", surveying: "Surveying", receiving: "Ready", sending: "Ready", silent: "No data", error: "Disconnected" }[base] || "—";
-    const inOn = running && s.rx_age_s != null && s.rx_age_s < 5;
-    $("rtkLinkIn").classList.toggle("on", inOn);
-    $("rtkLinkInText").textContent = inOn ? rate(s.rx_rate_bps) : "";
-    const outOn = inOn && a.connected && s.rate_bps > 0;
-    $("rtkLinkOut").classList.toggle("on", outOn);
-    $("rtkLinkOutText").textContent = outOn ? rate(s.rate_bps) : running && inOn && !a.connected ? "waiting" : "";
-    const drone = $("rtkNodeDrone");
-    drone.className = "node " + (!a.connected ? "" : a.fix === 6 ? "on" : a.fix === 5 ? "float" : "wait");
-    $("rtkNodeDroneText").textContent = !a.connected ? "Not connected" : a.fix === 6 || a.fix === 5 ? `${a.fix === 6 ? "Fixed" : "Float"}, ${metres(a.h_acc_m)}` : a.fix_name;
+    // Live facts while the base runs and isn't surveying
+    $("rtkFacts").hidden = !running || surveying || showSetup;
+    if (running && !surveying) {
+      const pos = s.base_position;
+      const how = s.options?.mode === "saved" ? `Saved, ${s.options.spot}`
+        : s.options?.mode === "as_is" ? "From the receiver"
+        : sv && sv.acc_m ? `Surveyed, within ${metres(sv.acc_m)}${s.finished_early ? " (stopped early)" : ""}` : "Surveyed";
+      $("rtkFactBase").textContent = pos || s.options?.mode !== "survey" ? how : "Waiting for the base";
+      $("rtkFactLink").textContent = !a.connected ? "Waiting for the drone" : s.rate_bps ? `${rate(s.rate_bps)} to the drone` : "Nothing sent yet";
+    }
 
     // Survey progress
-    const sv = s.survey;
-    const surveying = base === "surveying" && sv;
-    $("rtkSurvey").hidden = !surveying;
+    $("rtkSurvey").hidden = !surveying || showSetup;
     if (surveying) {
       const minS = Number(s.options?.min_s) || 120, target = Number(s.options?.acc_m) || 2;
       const tFrac = Math.min(1, sv.duration_s / minS), aFrac = sv.acc_m ? Math.min(1, target / sv.acc_m) : 0;
@@ -148,25 +148,22 @@
       list.dataset.key = key;
     }
     $("rtkSavedEmpty").hidden = saved.length > 0;
-    $("rtkSaveRow").hidden = !(running && s.can_save);
-
-    // Actions. While the base runs, its setup folds away behind "Change setup".
-    const showSetup = !running || editing;
     $("rtkSetup").hidden = !showSetup;
-    $("rtkEdit").hidden = showSetup;
-    const start = $("rtkStart");
-    start.hidden = !showSetup;
-    start.textContent = running ? "Apply and restart" : "Start base";
-    start.disabled = busy || !$("rtkPort").value || (mode() === "saved" && !spot);
-    $("rtkStop").hidden = !running;
+    $("rtkSaveRow").hidden = !naming;
+
+    // Action bar: at most one primary button, chosen by state.
+    const primary = showSetup ? "rtkStart" : surveying ? "rtkFinish" : naming ? "rtkSave" : s.can_save ? "rtkSaveOpen" : null;
+    ["rtkStart", "rtkFinish", "rtkSave", "rtkSaveOpen"].forEach((id) => { $(id).hidden = id !== primary; });
+    $("rtkStart").textContent = running ? "Restart base" : "Start base";
+    $("rtkStart").disabled = busy || !$("rtkPort").value || (mode() === "saved" && !spot);
+    $("rtkFinish").disabled = busy || !s.can_finish;
+    $("rtkSave").disabled = busy;
+    $("rtkSaveOpen").disabled = busy;
+    $("rtkEdit").hidden = !running || showSetup || naming;
+    $("rtkStop").hidden = !running || showSetup || naming;
+    $("rtkCancel").hidden = !((running && editing) || naming);
     $("rtkStop").disabled = busy;
-    const types = Object.keys(s.messages || {});
-    $("rtkMsgs").textContent = running && types.length ? "Receiving " + types.join(", ") : "";
-    $("rtkMsgs").title = Object.entries(s.messages || {}).map(([k, v]) => `RTCM ${k}: ${v}`).join("\n");
-    if (Date.now() > noteUntil) {
-      const slow = a.connected && running && a.transport && !["serial", "tcp", "herelink_hotspot", "herelink_client"].includes(a.transport);
-      note(slow ? "Corrections need about 1–2 kB/s on the drone link. ELRS may be too slow." : "");
-    }
+    if (Date.now() > noteUntil) note("");
   }
 
   async function loadPorts() {
@@ -193,7 +190,7 @@
 
   function toggle(next) {
     open = next ?? !open;
-    if (!open) editing = false;
+    if (!open) editing = naming = false;
     root.classList.toggle("open", open);
     $("rtkPanel").hidden = !open;
     $("rtkOpen").setAttribute("aria-expanded", String(open));
@@ -224,11 +221,16 @@
     if (m === "saved") body.spot = spot;
     if (await send("start", body)) { editing = false; note(m === "survey" ? "Survey started." : "Base started."); }
   });
+  $("rtkFinish").addEventListener("click", async () => {
+    if (await send("finish")) note("Survey stopped. The base is sending from the position averaged so far.");
+  });
   $("rtkStop").addEventListener("click", async () => { if (await send("stop")) { editing = false; note("Base stopped."); } });
   $("rtkEdit").addEventListener("click", () => { editing = true; loadPorts(); renderPanel(); });
+  $("rtkCancel").addEventListener("click", () => { editing = naming = false; note(""); renderPanel(); });
+  $("rtkSaveOpen").addEventListener("click", () => { naming = true; renderPanel(); $("rtkSpotName").focus(); });
   $("rtkSave").addEventListener("click", async () => {
     const name = $("rtkSpotName").value;
-    if (await send("save", { name })) { spot = name.trim(); $("rtkSpotName").value = ""; note(`Saved “${spot}”.`); }
+    if (await send("save", { name })) { spot = name.trim(); naming = false; $("rtkSpotName").value = ""; note(`Saved “${spot}”.`); }
   });
   $("rtkSpotName").addEventListener("keydown", (e) => { if (e.key === "Enter") $("rtkSave").click(); });
   ["rtkMinS", "rtkAccM"].forEach((id) => {
@@ -238,7 +240,28 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && open) toggle(false); });
   document.addEventListener("pointerdown", (e) => { if (open && !root.contains(e.target)) toggle(false); });
 
-  new MutationObserver(() => { if (!flying() && open) toggle(false); poll(); })
+  // Sit directly under the payload strip, on the same centre line.
+  // Before the drone connects the payload strip is hidden and the CSS centring applies instead.
+  const deck = document.getElementById("deck");
+  const payload = document.getElementById("payloadStrip");
+  function align() {
+    const r = payload?.getBoundingClientRect();
+    if (!deck || !payload || !deck.classList.contains("attached") || !r || !r.width) {
+      ["left", "right", "top", "margin"].forEach((k) => root.style.removeProperty(k));
+      return;
+    }
+    const d = deck.getBoundingClientRect();
+    const w = root.getBoundingClientRect().width;
+    root.style.left = `${Math.round(r.left - d.left + (r.width - w) / 2)}px`;
+    root.style.right = "auto";
+    root.style.top = `${Math.round(r.bottom - d.top + 8)}px`;
+    root.style.margin = "0";
+  }
+  if (payload && "ResizeObserver" in window) new ResizeObserver(align).observe(payload);
+  if (deck) new MutationObserver(align).observe(deck, { attributes: true, attributeFilter: ["class"] });
+  window.addEventListener("resize", align);
+
+  new MutationObserver(() => { if (!flying() && open) toggle(false); poll(); align(); })
     .observe(document.body, { attributes: true, attributeFilter: ["data-view"] });
   setInterval(poll, 1000);
   poll();

@@ -335,6 +335,29 @@ class ServiceTests(unittest.TestCase):
         finally:
             svc.close()
 
+    def test_finish_survey_early_fixes_the_base_at_the_mean_so_far(self):
+        self.svc.start({"port": "/dev/base", "mode": "survey", "min_s": 600, "acc_m": 0.5})
+        for _ in range(3):
+            self.serial.push(ack())
+        with self.assertRaises(RtkError):
+            self.svc.finish_survey()                                   # nothing surveyed yet
+        self.serial.push(nav_svin(dur=95, acc_m=1.8, valid=0, active=1))
+        s = self.wait(lambda s: s["can_finish"])
+        before = len(self.serial.written)
+        s = self.svc.finish_survey()
+        self.assertTrue(s["finished_early"])
+        self.assertFalse(s["can_finish"])
+        blobs = [p for k, _, p in StreamParser().feed(bytes(self.serial.written[before:])) if k == "ubx"]
+        modes = [p[8] for p in blobs if struct.unpack_from("<I", p, 4)[0] == 0x20030001]
+        self.assertEqual(modes, [0, 2])                                # off, then fixed position
+        self.serial.push(nav_svin(dur=0, acc_m=0, valid=0, active=0) + rtcm_1005())
+        s = self.wait(lambda s: s["sent_frames"] >= 1)
+        self.assertNotEqual(s["base_state"], "surveying")
+        self.svc.save_position("Quick spot")
+        saved = json.loads(self.store.read_text())["positions"][0]
+        self.assertAlmostEqual(saved["acc_m"], 1.8, places=3)
+        self.assertEqual(saved["source"], "survey-in (stopped early)")
+
     def test_m8_base_gets_the_older_setup_after_refusing_valset(self):
         self.svc.start({"port": "/dev/base", "mode": "survey", "min_s": 90, "acc_m": 1.5})
         before = len(self.serial.written)
