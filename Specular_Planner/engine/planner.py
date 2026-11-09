@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from engine.gnss import DEFAULT_CONSTELLATIONS, almanac_age_days, filter_sats
+from engine.export import lead_in_point
 from engine.coverage import swept_coverage
 from engine.survey import (
     build_edge_cross_survey,
@@ -440,7 +441,7 @@ def _sample_times(segs, total_s: float, step_s: float = 8.0) -> list[float]:
         t += step
     for t0, _t1, phase, *_rest in segs:
         p = str(phase)
-        if p.startswith("hover") or p.startswith("to_") or p in ("return", "climb"):
+        if p.startswith("hover") or p.startswith("to_") or p in ("return", "climb", "lead"):
             times.add(float(t0))
     return sorted(x for x in times if 0.0 <= x <= total_s + 1e-9)
 
@@ -490,6 +491,28 @@ def _timeline(pad, hovers, h_agl, speed, loiter_s, min_leg_s=15.0, pad_hold_s=No
     return segs, t
 
 
+def _insert_lead(segs, pad, hovers, lead, speed):
+    """Fly pad -> lead-in -> WP1 instead of straight to WP1, like the exported mission does.
+
+    The lead-in is the run-in point the waypoint file puts 50 m before the first survey
+    point on body-yaw missions. Later segments and arrival times shift by the extra time.
+    """
+    i = next((k for k, s in enumerate(segs) if s[2] == "to_1"), None)
+    if lead is None or i is None or not hovers:
+        return segs, 0.0
+    t0, t1 = segs[i][0], segs[i][1]
+    v = max(speed, 1.0)
+    a = haversine_m(pad["lat"], pad["lon"], lead[0], lead[1]) / v
+    b = haversine_m(lead[0], lead[1], hovers[0]["lat"], hovers[0]["lon"]) / v
+    delta = a + b - (t1 - t0)
+    out = segs[:i] + [(t0, t0 + a, "lead", lead[0], lead[1]), (t0 + a, t0 + a + b, "to_1", None, None)]
+    out += [(x0 + delta, x1 + delta, ph, la, lo) for x0, x1, ph, la, lo in segs[i + 1:]]
+    for h in hovers:
+        if h.get("arrive_s") is not None:
+            h["arrive_s"] += delta
+    return out, delta
+
+
 def _seg_at(t, segs):
     chosen = segs[-1]
     for seg in segs:
@@ -516,13 +539,16 @@ def _alt_gs(t, segs, h_agl, speed_mps):
 
 def _pos_at(t, segs, pad, hovers):
     t0, t1, phase, lat, lon = _seg_at(t, segs)
-    if lat is not None:
+    lead = next(({"lat": s[3], "lon": s[4]} for s in segs if s[2] == "lead"), None)
+    if phase == "lead":
+        a, b = pad, lead
+    elif lat is not None:
         return lat, lon, phase, None
-    if phase == "return":
+    elif phase == "return":
         a, b = hovers[-1], pad
     elif phase.startswith("to_"):
         idx = int(phase.split("_")[1]) - 1
-        a = pad if idx == 0 else hovers[idx - 1]
+        a = (lead or pad) if idx == 0 else hovers[idx - 1]
         b = hovers[idx]
     else:
         return pad["lat"], pad["lon"], phase, None
@@ -653,6 +679,7 @@ def plan(
     pad_hold_s: float | None = None,
     survey_pattern: str = "fill",
     edge: dict | None = None,
+    lead_in=None,
 ) -> dict:
     if survey_style not in ("continuous", "hover") or roi_mode not in ("none", "per_point", "body_yaw"):
         raise ValueError("Invalid survey or pointing mode.")
@@ -942,8 +969,18 @@ def plan(
         if any(h.get("prn") for h in hovers):
             survey_info = _attach_survey_aim(survey_info or {}, hovers, "Loaded mission")
 
+    # Body-yaw missions get a lead-in point 50 m before WP1 in the waypoint file (export.py).
+    # Fly the preview through it too. lead_in: None = decide here, False = none, (lat, lon) = given.
+    lead = None
+    if roi_mode == "body_yaw" and lead_in is not False and hovers:
+        lead = tuple(lead_in) if isinstance(lead_in, (list, tuple)) else lead_in_point(pad, hovers)
+    segs, lead_delta = _insert_lead(segs, pad, hovers, lead, speed_mps)
+    total_s += lead_delta
+
     transit_m = 0.0
-    prev = pad
+    prev = {"lat": lead[0], "lon": lead[1]} if lead else pad
+    if lead:
+        transit_m += haversine_m(pad["lat"], pad["lon"], lead[0], lead[1])
     for hov in hovers:
         transit_m += haversine_m(prev["lat"], prev["lon"], hov["lat"], hov["lon"])
         prev = hov
@@ -961,7 +998,7 @@ def plan(
 
     for t in _sample_times(segs, end, step_s):
         dt = start + timedelta(seconds=t)
-        dlat, dlon, phase, _ = _pos_at(t, segs, pad, hovers)
+        dlat, dlon, phase, course = _pos_at(t, segs, pad, hovers)
         alt, gs, vs = _alt_gs(t, segs, h_agl, speed_mps)
         if survey_line is not None and alt >= 5.0:
             pin_lat, pin_lon, pin_sid = _river_splash_at(t, segs, hovers, survey_line, phase)
@@ -975,6 +1012,8 @@ def plan(
         hdg = _heading_to_aim(dlat, dlon, phase, pad, hovers, last_hdg)
         if roi_mode == "body_yaw" and (phase.startswith("to_") or phase.startswith("hover_")):
             hdg = hovers[int(phase.split("_")[1])-1]["yaw_deg"]
+        if phase == "lead" and course is not None:
+            hdg = course
         last_hdg = hdg
         vis = _visible(sats, dt, dlat, dlon, WATER_H + alt, elev_mask)
         specs = []

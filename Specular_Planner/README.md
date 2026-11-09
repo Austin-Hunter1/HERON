@@ -231,6 +231,40 @@ and checksums, no satellite data), and the rest of the Fly page still waits for 
 
 Relative accuracy (drone vs base) is cm-level right away. Absolute accuracy is only as good as the base position: a 2 m survey-in shifts the whole flight by up to ~2 m. For repeatable heights across days, survey once for a long time (or post-process the base), save it, and always set the antenna on the same mark.
 
+**Raw base data for post-processing (OPUS / PPP)**
+
+Every time the base runs, HERON saves everything the receiver sends to `output/rtk/`:
+
+- `<UTC time>_base.ubx`: the raw stream, including `RXM-RAWX` / `RXM-SFRBX` (turned on automatically in
+  Survey and Saved position modes; in "Use the receiver's settings" mode, turn them on in u-center yourself).
+- `<UTC time>_base.json`: start/stop time, mode, and `base_position`, the exact position the base's
+  corrections used (from its RTCM 1005). The drone's RTK positions are relative to this point.
+
+The panel shows *Raw data: Saving, 1:12:03 (7.4 MB)* while it records. About 10–20 MB per hour.
+
+To get the base's true position and fix a whole day's flights to a few cm:
+
+1. Set the tripod over a marked spot and measure the vertical antenna height above the mark.
+   Leave the base logging **2 h or more** (6 h+ for the best result). Clear sky matters more than time.
+2. Check the log: `.venv/bin/python scripts/check_base_log.py output/rtk/<file>_base.ubx`
+   (duration, gaps, rate, satellites, GPS L2, and the base position used).
+3. Convert to RINEX with RTKLIB's `convbin` (the rtklibexplorer "demo5" build handles the F9P best;
+   on a Mac build it once: `git clone https://github.com/rtklibexplorer/RTKLIB && cd RTKLIB/app/consapp/convbin/gcc && make`):
+   `convbin -r ubx -v 3.04 -od -os -o base.obs -n base.nav <file>_base.ubx`
+   (Don't add `-ti 1`: if the receiver's epochs aren't exactly on whole seconds it drops every epoch.)
+4. Upload `base.obs` to **NRCan CSRS-PPP** (https://webapp.csrs-scrs.nrcan-rncan.gc.ca/geod/tools-outils/ppp.php,
+   free account, choose ITRF / Static, give the antenna height). This is the route people have used
+   successfully with the ZED-F9P. NGS OPUS *static* (https://geodesy.noaa.gov/OPUS/, 2–48 h, takes
+   RINEX 3) may also work: it uses GPS L1/L2 only, which the F9P records as L2C. OPUS-RS (15 min–2 h)
+   needs P2 observables the F9P doesn't record, so don't count on it. On either site pick the antenna
+   type exactly (NovAtel GPS-702-GG = `NOV702GG NONE`); the wrong type can put the height off by tens of cm.
+5. Shift every drone position by *(post-processed antenna position − `base_position` in the .json)*.
+6. Add the mark in the RTK panel: Saved position → **Add known coordinates** (ellipsoid height of the mark
+   + antenna height). Next time, set up on the same mark and use that saved position: no survey, and the
+   flights are absolute from the start.
+
+The base is set to 1 Hz in Survey and Saved position modes; the raw log is roughly 10–20 MB per hour.
+
 **Checks after the flight** (in the `.bin` log): `GPS.Status` 6 = RTK fixed (5 = float, 3 = no RTK), `GPA.HAcc` about 0.01–0.05 m.
 
 Notes:
@@ -239,6 +273,33 @@ Notes:
 - Corrections use about 1–2 kB/s. A 57600 SiK radio or Herelink is fine; ELRS MAVLink may be too slow.
 - Saved spots live in `data/rtk_base.json`.
 - Code: `engine/rtk.py` (RTCM framing, `GPS_RTCM_DATA` fragmenting, u-blox setup), `static/rtk-strip.js`. Tests: `tests/test_rtk.py`.
+
+## Map layers from earlier flights
+
+The layers button above the zoom buttons (bottom right, every tab) opens **Map layers**. For each
+imported flight you can switch on:
+
+- **Orthomosaic**: the GoPro imagery stitched onto the ground, with an opacity slider.
+- **Water** (orange): where the water actually was on that flight, from heron-ar's water
+  segmentation, only inside the area the camera saw.
+
+While **Water** is on, Plan > Water can select it like any lake: click inside the orange
+area to tile it, or use Shoreline edge to fly its real shoreline. Turn the layer off to pick the
+mapped lake instead.
+
+Choices are remembered in the browser. The layers sit under the plan and the aircraft and never
+take clicks, so you can still place waypoints on top of them.
+
+Add another flight from a heron-ar twin export (`ortho.jpg`, `scene.json`, `water.png`):
+
+```bash
+.venv/bin/python -m pip install numpy opencv-python-headless pillow   # once
+.venv/bin/python scripts/import_overlay.py ../../heron-ar/docs/twin \
+    --pos ../../heron-ar/data/POS.csv --name "Boulder Reservoir survey" --date 2026-10-19
+```
+
+`--pos` is that flight's POS.csv (its first row is heron-ar's local origin); `--origin lat,lon`
+works too. Output goes to `data/overlays/<date>-<name>/` and shows up after a page reload.
 
 ## Orbit files
 

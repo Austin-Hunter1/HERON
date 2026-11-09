@@ -755,7 +755,9 @@ function aimWp(plan, phase) {
   const pad = plan.pad;
   if (!pad) return null;
   if (!hovers.length) return pad;
-  if (phase === "climb" || phase === "hold") return hovers[0];
+  const lead = hasLeadIn(plan) ? { lat: plan.route_line[1][0], lon: plan.route_line[1][1] } : null;
+  if (phase === "lead" && lead) return lead;
+  if (phase === "climb" || phase === "hold") return lead || hovers[0];
   if (phase === "return" || phase === "land") return pad;
   const m = /^(to|hover)_(\d+)$/.exec(String(phase || ""));
   if (!m) return hovers[0];
@@ -770,7 +772,7 @@ function prevWp(plan, phase) {
   const m = /^to_(\d+)$/.exec(String(phase || ""));
   if (!m || !pad) return null;
   const idx = Number(m[1]) - 1;
-  if (idx <= 0) return pad;
+  if (idx <= 0) return hasLeadIn(plan) ? { lat: plan.route_line[1][0], lon: plan.route_line[1][1] } : pad;
   return hovers[idx - 1] || pad;
 }
 
@@ -1386,7 +1388,7 @@ function paintSurveyPicks() {
   };
   if (isEdgePattern() && !layerIsLine(surveyStart.layer)) {
     edgePicks.forEach((p, i) => mark(p, i === 0 ? "FROM" : "TO"));
-    if (n) n.textContent = edgePicks.length === 0 ? "lake selected · whole shore" : edgePicks.length === 1 ? "click the other end of the stretch" : "shore stretch set";
+    if (n) n.textContent = edgePicks.length === 0 ? `${surveyStart.overlay ? "flight water" : "lake"} selected · whole shore` : edgePicks.length === 1 ? "click the other end of the stretch" : "shore stretch set";
     return;
   }
   mark(surveyStart, "START");
@@ -1395,11 +1397,17 @@ function paintSurveyPicks() {
     if (n) n.textContent = "start + end";
   } else if (layerIsLine(surveyStart.layer)) {
     if (n) n.textContent = "start set — click end";
-  } else if (n) n.textContent = "lake selected";
+  } else if (n) n.textContent = surveyStart.overlay ? "flight water selected" : "lake selected";
 }
 
 function pickWater(latlng) {
   let found = null;
+  let overlay = null;
+  const flight = window.heronFlightWaterAt ? window.heronFlightWaterAt(latlng) : null;
+  if (flight) {
+    found = flight.layer;
+    overlay = flight.id;
+  }
   lakeLayer.eachLayer((layer) => {
     if (!found && clickOnLayer(layer, latlng)) found = layer;
   });
@@ -1421,7 +1429,7 @@ function pickWater(latlng) {
     computePlan();
     return;
   }
-  surveyStart = { lat: latlng.lat, lon: latlng.lng, layer: found };
+  surveyStart = { lat: latlng.lat, lon: latlng.lng, layer: found, overlay };
   surveyEnd = null;
   edgePicks = [];
   paintSurveyPicks();
@@ -1434,10 +1442,13 @@ function pickWater(latlng) {
 
 function pickShore(latlng) {
   // A click inside a different waterbody switches to that one.
+  // (A flight's water sits inside the mapped lake, so shore clicks around it stay on it.)
   let other = null;
-  lakeLayer.eachLayer((layer) => {
-    if (!other && layer !== surveyStart.layer && clickOnLayer(layer, latlng)) other = layer;
-  });
+  if (!surveyStart.overlay) {
+    lakeLayer.eachLayer((layer) => {
+      if (!other && layer !== surveyStart.layer && clickOnLayer(layer, latlng)) other = layer;
+    });
+  }
   if (other) return pickWater(latlng);
   if (edgePicks.length >= 2) edgePicks = [];
   edgePicks.push(snapToShore(surveyStart.layer, latlng));
@@ -1512,6 +1523,7 @@ async function computePlan() {
       if (missionMode === "survey") {
         body.click_lat = surveyStart.lat;
         body.click_lon = surveyStart.lon;
+        if (surveyStart.overlay) body.water_overlay = surveyStart.overlay;
         if (surveyEnd) {
           body.click_lat2 = surveyEnd.lat;
           body.click_lon2 = surveyEnd.lon;
@@ -1569,14 +1581,21 @@ async function computePlan() {
   }
 }
 
+// Body-yaw missions fly a lead-in waypoint before the survey. It is WP1 in the file,
+// in Mission Planner and on the Fly page, so the survey waypoints are numbered from 2 here too.
+let planLeadOff = 0;
+const hasLeadIn = (plan) =>
+  Array.isArray(plan?.route_line) && plan.route_line.length === (plan.hovers || []).length + 3;
+
 function phaseLabel(p) {
   if (!p) return "—";
+  if (p === "lead") return "to WP1";
   if (p === "climb") return "climb";
   if (p === "hold") return "pad hold";
   if (p === "return") return "RTL";
   if (p === "land") return "land";
-  if (p.startsWith("hover_")) return `hover WP${p.slice(6)}`;
-  if (p.startsWith("to_")) return `to WP${p.slice(3)}`;
+  if (p.startsWith("hover_")) return `hover WP${Number(p.slice(6)) + planLeadOff}`;
+  if (p.startsWith("to_")) return `to WP${Number(p.slice(3)) + planLeadOff}`;
   return p;
 }
 
@@ -2071,6 +2090,7 @@ function showPlan(plan) {
   setMissionPath(pts);
 
   wpLayer.clearLayers();
+  planLeadOff = hasLeadIn(plan) ? 1 : 0;
   const dense = hovers.length > 48;
   hovers.forEach((h, i) => {
     const keepLabel = !dense || i === 0 || i === hovers.length - 1 || i % Math.ceil(hovers.length / 24) === 0;
@@ -2086,13 +2106,13 @@ function showPlan(plan) {
       L.marker([h.lat, lon], {
         icon: L.divIcon({
           className: "",
-          html: `<div class="wp-label">WP${i + 1}</div>`,
+          html: `<div class="wp-label">WP${i + 1 + planLeadOff}</div>`,
           iconSize: [40, 16],
           iconAnchor: [20, 22],
         }),
       })
         .bindTooltip(
-          `${h.name}` +
+          `WP${i + 1 + planLeadOff} · ${h.name}` +
             (h.prn ? `  ${h.prn} @ ${Math.round(h.el)}°` : "  centroid (no sat lined up)") +
             ((h.geometry_s ?? h.t_in_window) != null ? `  geometry +${Math.round(h.geometry_s ?? h.t_in_window)}s` : ""),
           { direction: "top" }
@@ -2100,6 +2120,20 @@ function showPlan(plan) {
         .addTo(wpLayer);
     });
   });
+
+  // WP1 on body-yaw missions: the lead-in 50 m before the first pass, flown to line the antenna up.
+  if (planLeadOff) {
+    const lead = plan.route_line[1];
+    wrapLngs(lead[1]).forEach((lon) => {
+      L.circleMarker([lead[0], lon], { radius: dense ? 3 : 7, color: "#fff", weight: dense ? 1 : 2, fillColor: "#1f6feb", fillOpacity: 1 })
+        .bindTooltip("WP1 · lead-in: lines the antenna up 50 m before the first pass", { direction: "top" })
+        .addTo(wpLayer);
+      L.marker([lead[0], lon], {
+        interactive: false,
+        icon: L.divIcon({ className: "", html: '<div class="wp-label">WP1</div>', iconSize: [40, 16], iconAnchor: [20, 22] }),
+      }).addTo(wpLayer);
+    });
+  }
 
   paintFlightBounces(plan);
   paintSurveyLock(plan);

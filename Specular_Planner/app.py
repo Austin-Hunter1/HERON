@@ -69,7 +69,7 @@ app.register_blueprint(flight_api(flight))
 app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
 app.register_blueprint(payload_api(flight, sim))
 # RTK base station: forwards corrections from a base on this laptop to the real aircraft (Fly only).
-rtk = RtkService(flight, DATA / "rtk_base.json")
+rtk = RtkService(flight, DATA / "rtk_base.json", log_dir=OUTPUT / "rtk")
 app.register_blueprint(rtk_api(rtk))
 
 _SATS = None
@@ -96,6 +96,34 @@ def lake():
         water = DATA / "waterbodies.geojson"
         _LAKE = load_lake(water if water.exists() else DATA / "boulder_reservoir.geojson")
     return _LAKE
+
+
+_LAKE_WITH: dict[str, dict] = {}
+
+
+def lake_for(body: dict) -> dict:
+    """Mapped water, plus a previous flight's segmented water when the user picked it.
+
+    The merged collection is built once per flight and kept, because the water index is cached
+    per collection object.
+    """
+    ident = Path(str(body.get("water_overlay") or "")).name
+    if not ident:
+        return lake()
+    hit = _LAKE_WITH.get(ident)
+    if hit is None:
+        folder = DATA / "overlays" / ident
+        try:
+            meta = json.loads((folder / "meta.json").read_text())
+            water = json.loads((folder / meta["water"]["file"]).read_text())
+        except (OSError, ValueError, KeyError, TypeError):
+            raise ValueError("That flight's water outline isn't available any more. Clear and pick the water again.")
+        label = f"Water {meta.get('date', ident)}"
+        own = [{"type": "Feature", "geometry": f["geometry"],
+                "properties": {"name": label, "kind": "lake", "source": "flight", "overlay": ident}}
+               for f in water.get("features") or []]
+        hit = _LAKE_WITH[ident] = {"type": "FeatureCollection", "features": own + list(lake().get("features") or [])}
+    return hit
 
 
 @app.get("/")
@@ -230,7 +258,7 @@ def api_plan():
     try:
         result = plan(
             sats(),
-            lake(),
+            lake_for(body),
             start=start,
             duration_min=int(body.get("duration_min", 40)),
             pad=pad,
@@ -335,6 +363,7 @@ def api_plan_import():
             start=start,
             duration_min=int(body.get("duration_min", 40)),
             pad=route["pad"],
+            lead_in=route["lead_in"] or False,
             h_agl=route["h_agl"],
             speed_mps=route["speed_mps"],
             loiter_s=route["loiter_s"],
@@ -524,6 +553,35 @@ def api_almanac_file(sid: str):
 def export_file(name: str):
     safe = Path(name).name
     return send_from_directory(OUTPUT, safe, as_attachment=True)
+
+
+# Map layers from earlier flights (orthomosaic + segmented water), made by scripts/import_overlay.py
+OVERLAYS = DATA / "overlays"
+
+
+@app.get("/api/overlays")
+def api_overlays():
+    items = []
+    for meta in sorted(OVERLAYS.glob("*/meta.json"), reverse=True):
+        try:
+            m = json.loads(meta.read_text())
+        except (OSError, ValueError):
+            continue
+        base = f"/overlays/{meta.parent.name}/"
+        m["id"] = meta.parent.name
+        if m.get("ortho"):
+            m["ortho"]["url"] = base + m["ortho"]["file"]
+        if m.get("water"):
+            m["water"]["url"] = base + m["water"]["file"]
+        items.append(m)
+    return jsonify({"overlays": items})
+
+
+@app.get("/overlays/<ident>/<name>")
+def overlay_file(ident: str, name: str):
+    folder = OVERLAYS / Path(ident).name
+    resp = send_from_directory(folder, Path(name).name, max_age=86400)
+    return resp
 
 
 def start_almanac_watch() -> None:

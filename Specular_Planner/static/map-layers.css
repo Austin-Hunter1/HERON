@@ -1,0 +1,126 @@
+/* Map layers control (static/map-layers.js). Light in Plan, deck-dark in Simulate / Fly. */
+.ml-control {
+  --ml-bg: rgba(247, 248, 245, 0.97);
+  --ml-ink: var(--ink, #14282a);
+  --ml-muted: var(--muted, #68797a);
+  --ml-line: var(--line, #dce3df);
+  --ml-track: #cfd8d3;
+  --ml-accent: var(--teal, #0b7068);
+  --ml-shadow: 0 14px 40px rgba(20, 40, 42, 0.18);
+  position: relative;
+  clear: both;
+}
+body:not([data-view="plan"]) .ml-control {
+  --ml-bg: rgba(17, 27, 36, 0.96);
+  --ml-ink: var(--deck-ink, #e7eef3);
+  --ml-muted: var(--deck-muted, #93a3b0);
+  --ml-line: var(--deck-line, rgba(255, 255, 255, 0.09));
+  --ml-track: rgba(255, 255, 255, 0.16);
+  --ml-accent: var(--live, #3ddc97);
+  --ml-shadow: var(--deck-shadow, 0 14px 40px rgba(0, 0, 0, 0.42));
+}
+
+.ml-control .leaflet-bar a { display: grid; place-items: center; }
+.ml-control .leaflet-bar a svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ml-control .leaflet-bar a.active { color: var(--ml-accent) !important; }
+.ml-control .leaflet-bar a.on { box-shadow: inset 0 0 0 1.5px var(--ml-accent); }
+
+.ml-panel {
+  position: absolute;
+  right: calc(100% + 10px);
+  bottom: 0;
+  width: 296px;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  color: var(--ml-ink);
+  background: var(--ml-bg);
+  border: 1px solid var(--ml-line);
+  border-radius: 12px;
+  box-shadow: var(--ml-shadow);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: default;
+}
+.ml-panel[hidden] { display: none; }
+
+.ml-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 10px 9px 14px;
+  border-bottom: 1px solid var(--ml-line);
+}
+.ml-panel header b { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+
+.ml-panel button.ml-x,
+.ml-panel button.ml-fit {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ml-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+}
+.ml-panel button.ml-x:hover,
+.ml-panel button.ml-fit:hover { color: var(--ml-ink); background: var(--ml-line); }
+.ml-panel button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.ml-body { padding: 4px 0 2px; }
+.ml-flight { padding: 8px 14px 10px; }
+.ml-flight + .ml-flight { border-top: 1px solid var(--ml-line); }
+
+.ml-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.ml-head span, .ml-row span { display: flex; flex-direction: column; min-width: 0; }
+.ml-head b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-head small, .ml-row small { color: var(--ml-muted); font-size: 11.5px; }
+
+.ml-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; cursor: pointer; }
+.ml-row b { font-weight: 500; }
+
+/* switch */
+.ml-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  background: var(--ml-track);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.ml-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 150ms ease;
+}
+.ml-switch:checked { background: var(--ml-accent); }
+.ml-switch:checked::after { transform: translateX(14px); }
+.ml-switch:focus-visible { outline: 2px solid var(--ml-accent); outline-offset: 2px; }
+
+/* opacity */
+.ml-opacity { display: grid; grid-template-columns: auto 1fr 38px; align-items: center; gap: 10px; padding: 0 0 6px; color: var(--ml-muted); font-size: 12px; }
+.ml-opacity.off { opacity: 0.4; pointer-events: none; }
+.ml-opacity output { text-align: right; font-variant-numeric: tabular-nums; color: var(--ml-ink); }
+.ml-opacity input[type="range"] { width: 100%; height: 18px; margin: 0; background: transparent; accent-color: var(--ml-accent); cursor: pointer; }
+
+.ml-swatch { display: inline-block; width: 12px; height: 10px; margin: 0 7px 1px 0; vertical-align: middle; background: rgba(255, 138, 31, 0.25); border: 2px solid #ff8a1f; border-radius: 3px; }
+
+.ml-empty { margin: 0; padding: 8px 14px 12px; color: var(--ml-muted); font-size: 11.5px; }
+.ml-empty code { font-size: 11px; }
+
+.ml-ortho { image-rendering: auto; }

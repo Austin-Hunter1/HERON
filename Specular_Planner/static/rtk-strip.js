@@ -7,7 +7,7 @@
   const root = $("rtkStrip");
   if (!root) return;
 
-  let token = "", last = null, busy = false, open = false, noteUntil = 0, portsKey = "", spot = null, editing = false, naming = false;
+  let token = "", last = null, busy = false, open = false, noteUntil = 0, portsKey = "", spot = null, editing = false, naming = false, adding = false;
 
   const flying = () => document.body.dataset.view === "fly";
   const clock = (s) => {
@@ -17,6 +17,7 @@
   };
   const metres = (m) => m == null ? "—" : m < 1 ? Math.round(m * 100) + " cm" : m < 10 ? m.toFixed(1) + " m" : Math.round(m) + " m";
   const distance = (m) => m == null ? "" : m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km";
+  const size = (b) => b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1e3)) + " kB";
   const rate = (bps) => !bps ? "" : bps >= 1000 ? (bps / 1000).toFixed(1) + " kB/s" : Math.round(bps) + " B/s";
   const mode = () => document.querySelector('#rtkMode input:checked')?.value || "survey";
   const date = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; } };
@@ -73,7 +74,7 @@
     if (base === "silent") return { fix: "bad", badge: "Base", title: "No data from the base", sub: s.rx_age_s == null ? "Check the port and that the base is outputting RTCM." : `Nothing for ${Math.round(s.rx_age_s)} s` };
     if (!a.connected) return { fix: "base", badge: "Ready", title: "Base ready", sub: s.finished_early ? `Survey stopped early, base within ${metres(s.survey?.acc_m)}` : "Corrections start when the drone connects" };
     if (a.fix === 6) return { fix: "fixed", badge: "Fixed", title: "RTK fixed", sub: a.baseline_m ? `${distance(a.baseline_m)} from base, ${rate(s.rate_bps)}` : `Sending ${rate(s.rate_bps)}` };
-    if (a.fix === 5) return { fix: "float", badge: "Float", title: "RTK float", sub: "Converging. Usually fixed within a few minutes." };
+    if (a.fix === 5) return { fix: "float", badge: "Float", title: "RTK float", sub: "Usually fixed within minutes" };
     return { fix: "base", badge: a.fix_name === "—" ? "No GPS" : a.fix_name.replace(" fix", ""), title: "Waiting for RTK", sub: `Sending ${rate(s.rate_bps) || "corrections"}. The drone needs a clear sky view.` };
   }
 
@@ -98,11 +99,19 @@
     const s = last || {}, a = s.aircraft || {}, base = s.base_state, running = !!s.running;
     const sv = s.survey;
     const surveying = running && base === "surveying" && sv;
-    const showSetup = !running || editing;
+    const showSetup = (!running || editing) && !adding;
     if (!running || surveying || !s.can_save) naming = false;
 
-    // Live facts while the base runs and isn't surveying
-    $("rtkFacts").hidden = !running || surveying || showSetup;
+    // Live facts while the base runs
+    $("rtkFacts").hidden = !running || showSetup || adding;
+    $("rtkFactBaseRow").hidden = $("rtkFactLinkRow").hidden = !!surveying;
+    const raw = s.raw;
+    const rawEl = $("rtkFactRaw");
+    rawEl.textContent = s.raw_error ? "Not saving" : !raw ? "—"
+      : raw.epochs ? `Saving, ${clock(raw.duration_s)} (${size(raw.bytes)})`
+      : raw.bytes > 20000 ? "Base isn't sending raw data" : "Starting";
+    rawEl.classList.toggle("warn", !!s.raw_error || (raw && !raw.epochs && raw.bytes > 20000));
+    rawEl.title = s.raw_error || (raw ? `output/rtk/${raw.file} for post-processing (OPUS / PPP)` : "");
     if (running && !surveying) {
       const pos = s.base_position;
       const how = s.options?.mode === "saved" ? `Saved, ${s.options.spot}`
@@ -150,18 +159,20 @@
     $("rtkSavedEmpty").hidden = saved.length > 0;
     $("rtkSetup").hidden = !showSetup;
     $("rtkSaveRow").hidden = !naming;
+    $("rtkAdd").hidden = !adding;
 
     // Action bar: at most one primary button, chosen by state.
-    const primary = showSetup ? "rtkStart" : surveying ? "rtkFinish" : naming ? "rtkSave" : s.can_save ? "rtkSaveOpen" : null;
-    ["rtkStart", "rtkFinish", "rtkSave", "rtkSaveOpen"].forEach((id) => { $(id).hidden = id !== primary; });
+    const primary = adding ? "rtkAddSave" : showSetup ? "rtkStart" : surveying ? "rtkFinish" : naming ? "rtkSave" : s.can_save ? "rtkSaveOpen" : null;
+    ["rtkStart", "rtkFinish", "rtkSave", "rtkSaveOpen", "rtkAddSave"].forEach((id) => { $(id).hidden = id !== primary; });
+    $("rtkAddSave").disabled = busy;
     $("rtkStart").textContent = running ? "Restart base" : "Start base";
     $("rtkStart").disabled = busy || !$("rtkPort").value || (mode() === "saved" && !spot);
     $("rtkFinish").disabled = busy || !s.can_finish;
     $("rtkSave").disabled = busy;
     $("rtkSaveOpen").disabled = busy;
-    $("rtkEdit").hidden = !running || showSetup || naming;
-    $("rtkStop").hidden = !running || showSetup || naming;
-    $("rtkCancel").hidden = !((running && editing) || naming);
+    $("rtkEdit").hidden = !running || showSetup || naming || adding;
+    $("rtkStop").hidden = !running || showSetup || naming || adding;
+    $("rtkCancel").hidden = !((running && editing) || naming || adding);
     $("rtkStop").disabled = busy;
     if (Date.now() > noteUntil) note("");
   }
@@ -190,7 +201,7 @@
 
   function toggle(next) {
     open = next ?? !open;
-    if (!open) editing = naming = false;
+    if (!open) editing = naming = adding = false;
     root.classList.toggle("open", open);
     $("rtkPanel").hidden = !open;
     $("rtkOpen").setAttribute("aria-expanded", String(open));
@@ -226,7 +237,18 @@
   });
   $("rtkStop").addEventListener("click", async () => { if (await send("stop")) { editing = false; note("Base stopped."); } });
   $("rtkEdit").addEventListener("click", () => { editing = true; loadPorts(); renderPanel(); });
-  $("rtkCancel").addEventListener("click", () => { editing = naming = false; note(""); renderPanel(); });
+  $("rtkCancel").addEventListener("click", () => { editing = naming = adding = false; note(""); renderPanel(); });
+  $("rtkAddOpen").addEventListener("click", () => { adding = true; note(""); renderPanel(); $("rtkAddName").focus(); });
+  $("rtkAddSave").addEventListener("click", async () => {
+    const body = { name: $("rtkAddName").value, lat: $("rtkAddLat").value.trim(), lon: $("rtkAddLon").value.trim(),
+                   height_m: $("rtkAddH").value.trim(), antenna_height_m: $("rtkAddAnt").value.trim() || 0 };
+    if (await send("add", body)) {
+      spot = body.name.trim(); adding = false;
+      document.querySelector('#rtkMode input[value="saved"]').checked = true;
+      ["rtkAddName", "rtkAddLat", "rtkAddLon", "rtkAddH"].forEach((id) => { $(id).value = ""; });
+      note(`Added “${spot}”.`);
+    }
+  });
   $("rtkSaveOpen").addEventListener("click", () => { naming = true; renderPanel(); $("rtkSpotName").focus(); });
   $("rtkSave").addEventListener("click", async () => {
     const name = $("rtkSpotName").value;

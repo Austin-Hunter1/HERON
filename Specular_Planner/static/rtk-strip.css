@@ -208,7 +208,17 @@ body[data-view="fly"] #deck:not(.attached) > #rtkStrip .rtk-bar { background: va
 .rtk-name input { width: 100%; box-sizing: border-box; }
 .rtk-name input::placeholder { color: var(--deck-faint); }
 
+.rtk-add { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; }
+.rtk-add[hidden] { display: none; }
+.rtk-add label > span:first-child { display: block; margin-bottom: 4px; color: var(--deck-muted); font-size: 11.5px; }
+.rtk-add label.wide { grid-column: 1 / -1; }
+.rtk-add input { width: 100%; box-sizing: border-box; }
+.rtk-add input::placeholder { color: var(--deck-faint); }
+#deck .rtk-add-open { justify-self: start; margin: 6px 0 0 -8px; }
+
 .rtk-facts { display: grid; gap: 8px; margin: 0 0 14px; }
+.rtk-facts div[hidden] { display: none; }
+#rtkFactRaw.warn { color: var(--warn); }
 .rtk-facts[hidden] { display: none; }
 .rtk-facts div { display: grid; grid-template-columns: 110px 1fr; gap: 10px; font-size: 12.5px; }
 .rtk-facts dt { color: var(--deck-muted); }

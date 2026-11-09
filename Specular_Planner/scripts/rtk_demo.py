@@ -37,7 +37,7 @@ from engine import flight as flight_mod                        # noqa: E402
 from engine.rtk import crc24q, ecef_to_lla, ubx                 # noqa: E402
 
 DEMO_PORT = "demo-base"
-BASE_ECEF = (-1283411.52, -4728125.08, 4088062.46)             # near the Boulder Reservoir pad
+BASE_ECEF = (-1283722.78, -4717035.58, 4085337.99)          # Boulder Reservoir, 1582 m ellipsoid height
 NAMES = {1005: "base position", 1074: "GPS", 1084: "GLONASS", 1094: "Galileo", 1124: "BeiDou", 1230: "GLONASS bias"}
 SIZES = {1074: 226, 1084: 147, 1094: 201, 1124: 183, 1230: 6}  # typical MSM4 payload sizes, bytes
 
@@ -74,6 +74,23 @@ def nav_svin(duration, acc_m, valid, active, ecef):
     (x, xh), (y, yh), (z, zh) = (split(v) for v in ecef)
     return ubx(0x01, 0x3B, struct.pack("<B3xIIiiibbbxIIBB2x", 0, 0, duration, x, y, z, xh, yh, zh,
                                        int(acc_m * 1e4), duration * 8, valid, active))
+
+
+# Signals a dual-band F9P typically tracks: (gnssId, svId, sigId). GPS L1 C/A + L2 CL, GLONASS L1 + L2,
+# Galileo E1 + E5b, BeiDou B1 + B2. Measurement values are filler; the structure matches real RXM-RAWX.
+DEMO_SIGNALS = ([(0, sv, s) for sv in (2, 5, 7, 9, 13, 15, 18, 20, 26, 29) for s in (0, 3)]
+                + [(6, sv, s) for sv in (1, 2, 8, 9, 15, 16, 17) for s in (0, 2)]
+                + [(2, sv, s) for sv in (1, 4, 7, 9, 13, 19, 21, 26) for s in (0, 5)]
+                + [(3, sv, s) for sv in (6, 9, 11, 14, 19, 20, 22, 29) for s in (0, 2)])
+
+
+def rxm_rawx(t_unix):
+    gps = t_unix - 315964800 + 18                              # GPS time, 18 leap seconds
+    week, tow = int(gps // 604800), gps % 604800
+    p = struct.pack("<dHbBBB2x", tow, week, 18, len(DEMO_SIGNALS), 1, 1)
+    for g, sv, sig in DEMO_SIGNALS:
+        p += struct.pack("<ddfBBBBHBBBBBx", 2.2e7, 1.1e8, -1200.0, g, sv, sig, 0, 64000, 44, 3, 2, 1, 15)
+    return ubx(0x02, 0x15, p)
 
 
 class DemoBase:
@@ -129,13 +146,17 @@ class DemoBase:
         while not self.closed:
             time.sleep(1)
             tick += 1
+            done = True
             if self.mode == "survey" and self.survey_start is not None:
                 t = int((time.monotonic() - self.survey_start) * self.speed)
                 acc = max(0.6, 6.0 / (1 + t / 25))                       # accuracy improves with time
                 done = t >= self.min_s and acc <= self.acc_limit
                 self._emit(nav_svin(t, acc, int(done), int(not done), BASE_ECEF))
-                if not done:
-                    continue                                           # a surveying F9P sends no RTCM
+                # a surveying F9P sends no RTCM yet (checked below, after the raw data)
+            if self.mode in ("survey", "fixed"):
+                self._emit(rxm_rawx(time.time()) + ubx(0x02, 0x13, bytes(48)) * 4)   # raw data for the log
+            if self.mode == "survey" and self.survey_start is not None and not done:
+                continue
             frames = [rtcm_1005(BASE_ECEF)] if tick % 5 == 1 else []
             frames += [rtcm_filler(m, n + (tick % 9), tick) for m, n in SIZES.items()]
             self._emit(b"".join(frames))
@@ -235,6 +256,7 @@ def main():
     drone = DemoDrone(a.drone_after, a.show_packets)
     planner.rtk.flight = DemoFlight(drone)
     planner.rtk.opener = lambda port, baud: DemoBase(a.survey_speed)
+    planner.rtk.log_dir = ROOT / "output" / "rtk_demo"          # keep fake raw logs apart from real ones
 
     real_ports = flight_mod.serial_port_records
 

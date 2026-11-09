@@ -9,7 +9,8 @@
   <link rel="stylesheet" href="/static/style.css?v=gold1" />
   <link rel="stylesheet" href="/static/flight.css?v=flyhold3" />
   <link rel="stylesheet" href="/static/payload-strip.css?v=2" />
-  <link rel="stylesheet" href="/static/rtk-strip.css?v=10" />
+  <link rel="stylesheet" href="/static/rtk-strip.css?v=11" />
+  <link rel="stylesheet" href="/static/map-layers.css?v=3" />
 </head>
 <body class="click-wps" data-view="plan">
   <header id="appbar">
@@ -355,8 +356,9 @@
 
       <div id="rtkPanel" class="rtk-panel" hidden>
         <dl id="rtkFacts" class="rtk-facts" hidden>
-          <div><dt>Base position</dt><dd id="rtkFactBase">—</dd></div>
-          <div><dt>Corrections</dt><dd id="rtkFactLink">—</dd></div>
+          <div id="rtkFactBaseRow"><dt>Base position</dt><dd id="rtkFactBase">—</dd></div>
+          <div id="rtkFactLinkRow"><dt>Corrections</dt><dd id="rtkFactLink">—</dd></div>
+          <div><dt>Raw data</dt><dd id="rtkFactRaw" title="Saved to output/rtk for post-processing (OPUS / PPP)">—</dd></div>
         </dl>
 
         <div id="rtkSurvey" class="rtk-survey" hidden>
@@ -387,12 +389,21 @@
               <span><b>Saved position</b><small>Starts at once. Set the antenna on the same mark as before.</small></span></label>
             <div id="rtkSavedRow" class="opt-detail">
               <ul id="rtkSpots" class="rtk-spots" aria-label="Saved positions"></ul>
-              <p id="rtkSavedEmpty" class="rtk-empty">Nothing saved yet. After a survey finishes, save it below.</p>
+              <p id="rtkSavedEmpty" class="rtk-empty">Nothing saved yet. Save one after a survey, or add known coordinates.</p>
+              <button id="rtkAddOpen" type="button" class="rtk-link rtk-add-open">Add known coordinates</button>
             </div>
             <label class="opt"><input type="radio" name="rtkMode" value="as_is" />
               <span><b>Use the receiver's settings</b><small>HERON changes nothing on the base.</small></span></label>
           </div>
         </section>
+        </div>
+
+        <div id="rtkAdd" class="rtk-add" hidden>
+          <label class="wide"><span>Name</span><input id="rtkAddName" maxlength="40" placeholder="e.g. Reservoir north mark" /></label>
+          <label><span>Latitude</span><input id="rtkAddLat" inputmode="decimal" placeholder="40.0745123" /></label>
+          <label><span>Longitude</span><input id="rtkAddLon" inputmode="decimal" placeholder="-105.2241234" /></label>
+          <label><span>Ellipsoid height of the mark</span><span class="unit"><input id="rtkAddH" inputmode="decimal" placeholder="1580.123" /><em>m</em></span></label>
+          <label><span>Antenna height above the mark</span><span class="unit"><input id="rtkAddAnt" inputmode="decimal" value="0" /><em>m</em></span></label>
         </div>
 
         <label id="rtkSaveRow" class="rtk-name" hidden><span>Name this base position</span>
@@ -409,6 +420,7 @@
           <button id="rtkFinish" type="button" class="rtk-btn primary" title="Stop the survey and send corrections from the position averaged so far">Use position now</button>
           <button id="rtkSaveOpen" type="button" class="rtk-btn primary">Save position</button>
           <button id="rtkSave" type="button" class="rtk-btn primary">Save</button>
+          <button id="rtkAddSave" type="button" class="rtk-btn primary">Add position</button>
           <button id="rtkStart" type="button" class="rtk-btn primary">Start base</button>
         </footer>
       </div>
@@ -495,10 +507,11 @@
   </div>
 
   <script src="/static/vendor/leaflet/leaflet.js"></script>
-  <script src="/static/app.js?v=tiles1"></script>
+  <script src="/static/app.js?v=lead2"></script>
   <script src="/static/instruments.js?v=2"></script>
-  <script src="/static/flight.js?v=rtk1"></script>
+  <script src="/static/flight.js?v=lead2"></script>
   <script src="/static/payload-strip.js?v=2"></script>
-  <script src="/static/rtk-strip.js?v=12"></script>
+  <script src="/static/rtk-strip.js?v=14"></script>
+  <script src="/static/map-layers.js?v=4"></script>
 </body>
 </html>

@@ -1,0 +1,27 @@
+{
+ "id": "2026-10-19-boulder-reservoir-survey",
+ "name": "Boulder Reservoir survey",
+ "date": "2026-10-19",
+ "ortho": {
+  "file": "ortho.webp",
+  "bounds": [
+   [
+    40.08087399964319,
+    -105.23191206862684
+   ],
+   [
+    40.08679636687017,
+    -105.22455120892491
+   ]
+  ],
+  "gsd_m": 0.42
+ },
+ "water": {
+  "file": "water.geojson",
+  "m2": 66176
+ },
+ "origin": [
+  40.0859711,
+  -105.2328258
+ ]
+}

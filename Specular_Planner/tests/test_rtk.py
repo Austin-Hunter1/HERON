@@ -230,6 +230,8 @@ class UbloxTests(unittest.TestCase):
             self.assertAlmostEqual(v[f"CFG_TMODE_ECEF_{axis}"] * 0.01 + v[f"CFG_TMODE_ECEF_{axis}_HP"] * 1e-4, metres, places=4)
         v = values(output_setup())
         self.assertEqual(v["CFG_MSGOUT_RTCM_3X_TYPE1074_USB"], 1)
+        self.assertEqual((v["CFG_MSGOUT_UBX_RXM_RAWX_USB"], v["CFG_MSGOUT_UBX_RXM_SFRBX_USB"]), (1, 1))
+        self.assertEqual((v["CFG_RATE_MEAS"], v["CFG_RATE_NAV"]), (1000, 1))      # 1 Hz base
         self.assertEqual(v["CFG_MSGOUT_RTCM_3X_TYPE1005_USB"], 5)
 
     @unittest.skipIf(pyubx2 is None, "pyubx2 not installed")
@@ -262,6 +264,11 @@ class LegacyM8Tests(unittest.TestCase):
         self.assertEqual(rates[(0xF5, 0x4D)], (1, 1))      # RTCM 1077
         self.assertEqual(rates[(0xF5, 0x05)], (5, 5))      # RTCM 1005 every 5 s
         self.assertEqual(rates[(0x01, 0x3B)], (1, 1))      # NAV-SVIN
+        self.assertEqual(rates[(0x02, 0x15)], (1, 1))      # RXM-RAWX for post-processing
+        self.assertEqual(rates[(0x02, 0x13)], (1, 1))      # RXM-SFRBX
+        rate = [p for k, (c, m), p in StreamParser().feed(legacy_setup("survey")) if (c, m) == (0x06, 0x08)]
+        msg = pyubx2.UBXReader.parse(ubx(0x06, 0x08, rate[0]), msgmode=pyubx2.SET)
+        self.assertEqual((msg.measRate, msg.navRate), (1000, 1))
 
 
 class ServiceTests(unittest.TestCase):
@@ -358,6 +365,51 @@ class ServiceTests(unittest.TestCase):
         self.assertAlmostEqual(saved["acc_m"], 1.8, places=3)
         self.assertEqual(saved["source"], "survey-in (stopped early)")
 
+    def test_session_logs_every_byte_and_records_the_base_position(self):
+        logs = Path(self.tmp.name) / "rtk"
+        svc = RtkService(Flight(self.link), self.store, opener=lambda port, baud: self.serial, log_dir=logs)
+        self.svc.close()
+        self.svc = svc                                                       # so self.wait() watches this one
+        try:
+            svc.start({"port": "/dev/base", "mode": "survey"})
+            rawx = ubx(0x02, 0x15, bytes(16))
+            stream = [b"$GNGGA,junk*00\r\n", rawx, nav_svin(dur=150, acc_m=1.2, valid=1, active=0),
+                      rawx + rtcm_1005() + rtcm_blob(1074, 200), ubx(0x02, 0x13, bytes(12))]
+            for chunk in stream:
+                self.serial.push(chunk)
+            s = self.wait(lambda s: s["raw"] and s["raw"]["epochs"] == 2 and s["sent_frames"] == 2)
+            self.assertTrue(s["raw"]["logging"])
+        finally:
+            svc.stop()
+        ubx_files, json_files = list(logs.glob("*_base.ubx")), list(logs.glob("*_base.json"))
+        self.assertEqual((len(ubx_files), len(json_files)), (1, 1))
+        self.assertEqual(ubx_files[0].read_bytes(), b"".join(stream))          # byte-for-byte copy
+        rec = json.loads(json_files[0].read_text())
+        self.assertIsNotNone(rec["stopped_utc"])
+        self.assertEqual(rec["raw_epochs"], 2)
+        self.assertEqual(rec["raw_file"], ubx_files[0].name)
+        self.assertEqual(rec["base_position"]["source"], "RTCM 1005 sent by the base")
+        self.assertAlmostEqual(rec["base_position"]["acc_m"], 1.2, places=3)
+        for a, b in zip(rec["base_position"]["ecef_m"], STATION):
+            self.assertAlmostEqual(a, b, places=4)
+
+    def test_typed_position_from_opus(self):
+        lat, lon, h = 40.0745123, -105.2241234, 1580.123
+        self.svc.add_position("Reservoir mark", lat, lon, h, antenna_height_m=1.5, acc_m=0.012)
+        p = json.loads(self.store.read_text())["positions"][0]
+        la, lo, hh = ecef_to_lla(*p["ecef"])
+        self.assertAlmostEqual(la, lat, places=8)
+        self.assertAlmostEqual(lo, lon, places=8)
+        self.assertAlmostEqual(hh, h + 1.5, places=3)                           # antenna, not the mark
+        self.assertEqual(p["source"], "entered")
+        for bad in (("", lat, lon, h), ("x", 95, lon, h), ("x", "abc", lon, h)):
+            with self.assertRaises(RtkError):
+                self.svc.add_position(*bad)
+        # it can then drive a fixed-position start
+        self.svc.start({"port": "/dev/base", "mode": "saved", "spot": "Reservoir mark"})
+        blobs = [q for k, _, q in StreamParser().feed(bytes(self.serial.written)) if k == "ubx"]
+        self.assertIn(2, [q[8] for q in blobs if struct.unpack_from("<I", q, 4)[0] == 0x20030001])
+
     def test_m8_base_gets_the_older_setup_after_refusing_valset(self):
         self.svc.start({"port": "/dev/base", "mode": "survey", "min_s": 90, "acc_m": 1.5})
         before = len(self.serial.written)
@@ -371,6 +423,8 @@ class ServiceTests(unittest.TestCase):
             self.serial.push(ack(True, 0x01))
         for _ in range(legacy.count(b"\xb5\x62\x06\x71")):
             self.serial.push(ack(True, 0x71))
+        for _ in range(legacy.count(b"\xb5\x62\x06\x08")):
+            self.serial.push(ack(True, 0x08))
         s = self.wait(lambda s: s["config"] == "accepted")
         self.assertEqual(s["receiver"], "m8")
 

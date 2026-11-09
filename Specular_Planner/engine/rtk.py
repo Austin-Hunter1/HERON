@@ -155,6 +155,14 @@ def ecef_to_lla(x, y, z):
     return math.degrees(lat), math.degrees(lon), h
 
 
+def lla_to_ecef(lat, lon, h):
+    a, f = 6378137.0, 1 / 298.257223563
+    e2 = f * (2 - f)
+    la, lo = math.radians(lat), math.radians(lon)
+    n = a / math.sqrt(1 - e2 * math.sin(la) ** 2)
+    return ((n + h) * math.cos(la) * math.cos(lo), (n + h) * math.cos(la) * math.sin(lo), (n * (1 - e2) + h) * math.sin(la))
+
+
 def haversine_m(a, b):
     la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
     h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
@@ -198,6 +206,7 @@ def rtcm_messages(data: bytes, seq: int):
 
 # Key IDs from the u-blox F9 interface description (checked against pyubx2's database in tests).
 KEYS = {
+    "RATE_MEAS": (0x30210001, "<H"), "RATE_NAV": (0x30210002, "<H"),   # measurement period ms, nav ratio
     "TMODE_MODE": (0x20030001, "<B"),
     "TMODE_POS_TYPE": (0x20030002, "<B"),
     "TMODE_ECEF_X": (0x40030003, "<i"), "TMODE_ECEF_Y": (0x40030004, "<i"), "TMODE_ECEF_Z": (0x40030005, "<i"),
@@ -208,6 +217,9 @@ KEYS = {
     "USBOUTPROT_UBX": (0x10780001, "<B"), "USBOUTPROT_RTCM3X": (0x10780004, "<B"),
     "UART1OUTPROT_UBX": (0x10740001, "<B"), "UART1OUTPROT_RTCM3X": (0x10740004, "<B"),
     "MSGOUT_UBX_NAV_SVIN_USB": (0x2091008B, "<B"), "MSGOUT_UBX_NAV_SVIN_UART1": (0x20910089, "<B"),
+    # Raw measurements + navigation data, logged on the laptop for post-processing (OPUS / PPP).
+    "MSGOUT_UBX_RXM_RAWX_USB": (0x209102A7, "<B"), "MSGOUT_UBX_RXM_RAWX_UART1": (0x209102A5, "<B"),
+    "MSGOUT_UBX_RXM_SFRBX_USB": (0x20910234, "<B"), "MSGOUT_UBX_RXM_SFRBX_UART1": (0x20910232, "<B"),
 }
 # Station position + MSM4 for GPS, GLONASS, Galileo, BeiDou + GLONASS code-phase biases.
 RTCM_OUT = {
@@ -227,8 +239,12 @@ def valset(items, layers=LAYER_RAM | LAYER_BBR) -> bytes:
 
 def output_setup(rate_s=1):
     """Turn on UBX + RTCM3 output and the rover messages on USB and UART1."""
-    items = [("USBOUTPROT_UBX", 1), ("USBOUTPROT_RTCM3X", 1), ("UART1OUTPROT_UBX", 1), ("UART1OUTPROT_RTCM3X", 1),
-             ("MSGOUT_UBX_NAV_SVIN_USB", 1), ("MSGOUT_UBX_NAV_SVIN_UART1", 1)]
+    # 1 Hz: the usual base rate, and what OPUS / CSRS-PPP expect for raw data (a faster rate only bloats the log).
+    items = [("RATE_MEAS", 1000), ("RATE_NAV", 1),
+             ("USBOUTPROT_UBX", 1), ("USBOUTPROT_RTCM3X", 1), ("UART1OUTPROT_UBX", 1), ("UART1OUTPROT_RTCM3X", 1),
+             ("MSGOUT_UBX_NAV_SVIN_USB", 1), ("MSGOUT_UBX_NAV_SVIN_UART1", 1),
+             ("MSGOUT_UBX_RXM_RAWX_USB", 1), ("MSGOUT_UBX_RXM_RAWX_UART1", 1),
+             ("MSGOUT_UBX_RXM_SFRBX_USB", 1), ("MSGOUT_UBX_RXM_SFRBX_UART1", 1)]
     for msg, (usb, uart) in RTCM_OUT.items():
         rate = 5 * rate_s if msg == 1005 else rate_s     # station position every 5 s is plenty
         items += [((usb, "<B"), rate), ((uart, "<B"), rate)]
@@ -277,8 +293,10 @@ def tmode3(mode: int, min_s=0, acc_m=0.0, ecef=None, fixed_acc_m=0.0) -> bytes:
 
 
 def legacy_setup(mode, min_s=120, acc_m=2.0, ecef=None, fixed_acc_m=0.02) -> bytes:
-    out = b"".join(cfg_msg(0xF5, mid, 5 if msg == 1005 else 1) for msg, mid in LEGACY_RTCM.items())
+    out = ubx(0x06, 0x08, struct.pack("<HHH", 1000, 1, 1))     # CFG-RATE: 1 Hz measurements, GPS time
+    out += b"".join(cfg_msg(0xF5, mid, 5 if msg == 1005 else 1) for msg, mid in LEGACY_RTCM.items())
     out += cfg_msg(0x01, 0x3B, 1)                         # NAV-SVIN, for the survey progress bars
+    out += cfg_msg(0x02, 0x15, 1) + cfg_msg(0x02, 0x13, 1)  # RXM-RAWX + RXM-SFRBX, for post-processing
     out += tmode3(0)
     if mode == "survey":
         out += tmode3(1, min_s=min_s, acc_m=acc_m)
@@ -287,7 +305,7 @@ def legacy_setup(mode, min_s=120, acc_m=2.0, ecef=None, fixed_acc_m=0.02) -> byt
     return out
 
 
-CFG_IDS = (0x8A, 0x01, 0x71)       # VALSET, MSG, TMODE3: the settings HERON writes and waits to hear back on
+CFG_IDS = (0x8A, 0x01, 0x71, 0x08)  # VALSET, MSG, TMODE3, RATE: the settings HERON writes and waits to hear back on
 
 
 def _count_cfg(blob: bytes) -> int:
@@ -316,9 +334,13 @@ class RtkError(RuntimeError):
 
 
 class RtkService:
-    def __init__(self, flight, store_path=None, opener=None, clock=time.monotonic):
+    def __init__(self, flight, store_path=None, opener=None, clock=time.monotonic, log_dir=None):
         self.flight = flight
         self.store_path = Path(store_path) if store_path else None
+        # Every base session writes everything the receiver sends to <log_dir>/<UTC time>_base.ubx
+        # (raw data for OPUS / PPP) plus <UTC time>_base.json (which base position the corrections used).
+        self.log_dir = Path(log_dir) if log_dir else None
+        self.raw = None
         self.opener = opener
         self.clock = clock
         self.lock = threading.RLock()
@@ -347,6 +369,12 @@ class RtkService:
         self.config_at = None
         self.receiver = None             # "gen9" (F9P, Here4) or "m8" (M8P, Here3) once the base answers
         self.legacy = b""                # M8 version of the setup, tried if the base refuses CFG-VALSET
+        self.session = None              # {"id", "started_utc", "raw_path", "json_path"}
+        self.raw_bytes = 0
+        self.raw_epochs = 0
+        self.raw_first = self.raw_last = None
+        self.session_saved_at = 0.0
+        self.log_error = None
 
     # ---- saved base positions
     def _load(self):
@@ -409,6 +437,123 @@ class RtkService:
             self.legacy = b""
         return self.snapshot()
 
+    # ---- raw log + session record
+    def _open_log(self):
+        if not self.log_dir:
+            return
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            sid = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
+            raw_path = self.log_dir / f"{sid}_base.ubx"
+            self.raw = open(raw_path, "ab")
+            self.session = {"id": sid, "started_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            "raw_path": raw_path, "json_path": self.log_dir / f"{sid}_base.json"}
+            self._write_session()
+        except OSError as exc:
+            self.raw, self.session = None, None
+            self.log_error = f"Raw data is not being saved: {exc}"
+
+    def _log_raw(self, data):
+        raw = self.raw
+        if raw is None:
+            return
+        try:
+            raw.write(data)
+            with self.lock:
+                self.raw_bytes += len(data)
+                now = self.clock()
+                if now - self.session_saved_at > 10 or (self.station and not self.session.get("has_base")):
+                    self.session["has_base"] = bool(self.station)
+                    raw.flush()
+                    self._write_session()
+        except (OSError, ValueError):
+            pass
+
+    def _close_log(self):
+        raw, self.raw = self.raw, None
+        if raw is not None:
+            try:
+                raw.close()
+            except OSError:
+                pass
+        if self.session:
+            self._write_session(stopped=True)
+            self.session["closed"] = True
+
+    def _base_reference(self):
+        """The position the base's corrections are computed from (what the drone's RTK is relative to)."""
+        if self.station:
+            ecef, source, acc = self.station["ecef"], "RTCM 1005 sent by the base", None
+            if self.early:
+                acc = self.early["acc_m"]
+            elif self.svin and self.svin.get("valid"):
+                acc = self.svin["acc_m"]
+            elif self.options.get("mode") == "saved":
+                spot = next((p for p in self._load() if p.get("name") == self.options.get("spot")), None)
+                acc = spot.get("acc_m") if spot else None
+        elif self.early or (self.svin and self.svin.get("valid")):
+            ecef, acc, source = self.svin["ecef"], self.svin["acc_m"], "survey-in mean"
+        else:
+            return None
+        lat, lon, h = ecef_to_lla(*ecef)
+        return {"source": source, "ecef_m": [round(v, 4) for v in ecef], "lat": round(lat, 9), "lon": round(lon, 9),
+                "ellipsoid_height_m": round(h, 4), "acc_m": acc}
+
+    def _write_session(self, stopped=False):
+        if not self.session:
+            return
+        self.session_saved_at = self.clock()
+        o = self.options
+        record = {
+            "about": "HERON RTK base session. The drone's RTK positions are relative to base_position. "
+                     "After post-processing the raw .ubx (OPUS / PPP), shift every drone position by "
+                     "(true base position - base_position).",
+            "started_utc": self.session["started_utc"],
+            "stopped_utc": datetime.now(timezone.utc).isoformat(timespec="seconds") if stopped else None,
+            "port": o.get("port"), "mode": o.get("mode"), "saved_position": o.get("spot"),
+            "survey_target": {"min_s": o.get("min_s"), "acc_m": o.get("acc_m")} if o.get("mode") == "survey" else None,
+            "survey_stopped_early": self.early is not None,
+            "receiver": self.receiver,
+            "base_position": self._base_reference(),
+            "raw_file": self.session["raw_path"].name,
+            "raw_bytes": self.raw_bytes,
+            "raw_epochs": self.raw_epochs,
+            "raw_duration_s": round(self.raw_last - self.raw_first) if self.raw_first is not None else 0,
+            "rtcm_messages": {str(k): v for k, v in sorted(self.counts.items())},
+        }
+        try:
+            tmp = self.session["json_path"].with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
+            tmp.replace(self.session["json_path"])
+        except OSError:
+            pass
+
+    def add_position(self, name, lat, lon, height_m, antenna_height_m=0.0, acc_m=0.02):
+        """Save a known position (e.g. from OPUS) for the antenna mark.
+
+        lat/lon in degrees, height_m = ellipsoid height of the ground mark; antenna_height_m = vertical
+        distance from the mark up to the antenna reference point. The saved position is the antenna's.
+        """
+        name = str(name or "").strip()[:40]
+        try:
+            lat, lon, height_m = float(lat), float(lon), float(height_m)
+            antenna_height_m, acc_m = float(antenna_height_m or 0), float(acc_m or 0.02)
+        except (TypeError, ValueError):
+            raise RtkError("Latitude, longitude and heights must be numbers.")
+        if not name:
+            raise RtkError("Give the position a name.")
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180 and -500 <= height_m <= 9000 and 0 <= antenna_height_m <= 10):
+            raise RtkError("Check the coordinates: latitude −90 to 90, longitude −180 to 180, antenna height 0 to 10 m.")
+        h = height_m + antenna_height_m
+        ecef = lla_to_ecef(lat, lon, h)
+        positions = [p for p in self._load() if p.get("name") != name]
+        positions.insert(0, {"name": name, "ecef": [round(v, 4) for v in ecef], "acc_m": max(acc_m, 0.001),
+                             "lat": round(lat, 9), "lon": round(lon, 9), "h_m": round(h, 4),
+                             "mark_height_m": height_m, "antenna_height_m": antenna_height_m, "source": "entered",
+                             "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+        self._store(positions[:20])
+        return self.snapshot()
+
     def forget_position(self, name):
         self._store([p for p in self._load() if p.get("name") != name])
         return self.snapshot()
@@ -465,6 +610,7 @@ class RtkService:
             self.started_at = self.clock()
             self.legacy = legacy
             self.stop_event.clear()
+            self._open_log()
         if setup:
             try:
                 handle.write(setup)
@@ -495,6 +641,7 @@ class RtkService:
                 handle.close()
             except Exception:
                 pass
+        self._close_log()
         return self.snapshot()
 
     def close(self):
@@ -512,6 +659,7 @@ class RtkService:
                     self.running = False
                 break
             if data:
+                self._log_raw(data)
                 for item in parser.feed(data):
                     self.handle(item)
 
@@ -536,6 +684,10 @@ class RtkService:
         elif kind == "ubx":
             _, (cls, mid), payload = item
             with self.lock:
+                if (cls, mid) == (0x02, 0x15):
+                    self.raw_epochs += 1
+                    self.raw_first = self.raw_first or now
+                    self.raw_last = now
                 if (cls, mid) == (0x01, 0x3B):
                     sv = parse_nav_svin(payload)
                     if self.early and sv and not sv["active"]:
@@ -648,6 +800,11 @@ class RtkService:
                 "aircraft": aircraft, "saved": self._load(),
                 "can_save": bool((self.svin and self.svin["valid"]) or self.station),
                 "finished_early": self.early is not None,
+                "raw": None if not self.session else {
+                    "file": self.session["raw_path"].name, "bytes": self.raw_bytes, "epochs": self.raw_epochs,
+                    "duration_s": round(self.raw_last - self.raw_first) if self.raw_first is not None else 0,
+                    "logging": self.raw is not None},
+                "raw_error": self.log_error,
                 "can_finish": bool(self.running and self.svin and self.svin["active"] and self.svin["duration_s"] >= 10),
             }
 
@@ -713,6 +870,12 @@ def rtk_api(service, prefix="/api/rtk"):
     @bp.post("/save")
     def save():
         return jsonify(service.save_position((request.get_json() or {}).get("name")))
+
+    @bp.post("/add")
+    def add():
+        b = request.get_json() or {}
+        return jsonify(service.add_position(b.get("name"), b.get("lat"), b.get("lon"), b.get("height_m"),
+                                            b.get("antenna_height_m", 0), b.get("acc_m", 0.02)))
 
     @bp.post("/finish")
     def finish():
