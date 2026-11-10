@@ -9,6 +9,8 @@
   <div class="panel">
     <div class="viz">
       <div class="fig"><div class="cap"><span>Time domain: 4 chips</span><span id="s08-modname"></span></div><canvas id="s08-wave" data-aspect="0.26" data-minh="150"></canvas></div>
+      <div class="fig"><div class="cap"><span>Time domain · every modulation on the same 4 code chips</span><span>click a row to select it</span></div><canvas id="s08-all" data-aspect="0.78" data-minh="420"></canvas></div>
+      <div class="controls" id="s08-allctl"></div>
       <div class="figrow">
         <div class="fig"><div class="cap"><span>Power spectral density</span><span>dB, unit power</span></div><canvas id="s08-psd" data-aspect="0.7" data-minh="220"></canvas></div>
         <div class="fig"><div class="cap"><span>Auto-correlation</span></div><canvas id="s08-acf" data-aspect="0.7" data-minh="220"></canvas></div>
@@ -24,6 +26,8 @@
         $$G(f)=\frac{1}{T_c}\,\big|P(f)\big|^2$$
         <div class="where">\(P(f)\) is the Fourier transform of one chip pulse. The page computes it exactly for each pulse shape.</div></div>
       <p><strong>MBOC:</strong> GPS L1C, Galileo E1 and BeiDou B1C all put 1/11 of their power in BOC(6,1) and 10/11 in BOC(1,1). They do it in different ways: TMBOC (time-multiplexed chips), CBOC (a weighted sum), and QMBOC (in quadrature). The total spectrum is the same, which makes the three signals interoperable.</p>
+      <p>The second plot shows every pulse shape on the same four code chips. Look for the BOC(6,1) parts: the small fast steps in CBOC, the one fast chip in TMBOC, and the dashed quadrature part in QMBOC. BPSK(10) puts ten chips where BPSK(1) puts one.</p>
+      <p>Tick <em>Put the signals on a carrier</em> to see the RF signal \(s(t)=I(t)\cos 2\pi f_c t-Q(t)\sin 2\pi f_c t\). Each sign change of the code or the subcarrier is a 180° jump of the carrier phase. The dashed line is the baseband waveform. The real L1 carrier makes 1540 cycles in one C/A chip, and the L5 carrier makes 115 cycles in one L5 chip. The plot uses fewer cycles so that you can see them. The L5 row keeps the true ratio of the two carrier frequencies.</p>
       <dl class="readouts" id="s08-ro"></dl>
     </div>
   </div>
