@@ -43,7 +43,7 @@ G.section("s08", (root) => {
   const v = G.controls($("#s08-ctl"), [
     { id: "s08-mod", key: "mod", label: "Modulation", type: "select", value: "boc11", options: Object.entries(MOD).map(([k, m]) => [k, m.name]) },
     { id: "s08-cmp", key: "cmp", label: "Compare with BPSK(1)", type: "check", value: true },
-  ], () => drawMod());
+  ], () => { drawMod(); if (typeof drawAll === "function") drawAll(); });
   const wC = $("#s08-wave"), pC = $("#s08-psd"), aC = $("#s08-acf");
   const code4 = [1, -1, -1, 1];
   const drawMod = () => {
@@ -84,6 +84,87 @@ G.section("s08", (root) => {
     ]);
   };
   [wC, pC, aC].forEach((c) => G.mount(c, drawMod));
+
+  /* ---------- time domain: every modulation on the same code ---------- */
+  // Why: the single-waveform plot above shows one pulse shape at a time.
+  // This view puts all of them on the same 4 code chips and the same time
+  // axis, so the eye can compare the subcarrier rates and the MBOC variants
+  // directly. Each row names its MOD entry; a click on a row selects it above.
+  const allC = $("#s08-all");
+  const r10 = G.rng(5), code40 = Int8Array.from({ length: 40 }, () => (r10() < 0.5 ? -1 : 1));
+  const wI = Math.sqrt(29 / 33), wQ = Math.sqrt(4 / 33);
+  // TMBOC: in L1C-P, chips 0, 4, 6 and 29 of each 33 are BOC(6,1). Chip 0 of
+  // the 4 shown takes the BOC(6,1) slot, so the pattern is visible.
+  const ALL = [
+    { n: "BPSK(1)", u: "GPS L1 C/A", key: "bpsk1", col: "gps", pulse: () => P.bpsk },
+    { n: "BOC(1,1)", u: "L1C-D, B1C-D", key: "boc11", col: "gps", pulse: () => P.boc11 },
+    { n: "BOC(6,1)", u: "high-frequency part of MBOC", key: "boc61", col: "accent", pulse: () => P.boc61 },
+    { n: "CBOC(6,1,1/11, +)", u: "Galileo E1-B data: √(10/11)·BOC(1,1) + √(1/11)·BOC(6,1)", key: "cboc", col: "gal", pulse: () => P.cbocP },
+    { n: "CBOC(6,1,1/11, −)", u: "Galileo E1-C pilot: √(10/11)·BOC(1,1) − √(1/11)·BOC(6,1)", key: "cboc", col: "gal", pulse: () => P.cbocM },
+    { n: "TMBOC(6,1,4/33)", u: "GPS L1C-P: 4 of 33 chips are BOC(6,1)", key: "tmboc", col: "gps", pulse: (c) => (c === 0 ? P.boc61 : P.boc11) },
+    { n: "QMBOC(6,1,4/33)", u: "BeiDou B1C-P: I = √(29/33)·BOC(1,1), Q = √(4/33)·BOC(6,1) (dashed)", key: "tmboc", col: "bds", pulse: () => P.boc11.map((x) => wI * x), q: () => P.boc61.map((x) => wQ * x) },
+    { n: "BPSK(10)", u: "GPS L5, Galileo E5a, BeiDou B2a: 10 chips per L1 chip", key: "bpsk10", col: "bds", fast: true },
+  ];
+  // Carrier view. The true L1 carrier has 1540 cycles in one 1.023 MHz chip,
+  // which no screen can show. So the carrier runs at a display rate that the
+  // user sets, and L5 keeps its true ratio to L1 (1176.45 / 1575.42).
+  const vc = G.controls($("#s08-allctl"), [
+    { id: "s08-car", key: "on", label: "Put the signals on a carrier", type: "check", value: false },
+    { id: "s08-cyc", key: "cyc", label: "Carrier cycles per L1 chip (display; true value 1540)", min: 3, max: 40, step: 1, value: 12, fmt: (x) => x + "" },
+  ], () => drawAll());
+  const L5_OVER_L1 = 1176.45 / 1575.42;
+  /** Baseband value (I, Q) of row r at time x in L1 chips, 0 <= x < 4. */
+  const bb = (r, x) => {
+    if (r.fast) { const k = Math.min(39, Math.floor(x * 10)); return [code40[k], 0]; }
+    const c = Math.min(3, Math.floor(x)), k = Math.min(NSEG - 1, Math.floor((x - c) * NSEG));
+    return [code4[c] * r.pulse(c)[k], r.q ? code4[c] * r.q(c)[k] : 0];
+  };
+  const drawAll = () => {
+    const C = G.col, n = ALL.length, us = 1e6 / 1.023e6; // one L1 chip in µs
+    const p = G.plot(allC, { x: [0, 4 * us], y: [-0.55, n - 0.35], xlabel: "time (µs) · 4 chips at 1.023 Mchip/s", yticks: [], margin: { l: 14, r: 14, t: 6 } });
+    ALL.forEach((r, i) => {
+      const yc = n - 1 - i, amp = vc.on ? 0.2 : 0.24, xs = [], ys = [], qx = [], qy = [];
+      if (MOD[v.mod] && r.key === v.mod) p.hband(yc - 0.42, yc + 0.5, { fill: G.alpha(C.accent, 0.08) });
+      if (r.fast) {
+        for (let k = 0; k < 40; k++) { const t0 = k * us / 10, t1 = (k + 1) * us / 10; xs.push(t0, t1); ys.push(yc + amp * code40[k], yc + amp * code40[k]); }
+      } else {
+        for (let c = 0; c < 4; c++) {
+          const pl = r.pulse(c), ql = r.q ? r.q(c) : null;
+          for (let k = 0; k < NSEG; k++) {
+            const t0 = (c + k / NSEG) * us, t1 = (c + (k + 1) / NSEG) * us;
+            xs.push(t0, t1); ys.push(yc + amp * code4[c] * pl[k], yc + amp * code4[c] * pl[k]);
+            if (ql) { qx.push(t0, t1); qy.push(yc + amp * code4[c] * ql[k], yc + amp * code4[c] * ql[k]); }
+          }
+        }
+      }
+      p.hline(yc, { color: G.alpha(C.ink3, 0.25), width: 1 });
+      if (vc.on) {
+        // s(t) = I(t) cos(2 pi fc t) - Q(t) sin(2 pi fc t). A sign change of
+        // the code or subcarrier shows as a 180 degree jump of the carrier.
+        const cyc = vc.cyc * (r.fast ? L5_OVER_L1 : 1), N = Math.max(800, Math.round(4 * cyc * 24));
+        const cx = [], cy = [];
+        for (let j = 0; j <= N; j++) {
+          const x = Math.min(4 - 1e-9, 4 * j / N), [I, Q] = bb(r, x), ph = 2 * Math.PI * cyc * x;
+          cx.push(x * us); cy.push(yc + amp * (I * Math.cos(ph) - Q * Math.sin(ph)));
+        }
+        p.line(xs, ys, { color: G.alpha(C.ink3, 0.55), width: 1, dash: [2, 3] });
+        p.line(cx, cy, { color: C[r.col], width: 1.2 });
+      } else {
+        if (qx.length) p.line(qx, qy, { color: C.warn, width: 1.4, dash: [3, 2] });
+        p.line(xs, ys, { color: C[r.col], width: 1.6 });
+      }
+      p.text(0, yc + 0.43, r.n, { dx: 2, color: C.ink, font: `600 12px ${C.mono}`, halo: true });
+      p.text(0, yc + 0.43, r.u, { dx: 150, color: C.ink3, font: `11px ${C.mono}`, halo: true });
+    });
+    for (let c = 1; c < 4; c++) p.vline(c * us, { color: G.alpha(C.ink3, 0.35), dash: [2, 4] });
+  };
+  G.mount(allC, drawAll);
+  allC.style.cursor = "pointer";
+  allC.addEventListener("click", (e) => {
+    const b = allC.getBoundingClientRect(), i = Math.floor((e.clientY - b.top) / b.height * ALL.length);
+    const r = ALL[Math.min(ALL.length - 1, Math.max(0, i))], sel = $("#s08-mod");
+    sel.value = r.key; sel.dispatchEvent(new Event("change"));
+  });
 
   /* ---------- HERON signal plan in frequency ---------- */
   const L1 = [
