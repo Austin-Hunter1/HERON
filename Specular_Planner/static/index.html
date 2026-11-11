@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/static/style.css?v=gold1" />
   <link rel="stylesheet" href="/static/flight.css?v=flyhold3" />
   <link rel="stylesheet" href="/static/payload-strip.css?v=2" />
-  <link rel="stylesheet" href="/static/rtk-strip.css?v=11" />
+  <link rel="stylesheet" href="/static/rtk-strip.css?v=12" />
   <link rel="stylesheet" href="/static/map-layers.css?v=3" />
 </head>
 <body class="click-wps" data-view="plan">
@@ -362,8 +362,8 @@
         </dl>
 
         <div id="rtkSurvey" class="rtk-survey" hidden>
-          <div class="meter"><span>Time</span><div class="track"><i id="rtkTimeBar"></i></div><b id="rtkTimeText">0:00</b></div>
-          <div class="meter"><span>Accuracy</span><div class="track"><i id="rtkAccBar"></i></div><b id="rtkAccText">—</b></div>
+          <div id="rtkTimeMeter" class="meter"><span>Time</span><div class="track"><i id="rtkTimeBar"></i></div><b id="rtkTimeText">0:00</b></div>
+          <div id="rtkAccMeter" class="meter"><span>Accuracy</span><div class="track"><i id="rtkAccBar"></i></div><b id="rtkAccText">—</b></div>
         </div>
 
         <div id="rtkSetup">
@@ -511,7 +511,7 @@
   <script src="/static/instruments.js?v=2"></script>
   <script src="/static/flight.js?v=lead2"></script>
   <script src="/static/payload-strip.js?v=2"></script>
-  <script src="/static/rtk-strip.js?v=14"></script>
+  <script src="/static/rtk-strip.js?v=17"></script>
   <script src="/static/map-layers.js?v=4"></script>
 </body>
 </html>

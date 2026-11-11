@@ -144,6 +144,7 @@ body[data-view="fly"] #deck:not(.attached) > #rtkStrip .rtk-bar { background: va
 .rtk-survey { display: grid; gap: 8px; margin: 0 0 16px; }
 .rtk-survey[hidden] { display: none; }
 .meter { display: grid; grid-template-columns: 64px 1fr 92px; align-items: center; gap: 10px; font-size: 12px; }
+.meter[hidden] { display: none; }
 .meter span { color: var(--deck-muted); }
 .meter b { font-weight: 600; text-align: right; white-space: nowrap; }
 .meter .track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }

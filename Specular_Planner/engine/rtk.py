@@ -413,6 +413,13 @@ class RtkService:
         self._store(positions[:20])
         return self.snapshot()
 
+    @staticmethod
+    def _svin_usable(sv):
+        """A survey-in average worth using as the base position: real satellites, a point on Earth, under 10 m."""
+        if not sv or not sv.get("obs") or sv.get("acc_m") is None or sv["acc_m"] > 10:
+            return False
+        return math.dist((0, 0, 0), sv["ecef"]) > 6.3e6
+
     def finish_survey(self):
         """Stop a survey-in now and send corrections from the position averaged so far.
 
@@ -423,6 +430,9 @@ class RtkService:
             sv = self.svin
             if not (self.running and self.port is not None and sv and sv["active"] and sv["duration_s"] >= 10):
                 raise RtkError("There is no survey in progress to finish yet.")
+            if not self._svin_usable(sv):
+                raise RtkError("The base has no usable position yet (no satellites, or worse than 10 m). "
+                               "Check the antenna cable and that it has open sky, then wait for the survey.")
             ecef, acc = sv["ecef"], max(sv["acc_m"], 0.01)
             blob = (legacy_setup("saved", ecef=ecef, fixed_acc_m=acc) if self.receiver == "m8"
                     else fixed_setup(ecef, acc))
@@ -491,7 +501,7 @@ class RtkService:
             elif self.options.get("mode") == "saved":
                 spot = next((p for p in self._load() if p.get("name") == self.options.get("spot")), None)
                 acc = spot.get("acc_m") if spot else None
-        elif self.early or (self.svin and self.svin.get("valid")):
+        elif (self.early or (self.svin and self.svin.get("valid"))) and self._svin_usable(self.svin):
             ecef, acc, source = self.svin["ecef"], self.svin["acc_m"], "survey-in mean"
         else:
             return None
@@ -779,7 +789,7 @@ class RtkService:
                         "v_acc_m": tel.get("gps_v_acc") if fix is not None else None,
                         "transport": tel.get("transport"), "baseline_m": None}
             base_pos = None
-            if self.svin and (self.svin["valid"] or self.svin["active"]) and self.svin["duration_s"]:
+            if self.svin and (self.svin["valid"] or self.svin["active"]) and self.svin["duration_s"] and self._svin_usable(self.svin):
                 lat, lon, h = ecef_to_lla(*self.svin["ecef"])
                 base_pos = {"lat": lat, "lon": lon, "h": h, "source": "survey-in"}
             elif self.station:
@@ -805,7 +815,8 @@ class RtkService:
                     "duration_s": round(self.raw_last - self.raw_first) if self.raw_first is not None else 0,
                     "logging": self.raw is not None},
                 "raw_error": self.log_error,
-                "can_finish": bool(self.running and self.svin and self.svin["active"] and self.svin["duration_s"] >= 10),
+                "can_finish": bool(self.running and self.svin and self.svin["active"] and self.svin["duration_s"] >= 10
+                                   and self._svin_usable(self.svin)),
             }
 
 

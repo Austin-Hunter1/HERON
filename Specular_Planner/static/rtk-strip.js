@@ -61,21 +61,31 @@
     noteUntil = text ? Date.now() + 8000 : 0;
   }
 
+  // The survey's own accuracy, once it has locked or been stopped. Stays on screen after the target is met.
+  function baseAcc(s) {
+    const sv = s.survey;
+    if (!sv || sv.active || sv.acc_m == null) return "";
+    return `Base within ${metres(sv.acc_m)}`;
+  }
+
   // What the bar says. The drone's fix leads once corrections flow; before that, the base's state.
   function headline(s) {
     const a = s.aircraft || {}, base = s.base_state;
+    const withBase = (text) => [text, baseAcc(s)].filter(Boolean).join(" · ");
     if (base === "error") return { fix: "bad", badge: "Base", title: "Base station disconnected", sub: s.error || "Check the cable, then start it again." };
+    if (s.config === "no_reply" && s.options?.mode !== "as_is" && !(s.survey && s.survey.active)) return { fix: "bad", badge: "Base", title: "Base didn't take the settings", sub: "Not a u-blox receiver? Set it up on the receiver, then choose “Use the receiver's settings”." };
     if (s.config === "rejected") return { fix: "bad", badge: "Base", title: "Base refused the settings", sub: "Set it up in u-center, then choose “Use the receiver's settings”." };
     if (base === "off") return { fix: "none", badge: "RTK off", title: "No base station", sub: a.connected ? `Drone on ${a.fix_name}` : "Set up a base to send corrections" };
     if (base === "surveying") {
       const sv = s.survey || {};
+      if (!sv.obs && sv.duration_s >= 15) return { fix: "bad", badge: "Survey", title: "Base sees no satellites", sub: "Check the antenna cable and that it has open sky. Cold starts can take a minute." };
       return { fix: "base", badge: "Survey", title: `Base surveying  ${clock(sv.duration_s)}`, sub: `Within ${metres(sv.acc_m)} so far, target ${metres(Number(s.options?.acc_m))}` };
     }
     if (base === "silent") return { fix: "bad", badge: "Base", title: "No data from the base", sub: s.rx_age_s == null ? "Check the port and that the base is outputting RTCM." : `Nothing for ${Math.round(s.rx_age_s)} s` };
-    if (!a.connected) return { fix: "base", badge: "Ready", title: "Base ready", sub: s.finished_early ? `Survey stopped early, base within ${metres(s.survey?.acc_m)}` : "Corrections start when the drone connects" };
-    if (a.fix === 6) return { fix: "fixed", badge: "Fixed", title: "RTK fixed", sub: a.baseline_m ? `${distance(a.baseline_m)} from base, ${rate(s.rate_bps)}` : `Sending ${rate(s.rate_bps)}` };
-    if (a.fix === 5) return { fix: "float", badge: "Float", title: "RTK float", sub: "Usually fixed within minutes" };
-    return { fix: "base", badge: a.fix_name === "—" ? "No GPS" : a.fix_name.replace(" fix", ""), title: "Waiting for RTK", sub: `Sending ${rate(s.rate_bps) || "corrections"}. The drone needs a clear sky view.` };
+    if (!a.connected) return { fix: "base", badge: "Ready", title: "Base ready", sub: withBase(s.finished_early ? "Survey stopped early" : "Corrections start when the drone connects") };
+    if (a.fix === 6) return { fix: "fixed", badge: "Fixed", title: "RTK fixed", sub: withBase(a.baseline_m ? `${distance(a.baseline_m)} from base, ${rate(s.rate_bps)}` : `Sending ${rate(s.rate_bps)}`) };
+    if (a.fix === 5) return { fix: "float", badge: "Float", title: "RTK float", sub: withBase("Usually fixed within minutes") };
+    return { fix: "base", badge: a.fix_name === "—" ? "No GPS" : a.fix_name.replace(" fix", ""), title: "Waiting for RTK", sub: withBase(`Sending ${rate(s.rate_bps) || "corrections"}. The drone needs a clear sky view.`) };
   }
 
   function render() {
@@ -116,13 +126,15 @@
       const pos = s.base_position;
       const how = s.options?.mode === "saved" ? `Saved, ${s.options.spot}`
         : s.options?.mode === "as_is" ? "From the receiver"
-        : sv && sv.acc_m ? `Surveyed, within ${metres(sv.acc_m)}${s.finished_early ? " (stopped early)" : ""}` : "Surveyed";
+        : sv && sv.acc_m != null ? `Surveyed, within ${metres(sv.acc_m)}${s.finished_early ? " (stopped early)" : ""}` : "Surveyed";
       $("rtkFactBase").textContent = pos || s.options?.mode !== "survey" ? how : "Waiting for the base";
       $("rtkFactLink").textContent = !a.connected ? "Waiting for the drone" : s.rate_bps ? `${rate(s.rate_bps)} to the drone` : "Nothing sent yet";
     }
 
-    // Survey progress
-    $("rtkSurvey").hidden = !surveying || showSetup;
+    // Survey progress. The accuracy row stays after the target is met so the receiver's number remains visible.
+    const settled = running && sv && !sv.active && sv.acc_m != null;
+    $("rtkSurvey").hidden = (!surveying && !settled) || showSetup;
+    $("rtkTimeMeter").hidden = !surveying;
     if (surveying) {
       const minS = Number(s.options?.min_s) || 120, target = Number(s.options?.acc_m) || 2;
       const tFrac = Math.min(1, sv.duration_s / minS), aFrac = sv.acc_m ? Math.min(1, target / sv.acc_m) : 0;
@@ -130,6 +142,9 @@
       $("rtkAccBar").style.width = (aFrac * 100).toFixed(1) + "%"; $("rtkAccBar").classList.toggle("done", aFrac >= 1);
       $("rtkTimeText").textContent = `${clock(sv.duration_s)} / ${clock(minS)}`;
       $("rtkAccText").textContent = `${metres(sv.acc_m)} / ${metres(target)}`;
+    } else if (settled) {
+      $("rtkAccBar").style.width = "100%"; $("rtkAccBar").classList.add("done");
+      $("rtkAccText").textContent = metres(sv.acc_m);
     }
 
     // Saved positions

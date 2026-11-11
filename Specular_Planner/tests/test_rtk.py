@@ -493,3 +493,14 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_finish_refused_without_satellites():
+    """Field test 2026-11-09: Finish pressed while the base had 0 satellites saved ECEF (0,0,0) as the base.
+    Finishing must be refused and no base position recorded until the survey has real observations."""
+    from engine.rtk import RtkService
+    nosat = {"duration_s": 20, "ecef": (0.0, 0.0, 0.0), "acc_m": 94868.3, "obs": 0, "valid": False, "active": True}
+    good = {"duration_s": 20, "ecef": (-1288398.0, -4720804.0, 4079773.0), "acc_m": 1.5, "obs": 20, "valid": False, "active": True}
+    assert not RtkService._svin_usable(nosat)
+    assert RtkService._svin_usable(good)
+    assert not RtkService._svin_usable(dict(good, acc_m=50.0))
