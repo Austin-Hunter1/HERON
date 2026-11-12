@@ -39,8 +39,15 @@ def _status(connected, values, setup=None, fault=None, message=None, simulated=F
             "elapsed_s": round(values.get(P.F_ELAPSED, 0)), "rate_mbps": round(values.get(P.F_RATE, 0), 1),
             "minutes_left": None if left is None or left < 0 else round(left),
             "free_gb": round(values.get(P.F_FREE, 0), 1), "overflows": int(values.get(P.F_OVF, 0)),
+            "cpu_c": _temp(values, P.F_CPU), "ssd_c": _temp(values, P.F_SSD),
             "auto": auto, "setup": setup, "fault": fault if state == "FAULT" else None,
             "message": message, "age_s": None if age is None else round(age, 1)}
+
+
+def _temp(values, name):
+    """deg C from the NUC, or None when it is unknown or the NUC is older than 0.2.4."""
+    value = values.get(name)
+    return None if value is None or value < 0 else round(value)
 
 
 class PayloadMonitor:

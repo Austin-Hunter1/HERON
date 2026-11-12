@@ -4,13 +4,25 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
 
+from . import health
 from .config import digest, estimate, validate
+
+TEMP_EVERY_S = 2.0          # how often the NUC temperatures are read
+HEALTH_LOG_EVERY_S = 5.0    # nuc_health.csv row interval while recording
 
 
 class Controller:
-    def __init__(self, backend, clock=time.monotonic):
+    def __init__(self, backend, clock=time.monotonic, read_temps=None):
         self.backend, self.clock = backend, clock
+        # NUC temperatures: read every TEMP_EVERY_S, sent with the status, and written to
+        # nuc_health.csv in the recording folder every HEALTH_LOG_EVERY_S while recording.
+        self.read_temps = read_temps or health.read_temps
+        self.temps = {"cpu_c": None, "ssd_c": None}
+        self.temps_at = None
+        self.health_logged_at = None
+        self.hot = set()
         self.lock = threading.RLock()
         self.state = "IDLE"
         self.config = None
@@ -138,6 +150,7 @@ class Controller:
             raise
         self.started, self.origin = self.clock(), origin
         self.state = "RECORDING"
+        self.health_logged_at = None
         where = f" at item {self.plan['start_seq']}" if origin == "mission" and self.plan else ""
         if origin == "mission" and self.plan and "segments" in self.plan:
             where += f", phase {self.plan['index'] + 1} of {len(self.plan['segments'])}"
@@ -248,9 +261,49 @@ class Controller:
         self.state = "AUTO_ARMED"
         self.event(f"Waiting for items {plan["start_seq"]}-{plan["stop_seq"]} (phase {index + 1} of {len(plan['segments'])})")
 
+    def _health(self, now):
+        """Read the temperatures, warn once per heat-up, and log them while recording."""
+        if self.temps_at is None or now - self.temps_at >= TEMP_EVERY_S:
+            self.temps_at = now
+            try:
+                self.temps = self.read_temps()
+            except Exception:
+                self.temps = {"cpu_c": None, "ssd_c": None}
+            for key, name, warn in (("cpu_c", "CPU", health.CPU_WARN_C), ("ssd_c", "SSD", health.SSD_WARN_C)):
+                c = self.temps.get(key)
+                if c is None:
+                    continue
+                if c >= warn and key not in self.hot:
+                    self.hot.add(key)
+                    self.event(f"NUC {name} hot: {c:.0f} C")
+                elif c < warn - 5 and key in self.hot:
+                    self.hot.discard(key)
+                    self.event(f"NUC {name} cooled to {c:.0f} C")
+        if self.state == "RECORDING" and (self.health_logged_at is None or now - self.health_logged_at >= HEALTH_LOG_EVERY_S):
+            self.health_logged_at = now
+            try:
+                folder = self.backend.session_path()
+                if folder:
+                    path = Path(folder) / "nuc_health.csv"
+                    h = self.backend.status()
+                    overflows = sum(int(r.get("overflows", 0)) + int(r.get("gaps", 0)) for r in h.get("radios", []))
+                    new = not path.exists()
+                    with path.open("a") as f:
+                        if new:
+                            f.write("utc,elapsed_s,cpu_c,ssd_c,rate_mbps,disk_free_gb,dropped,mission_item\n")
+                        cell = lambda v: "" if v is None else v
+                        f.write(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')},"
+                                f"{round(now - self.started, 1) if self.started else ''},"
+                                f"{cell(self.temps.get('cpu_c'))},{cell(self.temps.get('ssd_c'))},"
+                                f"{round(h.get('rate_mbps', 0), 2)},{h.get('disk_free_gb', '')},{overflows},"
+                                f"{cell(self.cube.get('current'))}\n")
+            except Exception:
+                pass                                    # logging must never disturb the recording
+
     def tick(self):
         with self.lock:
             now = self.clock()
+            self._health(now)
             if self.cube_seen is not None and now - self.cube_seen > 5 and self.cube["connected"]:
                 self.cube["connected"] = False
                 self.event("Cube link lost")
@@ -281,7 +334,8 @@ class Controller:
                         estimate=e, session=self.session, plan=copy.deepcopy(self.plan),
                         elapsed_s=round(self.clock()-self.started, 1) if self.state == "RECORDING" and self.started else 0,
                         remaining_minutes=round(max(0, h["disk_free_gb"]-reserve)/e["gb_per_min"], 1) if e["gb_per_min"] else None,
-                        cube=copy.deepcopy(self.cube), events=list(self.events)[-15:], **h)
+                        cube=copy.deepcopy(self.cube), events=list(self.events)[-15:],
+                        temps=dict(self.temps), **h)
 
 
 def check_segments(segments):

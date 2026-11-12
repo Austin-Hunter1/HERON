@@ -58,7 +58,9 @@ F_FREE = "HRN_FREEGB"     # GB free on the data disk
 F_OVF = "HRN_OVF"         # receive overflows + gaps this recording
 F_AUTO = "HRN_AUTO"       # start*1000 + stop while auto-record is armed or active, else 0
 F_SEG = "HRN_SEG"         # segment number*10 + segment count with per-phase auto-record, else 0
-STATUS_FIELDS = (F_STATE, F_ELAPSED, F_RATE, F_LEFT, F_FREE, F_OVF, F_AUTO, F_SEG)
+F_CPU = "HRN_CPU_C"       # NUC CPU package temperature, deg C (-1 unknown)
+F_SSD = "HRN_SSD_C"       # NUC data SSD temperature, deg C (-1 unknown)
+STATUS_FIELDS = (F_STATE, F_ELAPSED, F_RATE, F_LEFT, F_FREE, F_OVF, F_AUTO, F_SEG, F_CPU, F_SSD)
 
 SETUP_PREFIX = "HERON setup: "
 TEXT_PREFIX = "HERON"
@@ -119,7 +121,14 @@ def status_values(snapshot):
         F_OVF: float(overflows),
         F_AUTO: pack_auto(snapshot.get("plan")),
         F_SEG: _pack_seg(snapshot.get("plan")),
+        F_CPU: _temp(snapshot, "cpu_c"),
+        F_SSD: _temp(snapshot, "ssd_c"),
     }
+
+
+def _temp(snapshot, key):
+    value = (snapshot.get("temps") or {}).get(key)
+    return float(-1 if value is None else value)
 
 
 def _pack_seg(plan):

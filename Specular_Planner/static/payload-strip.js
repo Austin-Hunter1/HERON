@@ -106,6 +106,11 @@
     $("plOvf").textContent = live ? String(s.overflows) : "—";
     $("plOvf").classList.toggle("bad", live && s.overflows > 0);
     $("plLeft").classList.toggle("bad", live && s.minutes_left != null && s.minutes_left < 5);
+    // NUC temperature: CPU shown, SSD in the tooltip; red from 90 C (CPU) or 70 C (SSD).
+    const cpu = live ? s.cpu_c : null, ssd = live ? s.ssd_c : null;
+    $("plTemp").textContent = cpu != null ? `${cpu} °C` : ssd != null ? `SSD ${ssd} °C` : "—";
+    $("plTemp").title = live ? `CPU ${cpu ?? "?"} °C · SSD ${ssd ?? "?"} °C` : "NUC temperature";
+    $("plTemp").classList.toggle("bad", (cpu != null && cpu >= 90) || (ssd != null && ssd >= 70));
 
     const rec = $("plRec");
     const recording = st === "RECORDING";
