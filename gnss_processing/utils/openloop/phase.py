@@ -172,11 +172,14 @@ class ScanfResult:
     uptime_ms: np.ndarray
     residual_m: np.ndarray          # filtered r
     rate_mps: np.ndarray
-    slips: np.ndarray               # (K, B) integer m_i
+    slips: np.ndarray               # (K, B) integer m_i: wrap count plus corrected slips
     measured_m: np.ndarray          # (K, B) y_i with the slips applied
     band_offset_m: np.ndarray       # (B,)
     innovation_m: np.ndarray        # (K, B)
-    slip_events: np.ndarray         # (K, B) bool: m changed at this epoch
+    # (K, B) bool: the filter chose an integer that is NOT the one that plain
+    # continuity with the previous epoch gives (a corrected cycle slip). A
+    # normal wrap of w_i through +-pi changes m_i but is not an event (C-17).
+    slip_events: np.ndarray
     excess_path_m: np.ndarray       # model excess + filtered residual
 
 
@@ -225,6 +228,9 @@ def scanf(series: list[PhaseSeries], *, process_accel_mps2: float = 0.05,
     out_y = np.zeros((k, b))
     out_innov = np.zeros((k, b))
     events = np.zeros((k, b), dtype=bool)
+    # Unwrapped cycles w/2pi + m of the last good epoch, per band. Plain
+    # continuity picks the m that keeps the new value nearest to it.
+    prev_cycles = w[0] / (2 * np.pi)
     h = np.ones((b, 1)) @ np.array([[1.0, 0.0]])
     for i in range(k):
         dt = t[i] - t[i - 1] if i > 0 else 0.0
@@ -241,9 +247,12 @@ def scanf(series: list[PhaseSeries], *, process_accel_mps2: float = 0.05,
             cands = m[j] + np.arange(-slip_search, slip_search + 1)
             vals = base - lam[j] * cands
             best = int(np.argmin(np.abs(vals - pred[j])))
-            if good[j] and cands[best] != m[j]:
-                events[i, j] = True
+            if good[j]:
+                frac = w[i, j] / (2 * np.pi)
+                m_cont = round(prev_cycles[j] - frac)
+                events[i, j] = cands[best] != m_cont
                 m[j] = cands[best]
+                prev_cycles[j] = frac + m[j]
             y[j] = base - lam[j] * m[j]
         r_cov = np.diag(np.where(good, var, 1e6))
         s_cov = h @ p @ h.T + r_cov

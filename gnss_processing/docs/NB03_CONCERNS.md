@@ -33,7 +33,7 @@ The most important ones are first.
 | C-14 | Hardware-delay calibration from one DDM peak | Medium | Code observable |
 | C-15 | Plan items not built in this draft | Info | Later phases |
 | C-16 | Run time | Low | Long flights |
-| C-17 | Open bug: the SCANF slip counter reports L5 slips in the notebook run | Medium | Slip statistics |
+| C-17 | Closed: the SCANF slip counter counted phase wraps as slips | Closed | Slip statistics |
 
 ---
 
@@ -296,17 +296,36 @@ section. A flight of several minutes at 20 Msps with 200+ lags needs either fewe
 lags (D-099 sizes the window from the height), a coarser lag step for the
 waveform, or a parallel run per satellite (the kernel releases the GIL).
 
-## C-17. Open bug: the SCANF slip counter reports L5 slips in the notebook run
+## C-17. Closed: the SCANF slip counter counted phase wraps as slips
 
-In the synthetic notebook run, `phase.scanf` reports 30 slip events on L5 and
-none on L1. The L5 residual phase itself is steady (about 0.05 rad per epoch), and
-the measured excess path agrees with the truth to 2.2 mm RMS. The same data in a
-short script (fewer lags) gives no slip events. So the count is probably wrong,
-not the phase. The debugging was not finished when this draft was committed.
+Symptom: in the synthetic notebook run, `phase.scanf` reported 30 slip events on
+L5 and none on L1. The L5 residual phase was steady, and the excess path agreed
+with the truth to 2.2 mm RMS.
 
-What to check first: the integer values `ScanfResult.slips[:, 1]` in the notebook
-context (whether m toggles between two values), and whether the long lag grid of
-the notebook changes the noise floor and so the C/N0 gate `min_cn0_dbhz`.
+Cause: the filter set a slip event each time the integer m_i changed. But m_i
+also changes at each normal wrap of w_i through +-pi. The constant phase of the
+L5 band in that run was near +-pi, so the noise made w_i cross the boundary in
+both directions, and each crossing was counted. The phase and the excess path
+were correct. Only the count was wrong.
+
+Fix: a slip event is now an epoch where the filter chooses an integer that is
+different from the integer that plain continuity with the last good epoch gives.
+A normal wrap is not an event. The notebook run now reports 0 slips on both
+bands, with the same 2.21 mm RMS error.
+
+The test `test_scanf_dual_frequency_repairs_injected_slips` also had a fault:
+it added a step of exactly 2 pi to the phase before it wrapped the phase. That
+step does not change a wrapped phase, so the test did not contain a slip. The
+test now asserts that it gives no slip events. The new test
+`test_scanf_rate_state_repairs_unwrap_slips` gives a real slip case: a residual
+that accelerates to more than half a cycle per epoch. Plain unwrapping fails by
+more than 1 m there. The filter follows the residual within 15 mm, and the
+slip events start where the L1 step passes half a cycle.
+
+Note for real data: a slip event now means "the filter disagreed with plain
+unwrapping". With a good model the residual rate is small, so events must be
+rare. Many events show a model error (for example, a bad lever arm or a bad
+trajectory) or a low C/N0.
 
 Fixed during the draft (for the record): each coherent sum was first labelled with
 the start time of its first block, while its model value was the mean over the

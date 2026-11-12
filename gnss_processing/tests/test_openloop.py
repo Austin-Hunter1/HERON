@@ -257,9 +257,52 @@ def test_scanf_dual_frequency_repairs_injected_slips():
     res = phase.scanf([s1, s5])
     r = res.residual_m - res.residual_m[0] + true_resid[0]
     assert np.max(np.abs(r - true_resid)) < 0.01
+    # A step of exactly 2 pi does not change a wrapped phase, so the "slips"
+    # above are invisible in w and must not give slip events (C-17).
+    assert not res.slip_events.any()
     single = phase.scanf([s1])
     assert np.max(np.abs(single.residual_m - single.residual_m[0] + true_resid[0]
                          - true_resid)) < 0.02
+
+
+def test_scanf_rate_state_repairs_unwrap_slips():
+    """
+    C-17: a residual that accelerates until it moves more than half a cycle per
+    epoch. Plain unwrapping slips; the filter's rate state predicts the right
+    integer, and each such epoch is a slip event.
+    """
+    rng = np.random.default_rng(0)
+    n = 600
+    t = np.arange(n) * 0.02
+    lam1, lam5 = frames.SPEED_OF_LIGHT / 1575.42e6, frames.SPEED_OF_LIGHT / 1176.45e6
+    true_resid = 0.4 * t**2  # 0.8 m/s^2 from rest
+    series = []
+    for lam, c0 in ((lam1, 0.3), (lam5, -1.1)):
+        phi = -2 * np.pi * true_resid / lam + c0 + rng.normal(0, 0.05, n)
+        series.append(_phase_series(n, lam, np.full(n, 34.0), np.angle(np.exp(1j * phi))))
+    naive = -lam1 * np.unwrap(series[0].wrapped_rad) / (2 * np.pi)
+    assert np.max(np.abs(naive - naive[0] - true_resid)) > 1.0  # plain unwrap fails
+    res = phase.scanf(series)
+    assert np.max(np.abs(res.residual_m - res.residual_m[0] - true_resid)) < 0.015
+    # L1 passes half a cycle per 20 ms epoch at lam1 / 2 / 0.02 s = 4.8 m/s (t = 6 s).
+    first_l1 = np.argmax(res.slip_events[:, 0])
+    assert 270 <= first_l1 <= 310
+    assert not res.slip_events[:250].any()
+
+
+def test_scanf_wraps_near_pi_are_not_slip_events():
+    """C-17: a steady phase near +-pi wraps often; a wrap is not a slip."""
+    rng = np.random.default_rng(1)
+    n = 500
+    lam1, lam5 = frames.SPEED_OF_LIGHT / 1575.42e6, frames.SPEED_OF_LIGHT / 1176.45e6
+    model_excess = np.full(n, 34.0)
+    w1 = np.angle(np.exp(1j * (0.3 + rng.normal(0, 0.15, n))))
+    w5 = np.angle(np.exp(1j * (3.1 + rng.normal(0, 0.15, n))))
+    res = phase.scanf([_phase_series(n, lam1, model_excess, w1),
+                       _phase_series(n, lam5, model_excess, w5)])
+    assert len(np.unique(res.slips[:, 1])) > 1  # the L5 phase did wrap
+    assert not res.slip_events.any()
+    assert np.ptp(res.residual_m) < 0.02
 
 
 def test_coherence_metric_separates_coherent_and_noise():
