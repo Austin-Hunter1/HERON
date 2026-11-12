@@ -58,6 +58,7 @@ NOTEBOOKS = {
     "00": "00-raw-signal-diagnostics.ipynb",
     "01": "01-acquisition-and-tracking.ipynb",
     "02": "02-navigation.ipynb",
+    "03": "03-open-loop-reflection-tracking.ipynb",
 }
 # Interpreter (relative to the repo that holds gps-tracking-example) and Jupyter
 # kernel name for each OS.  One entry per OS keeps the Linux boot and the Windows
@@ -173,7 +174,7 @@ def main() -> int:
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("notebook", choices=sorted(NOTEBOOKS), help="Which notebook: 00, 01, or 02")
+    parser.add_argument("notebook", choices=sorted(NOTEBOOKS), help="Which notebook: 00, 01, 02, or 03")
     parser.add_argument(
         "--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE",
         help="Override a top-level variable in the notebook's config cell. Repeatable.",

@@ -1,0 +1,76 @@
+# Notebook 03: open-loop tracking of reflected signals.
+# Plan: docs/NB03_OPEN_LOOP_PLAN.md. Decisions: D-087 to D-101. Concerns: docs/NB03_CONCERNS.md.
+# Every tunable value of notebook 03 is here (CLAUDE.md rule 5). `utils.openloop.config`
+# validates this file and stops with a clear message when a value is bad or missing.
+
+trajectory:
+  source: rtklib_pos          # rtklib_pos | static  (D-088)
+  path: null                  # RTKLIB .pos file (GPST, out-outvel recommended)
+  rover: here3                # here3 | zed_f9p  (D-087)
+  reference_point: rover      # antenna name below that the solution refers to
+  accepted_quality: [fix, float]
+  static: {lat_deg: null, lon_deg: null, h_ell_m: null}
+
+attitude:
+  source: constant            # ardupilot_log | constant  (D-089)
+  message: ATT                # ATT | XKF1
+  att_csv: null               # CSV export of the ATT (or XKF1) messages
+  gps_csv: null               # CSV export of the GPS messages (time tie)
+  constant_rpy_deg: [0.0, 0.0, 0.0]
+
+antennas:                     # FRD body frame, metres. null until measured (D-091).
+  rover:  {lever_arm_b: null, boresight_b: [0, 0, -1], pco_m: {L1: 0.0}}
+  zenith: {lever_arm_b: null, boresight_b: [0, 0, -1], pco_m: {L1: 0.0, L5: 0.0}}  # D-090
+  nadir:  {lever_arm_b: null, boresight_b: [0, 0, 1],  pco_m: {L1: 0.0, L5: 0.0}}
+
+time:
+  timebase_file: null         # YAML from notebook 02 anchors (D-100); see utils/openloop/timebase.py
+
+models:
+  model_mode: direct_referenced   # direct_referenced | absolute (cross-check only)
+  orbits: broadcast               # broadcast | precise
+  specular: image_plane           # image_plane | iterative_curved
+  geoid: geoid18                  # geoid18 | egm2008 | constant | none  (D-092)
+  geoid_epoch_year: 2026.9        # epoch for the ITRF2014 -> NAD83(2011) step
+  ionosphere: nequick_g           # nequick_g | klobuchar | ionex | none  (D-095)
+  troposphere: saastamoinen       # saastamoinen | gpt3 | none  (D-096)
+  gpt3_grid: null                 # path to gpt3_5.grd when troposphere = gpt3
+  use_deflection: false           # tilt the normal by the deflection of the vertical
+
+surface:
+  water_level_m: null             # H_orth in the geoid datum (NAVD88 for GEOID18)
+  constant_geoid_n_m: null        # used when models.geoid = constant
+  gauge: {source: usgs_nwis, site_id: null, datum: NAVD88}  # D-093
+  permittivity: [80.0, -5.0]      # fresh water, L-band (real, imag)
+  rms_height_m: 0.01
+
+flight:                           # D-099: no defaults; set per flight
+  height_max_m: null              # largest antenna height above the water
+  elevation_mask_deg: null
+
+openloop:
+  model_rate_hz: 50
+  coherent_ms: 20
+  lag_step_chips: 0.05
+  lag_margin_chips: 1.0
+  noise_lags_chips: [-8.0, -4.0]
+
+acquisition:
+  incoherent_blocks: 50
+  p_fa_total: 1.0e-3
+  doppler_offsets_hz: [-25.0, 0.0, 25.0]
+
+phase:
+  slip_search: 2
+  process_accel_mps2: 0.05
+  min_cn0_dbhz: 25.0
+  coherence_window: 25
+  coherence_min: 0.5
+
+leakage:                          # D-098: estimate and flag only
+  window_blocks: 50
+  min_turns: 2.0
+  strong_fraction: 0.1
+
+calibration:
+  tau_hw_ns: {L1_RHCP: 0.0, L1_LHCP: 0.0, L5_RHCP: 0.0, L5_LHCP: 0.0}
