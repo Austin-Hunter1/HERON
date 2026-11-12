@@ -206,6 +206,38 @@ def api_sky():
     )
 
 
+@app.get("/api/skyplot")
+def api_skyplot():
+    """Azimuth/elevation tracks for a polar sky plot: every healthy satellite of the chosen
+    constellations, from the takeoff spot, every `step_min` over `hours` from the takeoff time."""
+    from datetime import timedelta
+
+    start = _parse_start(request.args.get("start"))
+    lat = float(request.args.get("lat", DEFAULT_PAD["lat"]))
+    lon = float(request.args.get("lon", DEFAULT_PAD["lon"]))
+    mask = float(request.args.get("mask", DEFAULT_MASK))
+    h_agl = float(request.args.get("h_agl", DEFAULT_H_AGL))
+    hours = min(max(float(request.args.get("hours", 2)), 0.25), 6)
+    step = min(max(float(request.args.get("step_min", 2)), 0.5), 10)
+    consts = [c.strip().upper() for c in (request.args.get("constellations") or "G,E,C").split(",") if c.strip()]
+    chosen = filter_sats(sats(), consts or ["G", "E", "C"])
+    n = int(round(hours * 60 / step)) + 1
+    tracks = {}
+    for i in range(n):
+        t = start + timedelta(minutes=i * step)
+        for row in sky_snapshot(chosen, t, lat, lon, WATER_H + h_agl, mask):
+            tracks.setdefault(row["sid"], []).append([round(i * step, 2), row["az"], row["el"]])
+    out = []
+    for sid, pts in sorted(tracks.items()):
+        if max(p[2] for p in pts) <= 0:
+            continue
+        up = [p[0] for p in pts if p[2] >= mask]
+        out.append({"sid": sid, "points": pts,
+                    "above_from_min": up[0] if up else None, "above_to_min": up[-1] if up else None})
+    return jsonify({"start": start.isoformat(), "lat": lat, "lon": lon, "mask": mask,
+                    "hours": hours, "step_min": step, "sats": out})
+
+
 @app.post("/api/reflections")
 def api_reflections():
     """Specular points at the live aircraft, using the current UTC time.

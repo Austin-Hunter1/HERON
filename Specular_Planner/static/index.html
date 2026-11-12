@@ -102,7 +102,7 @@
           <label class="check"><input type="checkbox" id="cC" checked /><span><b>BeiDou</b><small>B2a</small></span></label>
         </div>
         <button type="button" id="btnAlmanac" class="text-button" aria-expanded="false">Review orbit data <span aria-hidden="true">→</span></button>
-        <button type="button" id="btnTrimble" class="text-button" title="Opens Trimble GNSS Planning's sky plot for the takeoff spot and time">Sky plot in Trimble <span aria-hidden="true">↗</span></button>
+        <button type="button" id="btnSkyplot" class="text-button" title="Polar sky plot for the takeoff spot and time">Sky plot <span aria-hidden="true">→</span></button>
         <div id="almBox" class="alm-box hidden">
           <div id="almList"></div>
           <div class="alm-foot">
@@ -529,10 +529,27 @@
     </div>
   </div>
 
+  <section id="skyPanel" class="sky-panel hidden" aria-label="Sky plot">
+    <header>
+      <b>Sky plot</b>
+      <span id="skyClock"></span>
+      <button type="button" id="skyClose" class="sky-x" aria-label="Close">×</button>
+    </header>
+    <canvas id="skyCanvas" width="460" height="480"></canvas>
+    <input type="range" id="skyTime" min="0" max="120" step="1" value="0" aria-label="Time after takeoff" />
+    <p id="skyInfo" class="sky-info"></p>
+    <footer>
+      <label>Window <select id="skyHours"><option value="1">1 h</option><option value="2" selected>2 h</option><option value="6">6 h</option></select></label>
+      <button type="button" id="btnTrimble" class="sky-btn" title="Opens Trimble GNSS Planning's sky plot for the same spot and time">Compare in Trimble ↗</button>
+      <button type="button" id="skySave" class="sky-btn primary">Save PNG</button>
+    </footer>
+  </section>
   <script src="/static/vendor/leaflet/leaflet.js"></script>
   <link rel="stylesheet" href="/static/science.css?v=1" />
-  <script src="/static/app.js?v=science3"></script>
+  <link rel="stylesheet" href="/static/skyplot.css?v=1" />
+  <script src="/static/app.js?v=sky1"></script>
   <script src="/static/science.js?v=3"></script>
+  <script src="/static/skyplot.js?v=1"></script>
   <script src="/static/instruments.js?v=2"></script>
   <script src="/static/flight.js?v=lead2"></script>
   <script src="/static/payload-strip.js?v=2"></script>
