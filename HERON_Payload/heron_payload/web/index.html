@@ -57,7 +57,7 @@
           <label><span>Time (PPS)</span>
             <select data-k="time_source"><option value="internal">Internal (radios not aligned)</option><option value="external">External PPS</option></select></label>
           <label><span>Write method</span>
-            <select data-k="write_mode"><option value="direct">Write each buffer at once (collect wizard)</option><option value="threaded">Writer thread with a memory queue</option></select></label>
+            <select data-k="write_mode"><option value="direct">Direct (collect wizard)</option><option value="threaded">Threaded (memory queue)</option></select></label>
           <label><span>Samples per buffer</span><input data-k="spb" type="number" min="64" max="10000000" step="1" /></label>
           <label><span>File buffer</span><span class="unit"><input data-k="file_buffer_bytes" type="number" min="0" step="1" /><i>bytes, 0 = default</i></span></label>
           <label class="wide"><span>USB buffers (UHD device args)</span><input data-k="device_args" spellcheck="false" placeholder="num_recv_frames=256,recv_frame_size=16000" /></label>
