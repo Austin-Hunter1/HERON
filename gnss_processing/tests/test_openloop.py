@@ -375,6 +375,83 @@ def test_nequick_without_backend_stops_with_message():
                                                           0.0, 1575.42e6)
 
 
+class _FakeNeQuick:
+    """Stands in for `nequick.NeQuick`: records the call, returns 10 TECU."""
+
+    calls: list = []
+
+    def __init__(self, a0, a1, a2):
+        self.coefficients = (a0, a1, a2)
+
+    def compute_stec(self, epoch, *pos):
+        _FakeNeQuick.calls.append((self.coefficients, epoch, pos))
+        return 10.0
+
+
+def test_nequick_jrc_backend_passes_lon_lat_h_and_utc():
+    """The binding reads (lon, lat, h), not the README's (lat, lon, alt); time is UT."""
+    from datetime import datetime
+
+    from utils.time_systems import GPS_EPOCH
+
+    _FakeNeQuick.calls.clear()
+    rx = frames.geodetic_to_ecef(np.deg2rad(40.0), np.deg2rad(-105.25), 1600.0)
+    sat = frames.geodetic_to_ecef(np.deg2rad(45.0), np.deg2rad(-100.0), 20.2e6)
+    utc = datetime(2026, 11, 12, 15, 30, 0)
+    t_gpst = (utc - GPS_EPOCH).total_seconds() + 18.0
+    iono = atmosphere.NeQuickGIono((60.0, 0.1, 0.002),
+                                   atmosphere.nequick_jrc_backend(18, _FakeNeQuick))
+    d = iono.delay_m(rx[None], sat[None], t_gpst, 1575.42e6)
+    coeffs, epoch, pos = _FakeNeQuick.calls[0]
+    assert coeffs == (60.0, 0.1, 0.002)
+    assert epoch == utc
+    assert np.allclose(pos, (-105.25, 40.0, 1600.0, -100.0, 45.0, 20.2e6), atol=1e-6)
+    assert d[0] == pytest.approx(40.3 * 10.0 * 1e16 / 1575.42e6**2)  # about 1.62 m
+
+
+def test_nequick_jrc_library_gives_plausible_stec():
+    """Runs only where the `nequick` package (JRC C library) is installed."""
+    pytest.importorskip("nequick")
+    rx = frames.geodetic_to_ecef(np.deg2rad(40.0), np.deg2rad(-105.25), 1600.0)
+    sat = frames.geodetic_to_ecef(np.deg2rad(45.0), np.deg2rad(-100.0), 20.2e6)
+    from utils.time_systems import GPS_EPOCH
+    from datetime import datetime
+
+    t = (datetime(2025, 3, 21, 18, 0, 0) - GPS_EPOCH).total_seconds() + 18.0
+    iono = atmosphere.NeQuickGIono.jrc((236.831641, -0.39362878, 0.00402826613), 18)
+    d = iono.delay_m(rx[None], sat[None], t, 1575.42e6)
+    assert 0.3 < d[0] < 50.0  # L1 slant delay, metres
+
+
+@pytest.mark.parametrize("level", ["high", "mid", "low"])
+def test_nequick_jrc_matches_validation_tables(level):
+    """
+    T-10: the Galileo NeQuick-G validation rays, end to end through the adapter
+    (geodetic -> ECEF -> geodetic, UTC -> GPST -> UTC).
+
+    The tolerance is 0.2 TECU, the same as the `nequick` package's own tests. On
+    2026-11-12 the worst ray was 0.11 TECU (mid table, month 4, UT 16; the
+    library alone gives the same value); all other rays were within 0.02 TECU.
+    0.2 TECU is 3 cm of delay at L1.
+    """
+    pytest.importorskip("nequick")
+    from datetime import datetime
+    from pathlib import Path
+
+    from utils.time_systems import GPS_EPOCH
+
+    path = Path(__file__).parent / "data" / "nequick_g" / f"benchmark_{level}.txt"
+    lines = [ln for ln in path.read_text().splitlines() if ln.strip()]
+    az = [float(x) for x in lines[0].split()]
+    rows = np.array([[float(x) for x in ln.split()] for ln in lines[1:]])
+    backend = atmosphere.nequick_jrc_backend(18)
+    for month, ut, rlon, rlat, rh, slon, slat, sh, ref in rows:
+        rx = frames.geodetic_to_ecef(np.deg2rad(rlat), np.deg2rad(rlon), rh)
+        sat = frames.geodetic_to_ecef(np.deg2rad(slat), np.deg2rad(slon), sh)
+        t = (datetime(2018, int(month), 15, int(ut)) - GPS_EPOCH).total_seconds() + 18.0
+        assert backend(rx[None], sat[None], t, az)[0] == pytest.approx(ref, abs=0.2)
+
+
 def test_fresnel_water_crossover_and_limits():
     eps = complex(80.0, -5.0)
     rr, rl = reflectivity.fresnel_circular(eps, np.deg2rad([2.0, 60.0]))
@@ -619,3 +696,18 @@ def test_chunked_file_run_equals_in_memory_run(tmp_path):
     a = whole.waveforms[np.isin(whole.periods, common)]
     b = chunked.waveforms[np.isin(chunked.periods, common)]
     np.testing.assert_allclose(a, b, rtol=1e-3, atol=1e-2)
+    # A span whose last chunk would hold less than one whole block must not stop
+    # with an error (seen on the 20261013_Jiawei_Testing_x2 file): a chunk that
+    # is not the last one ends 2 to 3 ms before the span end. The chunk starts
+    # do not depend on the span end, so take them from the run above.
+    starts = []
+    correlator.run_open_loop_file(path, params, samp_rate=FS_L1, file_start_uptime_ms=0.0,
+                                  signal=sig, model=m, lags_chips=lags, first_uptime_ms=5.0,
+                                  last_uptime_ms=330.0, chunk_ms=70.0, progress=starts.append)
+    for remainder_ms in np.arange(2.05, 3.0, 0.1):
+        last = starts[1] + remainder_ms
+        run = correlator.run_open_loop_file(path, params, samp_rate=FS_L1, file_start_uptime_ms=0.0,
+                                            signal=sig, model=m, lags_chips=lags,
+                                            first_uptime_ms=5.0, last_uptime_ms=last, chunk_ms=70.0)
+        assert np.all(np.diff(run.periods) == 1)
+        assert run.uptime_ms[-1] + run.duration_ms[-1] > last - 3.0 * sig.primary_period_ms

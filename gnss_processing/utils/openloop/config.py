@@ -36,7 +36,7 @@ NUMBERS = [
     ("acquisition", "p_fa_total"), ("phase", "slip_search"), ("phase", "process_accel_mps2"),
     ("phase", "min_cn0_dbhz"), ("phase", "coherence_window"), ("phase", "coherence_min"),
     ("leakage", "window_blocks"), ("leakage", "min_turns"), ("leakage", "strong_fraction"),
-    ("surface", "rms_height_m"), ("models", "geoid_epoch_year"),
+    ("surface", "rms_height_m"), ("models", "geoid_epoch_year"), ("models", "gps_minus_utc_s"),
 ]
 
 POSITIVE = {("openloop", "model_rate_hz"), ("openloop", "coherent_ms"),

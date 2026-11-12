@@ -33,6 +33,7 @@ models:
   geoid: geoid18                  # geoid18 | egm2008 | constant | none  (D-092)
   geoid_epoch_year: 2026.9        # epoch for the ITRF2014 -> NAD83(2011) step
   ionosphere: nequick_g           # nequick_g | klobuchar | ionex | none  (D-095)
+  gps_minus_utc_s: 18             # leap seconds, GPST - UTC (18 since 2017-01-01); NeQuick-G needs UT
   troposphere: saastamoinen       # saastamoinen | gpt3 | none  (D-096)
   gpt3_grid: null                 # path to gpt3_5.grd when troposphere = gpt3
   use_deflection: false           # tilt the normal by the deflection of the vertical

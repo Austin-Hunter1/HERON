@@ -23,7 +23,7 @@ The most important ones are first.
 | C-4 | The start offset between the zenith and nadir files is not known | High | Real-data run |
 | C-5 | Attitude comes from a CSV export; lever arms are not measured | Medium | Real-data run |
 | C-6 | The troposphere excess term and the GPT3 reader are not verified | Medium | Low-elevation altimetry |
-| C-7 | NeQuick-G is not ported | Medium | Absolute mode only |
+| C-7 | NeQuick-G: works through the `nequick` package; install needs a compiler and a DLL exception | Low | Absolute mode only |
 | C-8 | Plan section 6.2 overstates the error of the image solution | Low (good news) | Plan text |
 | C-9 | The leakage estimate has a bias; removal is not done | Medium | L1-group phase |
 | C-10 | PROJ grids: cache location and network access | Low | Offline runs |
@@ -140,26 +140,49 @@ file in `metadata.yml`. Read it in notebook 03 instead of the manual value.
   real `gpt3_5.grd` was not downloaded. Compare it with the official GPT3 code
   (TU Wien) at a few sites before use.
 
-## C-7. NeQuick-G is not ported (D-095)
+## C-7. NeQuick-G works through the `nequick` package; the install is not simple (D-095, D-102)
 
 Risk: D-095 makes NeQuick-G the rapid ionosphere model for all constellations.
-The model needs the electron-density profile code, the CCIR coefficient files and
-the modip grid. That is a large port, and it needs data files that are not in
-the repository.
 
-What the draft does: `atmosphere.NeQuickGIono` has the interface and the
-40.3 STEC / f^2 step, but it needs a `backend` callable for the slant TEC. Without
-one it stops with a message that names D-095 and this concern. Klobuchar and
-IONEX (single-layer) work now. The IONEX reader does not rotate the maps with
-the Sun between epochs.
+What the code does now (D-102): `atmosphere.nequick_jrc_backend` calls the EU
+JRC reference C library through the PyPI package `nequick` (1.0.0).
+`NeQuickGIono.jrc(az_coefficients, gps_minus_utc_s)` builds the model. The
+adapter converts ECEF to WGS-84 (longitude, latitude, height) and GPST to UTC
+with `models.gps_minus_utc_s`. A test with a fake library checks the argument
+order, the time and the 40.3 STEC / f^2 step.
+
+Validation (plan test T-10, 2026-11-12): the Galileo validation rays (high,
+mid and low solar activity: 108 rays in `tests/data/nequick_g/`, 576 with
+the expanded tables) agree with the reference STEC within 0.11 TECU through the
+full adapter path. Only one ray (mid, month 4, UT 16) is above 0.02 TECU; the
+library alone gives the same value there. The package's own tests allow
+0.2 TECU, and `test_nequick_jrc_matches_validation_tables` uses the same.
+
+Open problems:
+
+1. **Install on Windows.** PyPI has only source releases, so the install needs
+   a C compiler (MSVC Build Tools). On this machine, Windows Application Control
+   also blocked the new unsigned DLL `_c_ext.cp313-win_amd64.pyd` until the user
+   allowed it. Each team member's machine needs the same steps. Without the
+   package, the tests that need it are skipped.
+2. **The package pins `numpy<2.0`.** gnss_processing uses numpy 2.x. The C
+   extension does not use numpy (only the `to_gim` helper does), so
+   `pip install nequick --no-deps` is safe for this code. The pin also stops
+   `nequick` from going into `pyproject.toml` as a normal dependency.
+3. **The package README gives the wrong argument order.** It shows
+   `compute_stec(epoch, lat, lon, alt, ...)`. The C binding passes the values to
+   the JRC function `set_receiver_position(lon, lat, h)`. The adapter uses
+   (lon, lat, h), from the C source. The validation tables confirm it.
+4. **The binding drops fractions of a second** from the time. This is far below
+   the model error.
+5. **Az source:** the Galileo ai0, ai1, ai2 must come from a navigation message
+   or the RINEX 3 navigation header. No reader for them is connected to
+   notebook 03 yet (the D-095 note).
 
 Impact now: none on Mode A. The excess ionosphere of the reflected path is zero
 (plan 7.1), so the direct-referenced model does not use any ionosphere model.
-Only the absolute mode (Mode B) and a direct-path position need one.
-
-What to do: wrap the EU JRC reference implementation of NeQuick-G (C library),
-or port it, and test it against the check values of the NeQuick-G algorithm
-document (plan test T-10).
+Only the absolute mode (Mode B) and a direct-path position need one. Klobuchar
+and IONEX (single layer) work now.
 
 ## C-8. Plan section 6.2 overstates the error of the image solution
 
@@ -230,8 +253,26 @@ The filter (`phase.scanf`) follows Wang et al. 2021 with these changes:
   not tuned on drone motion.
 - The C/N0 estimator uses one median noise floor per run, from the noise lags.
 
-The test injects one slip per band into a sinusoidal height signal and recovers
-it. Real fading, diffuse scattering and data-sign errors (C-3) are not tested.
+The T-6 test once injected a slip of exactly 2 pi, which a wrapped phase cannot
+show (C-17). It now checks a slow residual, and a second test checks a residual
+that moves more than half a cycle per epoch. Real fading, diffuse scattering and
+data-sign errors (C-3) are not tested.
+
+Real-data result (2026-11-12, `20261013_Jiawei_Testing_x2`, G14, static, no
+reflection, 30 s): the direct signal was tracked open loop with a deliberately
+wrong model, D~ = 40 + 5 sin(2 pi t / 20 s) m, while the true D is 0. The
+filter state r must then follow -D~, which accelerates up to 0.49 m/s^2. With
+the config value `process_accel_mps2 = 0.05` the filter lags and leaves a
+smooth error of 4.5 mm RMS on L1 and 3.3 mm RMS on L5. With 1.0 m/s^2 the
+error is 0.85 mm and 0.80 mm RMS, which is the noise level. So the value must
+match the expected acceleration of the model error (lever arm, attitude,
+trajectory), not of the drone. Tune it on flight data.
+
+Limit seen on the same data: with D~ changing at up to 6.3 m/s, L1 (20 ms
+coherent) failed with 1162 slip events, because the residual moved more than
+lambda / (2 T) = 4.8 m/s. L5 (limit 6.4 m/s) held with 5 corrected slips and
+2.4 mm RMS. A model whose excess-path rate is wrong by more than lambda / (2 T)
+cannot be repaired by the filter; use a shorter coherent time for that case.
 
 ## C-12. Satellite PCO and constellation frame transformations are missing
 

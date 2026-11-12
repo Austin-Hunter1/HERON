@@ -195,7 +195,12 @@ def run_open_loop_file(
     pad_ms = 2.0
     pieces = []
     lo = first_uptime_ms
-    while lo < last_uptime_ms - 2.0:
+    # A chunk needs two whole code periods (one block) of the model. Stop when
+    # fewer than three periods are left: a shorter last chunk can hold no whole
+    # block, and run_open_loop then stops with an error. This drops at most
+    # three periods at the end of the span.
+    min_left_ms = 3.0 * float(signal.primary_period_ms)
+    while last_uptime_ms - lo >= min_left_ms:
         hi = min(lo + chunk_ms, last_uptime_ms)
         a = int(np.floor((lo - pad_ms - file_start_uptime_ms) * samp_rate / 1e3))
         a = max(a, 0)

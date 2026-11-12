@@ -13,9 +13,9 @@ has no free electrons; the two rays cross the ionosphere less than 2 km apart.
 So `excess_delay_m` is zero for every ionosphere model. The absolute models are:
 
 - `KlobucharIono`   -- GPS broadcast model (wraps `utils.observables`).
-- `NeQuickGIono`    -- the decided rapid model (D-095). The algorithm is not
-  ported yet: this class takes a backend callable `stec_tecu(...)` and stops with
-  a clear message when none is given. See concern C-7 in `docs/NB03_CONCERNS.md`.
+- `NeQuickGIono`    -- the decided rapid model (D-095). `NeQuickGIono.jrc(...)`
+  calls the EU JRC reference C library through the `nequick` package; any
+  other backend callable also works. See concern C-7 in `docs/NB03_CONCERNS.md`.
 - `IonexIono`       -- a global ionosphere map (IONEX), single-layer model.
 
 Troposphere (D-096, no met sensor). First-order excess delay of the reflected
@@ -30,7 +30,7 @@ This first-order value is NOT checked against ray tracing yet (concern C-6).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -272,6 +272,69 @@ class KlobucharIono(_NoExcessIono):
         return out
 
 
+def _import_jrc_nequick():
+    """The `NeQuick` class of the `nequick` package, or a clear error."""
+    try:
+        from nequick import NeQuick
+    except ImportError as exc:
+        raise ImportError(
+            "NeQuick-G (D-095) uses the `nequick` package (EU JRC reference C code, "
+            "https://pypi.org/project/nequick/). It is not installed. PyPI has only a "
+            "source release, so the install needs a C compiler (on Windows: the MSVC "
+            "Build Tools). Install it with `pip install nequick --no-deps` (its "
+            "numpy<2 pin is for a helper that this code does not use), or set "
+            "models.ionosphere to klobuchar/ionex. Mode A does not need it. See "
+            "docs/NB03_CONCERNS.md, C-7."
+        ) from exc
+    return NeQuick
+
+
+def nequick_jrc_backend(gps_minus_utc_s: float, model_class=None) -> Callable:
+    """
+    A `NeQuickGIono` backend that calls the EU JRC NeQuick-G C library through
+    the `nequick` package (D-095).
+
+    The library needs:
+
+    - the month and the UT hour: from GPST seconds minus `gps_minus_utc_s`
+      (`models.gps_minus_utc_s` in the config; 18 s since 2017-01-01);
+    - WGS-84 geodetic positions in the order (longitude deg, latitude deg,
+      height m). This is the order of the C binding and of the JRC header
+      `set_receiver_position`. The package README shows (lat, lon, alt), which
+      is NOT what the binding reads;
+    - the Galileo broadcast coefficients ai0, ai1, ai2.
+
+    It returns the slant TEC in TECU along the straight line from the receiver
+    to the satellite. The binding drops fractions of a second from the time;
+    that changes the TEC by much less than the model error.
+
+    `model_class` replaces `nequick.NeQuick` (tests use a fake one).
+    """
+    from utils.time_systems import GPS_EPOCH
+
+    def backend(rx_ecef, sat_ecef, t_gpst_s, az_coefficients):
+        cls = model_class or _import_jrc_nequick()
+        model = cls(*(float(a) for a in az_coefficients))
+        rx = np.atleast_2d(rx_ecef)
+        sat = np.atleast_2d(sat_ecef)
+        t = np.atleast_1d(np.asarray(t_gpst_s, dtype=float))
+        n = max(len(rx), len(sat), len(t))
+        rx_lat, rx_lon, rx_h = frames.ecef_to_geodetic(np.broadcast_to(rx, (n, 3)))
+        sv_lat, sv_lon, sv_h = frames.ecef_to_geodetic(np.broadcast_to(sat, (n, 3)))
+        t = np.broadcast_to(t, (n,))
+        out = np.empty(n)
+        for i in range(n):
+            utc = GPS_EPOCH + timedelta(seconds=float(t[i]) - gps_minus_utc_s)
+            out[i] = model.compute_stec(
+                utc,
+                float(np.degrees(rx_lon[i])), float(np.degrees(rx_lat[i])), float(rx_h[i]),
+                float(np.degrees(sv_lon[i])), float(np.degrees(sv_lat[i])), float(sv_h[i]),
+            )
+        return out
+
+    return backend
+
+
 @dataclass
 class NeQuickGIono(_NoExcessIono):
     """
@@ -282,24 +345,28 @@ class NeQuickGIono(_NoExcessIono):
     UT) and the effective ionisation level Az = ai0 + ai1 mu + ai2 mu^2 from the
     Galileo broadcast coefficients.
 
-    The NeQuick-G electron-density model itself is not ported in this draft.
-    Give `backend(rx_ecef, sat_ecef, t_gpst_s, az_coefficients) -> STEC [TECU]`
-    (for example a wrapper of the EU JRC reference C library); without it the
-    call stops with a clear message (concern C-7).
+    `backend(rx_ecef, sat_ecef, t_gpst_s, az_coefficients) -> STEC [TECU]` does
+    the integration. `NeQuickGIono.jrc(...)` uses the EU JRC reference C library
+    (`nequick_jrc_backend`). Without a backend the call stops with a clear
+    message (concern C-7).
     """
 
     az_coefficients: tuple[float, float, float] | None = None
     backend: Callable | None = None
     name: str = "nequick_g"
 
+    @classmethod
+    def jrc(cls, az_coefficients, gps_minus_utc_s: float) -> "NeQuickGIono":
+        """NeQuick-G with the EU JRC C library of the `nequick` package."""
+        return cls(tuple(az_coefficients), nequick_jrc_backend(gps_minus_utc_s))
+
     def delay_m(self, rx_ecef, sat_ecef, t_gpst_s, frequency_hz):
         if self.backend is None:
             raise NotImplementedError(
-                "NeQuick-G is the decided rapid ionosphere model (D-095), but the "
-                "algorithm is not ported yet (docs/NB03_CONCERNS.md, C-7). Give a "
-                "backend, or set models.ionosphere to klobuchar/ionex for now. In the "
-                "direct-referenced model (Mode A) the ionosphere cancels, so Mode A "
-                "does not need it."
+                "NeQuick-G (D-095) needs a backend. Use NeQuickGIono.jrc(...), which "
+                "calls the `nequick` package, or set models.ionosphere to "
+                "klobuchar/ionex. In the direct-referenced model (Mode A) the "
+                "ionosphere cancels, so Mode A does not need it (C-7)."
             )
         if self.az_coefficients is None:
             raise ValueError("NeQuick-G needs the Galileo ai0, ai1, ai2 coefficients")
