@@ -7,6 +7,8 @@
   if (!strip) return;
 
   let token = "", planId = null, last = null, busy = false, popOpen = false, errorUntil = 0;
+  let recMode = "phases";
+  let notRecSince = 0;
 
   const mode = () => ({ sim: "sim", fly: "fly" })[document.body.dataset.view] || null;
   const clock = (s) => {
@@ -71,17 +73,29 @@
     const st = s.state;
     strip.dataset.state = st;
     const auto = s.auto;
+    const phase = auto?.segments ? `Phase ${auto.segment} of ${auto.segments}: ` : "";
     const [title, sub] = {
       OFFLINE: ["Payload", "No signal from the NUC"],
       IDLE: ["No setup loaded", "Open Payload Setup on the NUC"],
       READY: ["Payload ready", s.setup || "Setup loaded"],
-      ARMED: ["Auto-record armed", auto ? `Starts at ${wpName(auto.start_seq)}, stops at ${wpName(auto.stop_seq)}` : ""],
-      RECORDING: ["REC " + clock(s.elapsed_s), auto ? `Auto, stops at ${wpName(auto.stop_seq)}` : "Manual: stop when done"],
+      ARMED: ["Auto-record armed", auto ? (auto.segments
+        ? `${phase}starts at ${wpName(auto.start_seq)}, ends after ${wpName(auto.stop_seq)}`
+        : `Starts at ${wpName(auto.start_seq)}, stops at ${wpName(auto.stop_seq)}`) : ""],
+      RECORDING: ["REC " + clock(s.elapsed_s), auto ? (auto.segments
+        ? `${phase}ends after ${wpName(auto.stop_seq)}`
+        : `Auto, stops at ${wpName(auto.stop_seq)}`) : "Manual: stop when done"],
       FAULT: ["Payload fault", s.fault || s.message || "Check Payload Setup on the NUC"],
       PREPARING: ["Starting radios…", s.setup || ""],
       FINALIZING: ["Finishing files…", ""],
     }[st] || [st, ""];
     $("plState").textContent = title;
+    // In the air, armed for a phase whose first waypoint is already behind the aircraft, and still
+    // not recording after 5 s: say so loudly and offer the manual Record button.
+    const ac = s.aircraft || {};
+    if (st === "ARMED" && auto && ac.armed && ac.auto && ac.current != null && ac.current > auto.start_seq) {
+      notRecSince = notRecSince || Date.now();
+      if (Date.now() - notRecSince > 5000) say(`Not recording! Aircraft is past ${wpName(auto.start_seq)}. Tap Record.`, true);
+    } else notRecSince = 0;
     if (Date.now() > errorUntil) {
       const subEl = $("plSub");
       subEl.textContent = sub; subEl.title = sub; subEl.classList.remove("err");
@@ -103,8 +117,10 @@
     const autoBtn = $("plAuto");
     const armed = st === "ARMED" || (recording && auto);
     autoBtn.classList.toggle("on", !!armed);
-    $("plAutoText").textContent = armed && auto ? `${wpName(auto.start_seq)}–${wpName(auto.stop_seq).replace("WP", "")}` : "off";
-    autoBtn.disabled = busy || !live || !["READY", "ARMED"].includes(st);
+    $("plAutoText").textContent = !(armed && auto) ? (s.arm_at_launch === false ? "off" : "at launch")
+      : auto.segments ? `phase ${auto.segment}/${auto.segments}`
+      : `${wpName(auto.start_seq)}–${wpName(auto.stop_seq).replace("WP", "")}`;
+    autoBtn.disabled = busy;
     if (autoBtn.disabled && popOpen) togglePop(false);
 
     if (popOpen) renderPop();
@@ -118,14 +134,42 @@
       sel.value = keep && w.waypoints.includes(Number(keep)) ? keep : value ?? "";
     };
     const a = last?.auto;
-    opts($("plStart"), a?.start_seq ?? w.start_seq);
-    opts($("plStop"), a?.stop_seq ?? w.stop_seq);
-    const none = w.waypoints.length < 2;
-    $("plArm").disabled = busy || none;
-    $("plArm").textContent = last?.state === "ARMED" ? "Update" : "Arm auto-record";
+    // The plan's recording (Plan tab: "Record this phase" + "Payload recording") sets the defaults.
+    const phases = w.phases || [];
+    const recorded = phases.filter((p) => p.record !== false);
+    const planStart = recorded.length ? recorded[0].start_seq : w.start_seq;
+    const planStop = recorded.length ? recorded[recorded.length - 1].stop_seq : w.stop_seq;
+    opts($("plStart"), a?.start_seq ?? planStart);
+    opts($("plStop"), a?.stop_seq ?? planStop);
+    const canPhases = recorded.length > 0 && recorded.length <= (w.max_phases || 4);
+    const usePhases = canPhases && recMode === "phases";
+    $("plModeRow").classList.toggle("hidden", !canPhases);
+    document.querySelector(`input[name="plMode"][value="${usePhases ? "phases" : "range"}"]`).checked = true;
+    $("plPhases").classList.toggle("hidden", !usePhases);
+    $("plRangeRow").classList.toggle("hidden", usePhases);
+    $("plPhases").replaceChildren(...phases.map((p, i) => {
+      const li = document.createElement("li");
+      const k = recorded.indexOf(p);
+      li.classList.toggle("now", !!(a?.segments && k >= 0 && a.segment === k + 1));
+      li.classList.toggle("off", k < 0);
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = p.name;
+      const wp = document.createElement("span"); wp.className = "wp";
+      wp.textContent = p.first_wp === p.last_wp ? `WP${p.first_wp}` : `WP${p.first_wp}–${p.last_wp}`;
+      if (k < 0) wp.textContent += " · not recorded";
+      li.append(nm, wp);
+      return li;
+    }));
+    $("plAtLaunch").checked = last?.arm_at_launch !== false;
+    const none = usePhases ? false : w.waypoints.length < 2;
+    $("plArm").disabled = busy || none || !last?.connected || !["READY", "ARMED"].includes(last?.state);
+    $("plArm").textContent = last?.state === "ARMED" ? "Update" : "Arm now";
     $("plCancelAuto").disabled = busy || last?.state !== "ARMED";
     if (!$("plPopNote").textContent) {
-      $("plPopNote").textContent = none ? "Put a survey mission on the drone first."
+      const fromPlan = w.recording_mode ? " Set in the Plan tab." : "";
+      $("plPopNote").textContent = usePhases ? `${recorded.length} separate recording${recorded.length === 1 ? "" : "s"}. Each starts on arrival at its first waypoint and ends when its last one is finished.${fromPlan}`
+        : recorded.length > (w.max_phases || 4) ? `Per-phase recording handles up to ${w.max_phases || 4} phases; this plan records ${recorded.length}.`
+        : w.recording_mode === "continuous" && recorded.length ? `One file from ${wpName(planStart)} to ${wpName(planStop)}.${fromPlan}`
+        : none ? "Put a survey mission on the drone first."
         : w.source === "plan" ? "Using the HERON plan. Write it to the drone before flying." : "Using the mission on the drone.";
     }
   }
@@ -136,14 +180,40 @@
     $("plAuto").setAttribute("aria-expanded", String(popOpen));
     $("plPopNote").textContent = "";
     $("plPopNote").classList.remove("err");
-    if (popOpen) renderPop();
+    if (popOpen) {
+      const a = last?.auto;
+      if (a && last?.state === "ARMED") recMode = a.segments ? "phases" : "range";
+      else if (last?.waypoints?.recording_mode) recMode = last.waypoints.recording_mode === "continuous" ? "range" : "phases";
+      renderPop();
+    }
   }
 
   $("plRec").addEventListener("click", () => send(last?.state === "RECORDING" ? "stop" : "start"));
   $("plAuto").addEventListener("click", () => togglePop());
+  document.querySelectorAll('input[name="plMode"]').forEach((r) => r.addEventListener("change", () => {
+    recMode = r.value;
+    $("plPopNote").textContent = "";
+    renderPop();
+  }));
   $("plArm").addEventListener("click", async () => {
-    const ok = await send("arm", { start_seq: Number($("plStart").value), stop_seq: Number($("plStop").value) });
+    const phases = last?.waypoints?.phases || [];
+    const ok = !$("plPhases").classList.contains("hidden") && phases.length
+      ? await send("arm_segments", { segments: phases.filter((p) => p.record !== false).map((p) => [p.start_seq, p.stop_seq]) })
+      : await send("arm", { start_seq: Number($("plStart").value), stop_seq: Number($("plStop").value) });
     if (ok) togglePop(false);
+  });
+  $("plAtLaunch").addEventListener("change", async (e) => {
+    const enabled = e.target.checked;
+    try {
+      const r = await fetch("/api/payload/arm-at-launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Payload-Token": await session() },
+        body: JSON.stringify({ mode: mode(), enabled }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || "Could not change that");
+      if (last) last.arm_at_launch = (await r.json()).arm_at_launch;
+    } catch (err) { say(err.message, true); }
+    render();
   });
   $("plCancelAuto").addEventListener("click", async () => { if (await send("cancel_auto")) togglePop(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && popOpen) togglePop(false); });

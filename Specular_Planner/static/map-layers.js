@@ -154,6 +154,13 @@
     });
   }
 
+  window.heronShowFlightWater = function(id) {
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+    const p = prefs(id); p.water = true; p.ortho = true;
+    apply(item); render();
+    if (item.ortho) map.fitBounds(L.latLngBounds(item.ortho.bounds), {padding: [40,40], maxZoom: 17});
+  };
   // Plan > Water can pick a flight's segmented water while that layer is shown.
   window.heronFlightWaterAt = function (latlng) {
     let found = null;

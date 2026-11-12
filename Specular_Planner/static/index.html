@@ -39,7 +39,13 @@
       <button id="connButton" type="button" class="conn-btn">Connect</button>
     </div>
     <div id="abConnSim" class="ab-conn hidden">
-      <span class="sim-flag">Simulation</span>
+      <span id="simFlag" class="sim-flag">Simulation</span>
+      <select id="simKind" aria-label="Simulator" title="ArduCopter SITL flies the real firmware on the X6 MAX model. Dry run adds the real flight controller and NUC.">
+        <option value="sitl">ArduCopter SITL · X6 MAX</option>
+        <option value="dryrun">Dry run · real FC + NUC</option>
+        <option value="demo">Quick preview</option>
+      </select>
+      <select id="simPort" class="hidden" aria-label="Flight controller USB port for the dry run"></select>
       <button id="simButton" type="button" class="conn-btn">Start simulator</button>
     </div>
   </header>
@@ -75,7 +81,7 @@
         <div class="field-grid">
           <label class="field"><span>Speed</span><div class="input-unit"><input type="number" id="speed" min="2" max="25" step="0.5" value="8" /><em>m/s</em></div></label>
           <label class="field"><span>Hover</span><div class="input-unit"><input type="number" id="loiter" min="0" max="1200" step="1" value="30" /><em>sec/WP</em></div></label>
-          <label class="field"><span>Above Home</span><div class="input-unit"><input type="number" id="h_agl" min="2" max="122" value="60" /><em>m</em></div></label>
+          <label class="field"><span>Above Home</span><div class="input-unit"><input type="number" id="h_agl" min="2" max="122" step="0.01" value="60" /><em>m</em></div></label>
           <label class="field" id="windowField"><span>Search window</span><div class="input-unit"><input type="number" id="duration" min="10" max="180" value="40" /><em>min</em></div></label>
           <label class="field"><span>Elevation mask</span><div class="input-unit"><input type="number" id="mask" min="10" max="40" value="20" /><em>degrees</em></div></label>
         </div>
@@ -119,9 +125,19 @@
           <button type="button" id="modeClick" class="mode on" aria-pressed="true"><b>Route</b><span>Place waypoints</span></button>
           <button type="button" id="modeAreas" class="mode" aria-pressed="false"><b>Area</b><span>Sweep a boundary</span></button>
           <button type="button" id="modeSurvey" class="mode" aria-pressed="false"><b>Water</b><span>Follow a surface</span></button>
+          <button type="button" id="modeScience" class="mode" aria-pressed="false"><b>Science</b><span>Combine observations</span></button>
         </div>
 
         <div class="pattern-tools">
+          <div id="scienceTools" class="hidden">
+            <p class="tool-guidance">Build an ordered sequence of stationary observations and shoreline passes. Map clicks set reflection locations; the aircraft route is calculated for the first satellite in each phase.</p>
+            <div class="tool-actions"><button type="button" id="sciencePreset">Two hovers + three passes</button><button type="button" id="scienceAddHover">+ Hover</button><button type="button" id="scienceAddPasses">+ Passes</button></div>
+            <label class="field"><span>Water outline</span><select id="scienceWater"><option value="">Automatic · visible flight water</option><option value="__mapped__">Mapped water only</option></select><small>Choose a flight to use its orthomosaic water boundary for science passes.</small></label><div id="sciencePhases"></div>
+            <label class="field"><span>Payload recording</span><select id="scienceRecording"><option value="phases">One file per phase</option><option value="continuous">One file, first to last recorded phase</option></select><small>Tick "Record this phase" on each phase to include it. The payload strip arms the NUC with this plan.</small></label>
+            <label class="field"><span>Antenna faces</span><div class="input-unit"><input id="scienceOffset" type="number" min="-180" max="180" value="0" /><em>° from nose</em></div></label>
+            <p class="tool-guidance">Flight setup speed is used for transits. Hover headings update every 10 seconds. The primary target sets pointing; check the preview for the other satellites.</p>
+            <div class="tool-actions"><button type="button" id="scienceSave">Save setup</button><button type="button" id="scienceLoad">Load setup</button><input id="scienceFile" type="file" accept=".json,application/json" hidden /></div>
+          </div>
           <div id="clickTools">
             <p class="tool-guidance">Click the map to place waypoints in flight order.</p>
             <div class="tool-actions"><span id="nClickWps" class="selection-count">0 waypoints</span><button type="button" id="btnUndoWp">Undo</button><button type="button" id="btnClearWp">Clear</button></div>
@@ -333,8 +349,14 @@
         <button id="plRec" type="button" class="pl-rec"><i aria-hidden="true"></i><span>Record</span></button>
       </div>
       <div id="plPop" class="pl-pop deck-card hidden" role="dialog" aria-label="Auto-record">
-        <p>Record between two survey waypoints. The NUC follows the mission itself, so it keeps going if the radio link drops.</p>
-        <div class="pl-pop-row">
+        <label class="pl-launch"><input type="checkbox" id="plAtLaunch" checked /><span><b>Arm automatically at launch</b><small>Launch arms the NUC with the plan's recording and won't take off if it can't. Off: launch ignores the payload.</small></span></label>
+        <p>The NUC follows the mission itself, so it keeps recording if the radio link drops.</p>
+        <div id="plModeRow" class="pl-mode hidden" role="radiogroup" aria-label="Auto-record mode">
+          <label><input type="radio" name="plMode" value="phases" checked><span>Each phase</span></label>
+          <label><input type="radio" name="plMode" value="range"><span>One range</span></label>
+        </div>
+        <ol id="plPhases" class="pl-phases hidden"></ol>
+        <div id="plRangeRow" class="pl-pop-row">
           <label><span>Start at</span><select id="plStart"></select></label>
           <label><span>Stop at</span><select id="plStop"></select></label>
         </div>
@@ -507,7 +529,9 @@
   </div>
 
   <script src="/static/vendor/leaflet/leaflet.js"></script>
-  <script src="/static/app.js?v=lead2"></script>
+  <link rel="stylesheet" href="/static/science.css?v=1" />
+  <script src="/static/app.js?v=science3"></script>
+  <script src="/static/science.js?v=3"></script>
   <script src="/static/instruments.js?v=2"></script>
   <script src="/static/flight.js?v=lead2"></script>
   <script src="/static/payload-strip.js?v=2"></script>

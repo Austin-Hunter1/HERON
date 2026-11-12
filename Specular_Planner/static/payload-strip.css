@@ -88,3 +88,22 @@ body[data-view="sim"] .pl-strip { top: 26px; }
   .pl-state small { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { .pl-strip[data-state="RECORDING"] .pl-dot { animation: none; } }
+
+.pl-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 10px; padding: 3px; border-radius: 9px; background: rgba(255, 255, 255, 0.05); }
+.pl-mode label { position: relative; cursor: pointer; }
+.pl-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.pl-mode span { display: block; padding: 6px 8px; border-radius: 7px; color: var(--deck-muted); font-size: 12px; font-weight: 600; text-align: center; }
+.pl-mode input:checked + span { background: rgba(255, 255, 255, 0.12); color: var(--deck-text, #fff); }
+.pl-mode input:focus-visible + span { outline: 2px solid var(--warn); outline-offset: 1px; }
+.pl-phases { margin: 0 0 4px; padding: 0; list-style: none; counter-reset: phase; }
+.pl-phases li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.07); font-size: 12px; }
+.pl-phases li:first-child { border-top: 0; }
+.pl-phases li::before { counter-increment: phase; content: counter(phase); flex: none; width: 16px; color: var(--deck-faint); font-variant-numeric: tabular-nums; }
+.pl-phases .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-phases .wp { flex: none; color: var(--deck-muted); font-variant-numeric: tabular-nums; }
+.pl-phases li.now .nm { color: var(--warn); font-weight: 700; }
+.pl-phases li.off .nm, .pl-phases li.off .wp { opacity: 0.45; }
+.pl-launch { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 10px; border-radius: 9px; background: rgba(255, 255, 255, 0.05); cursor: pointer; }
+.pl-launch input { margin: 2px 0 0; width: 16px; height: 16px; accent-color: var(--warn); flex: none; }
+.pl-launch b { display: block; font-size: 12px; }
+.pl-launch small { display: block; margin-top: 2px; color: var(--deck-muted); font-size: 11px; line-height: 1.4; }

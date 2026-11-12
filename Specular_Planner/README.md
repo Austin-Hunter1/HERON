@@ -58,6 +58,40 @@ python app.py
 
 Switching Route / Area / Water clears the current mission.
 
+## Science mode: ordered observations
+
+Choose **Science** to combine stationary observations and shoreline transects in one mission.
+The **Two hovers + three passes** preset sets 400 ft (121.92 m above Home), a 120-second
+G09/E05/C12 observation, a separate 120-second E23 observation, and three passes at 3 m/s
+with 25 m spacing. These are editable starting values, not a finalized flight plan.
+Takeoff time and transit speed remain in Flight setup; set the date/time for the actual flight.
+
+- Add, remove, or reorder **Hover** and **Passes** phases. Each phase has its own targets.
+- List satellite IDs with the **primary first**. The primary determines aircraft placement and
+  heading. All listed targets are modeled together; the preview reports their largest sampled
+  heading offset. This does not guarantee that all targets fit the antenna beam.
+- For a hover, select one **reflection point on water**. The drone is placed to hit that point
+  at arrival, then remains stationary for the full selected duration. Its heading setpoints
+  update every 10 seconds as the satellite moves; the reflection itself may drift on the water.
+- For passes, select two reflection endpoints, one over water and one over land. Pick a line
+  perpendicular to the shore, extending farther over water for a longer coherent observation.
+  Adjust endpoints to change length, and edit count, speed, and spacing independently.
+  Parallel lines are centred on the selected line, alternate directions, and use transit speed
+  between passes. Spacing 0 repeats the same line.
+- Use **Save setup / Load setup** to reuse the editable phases, locations, time, Home, altitude,
+  constellations, elevation mask, transit speed, and antenna offset in a JSON file.
+- **Build mission** gives one timed preview, satellite reflection tracks, phase summary, run
+  card, and `.waypoints` export. Timing includes climb, transits, holds, passes, and return.
+  Missing/below-mask requested targets produce an error rather than being silently replaced.
+
+Science exports retain repeated hold waypoints for heading updates. Each speed/yaw command
+follows the NAV waypoint it accompanies, according to
+[ArduPilot's mission command association](https://ardupilot.org/copter/docs/common-mavlink-mission-command-messages-mav_cmd.html).
+An explicit homebound waypoint restores transit speed before RTL; it is excluded from the
+payload's default science recording window. Ordinary planning modes keep their existing export behavior.
+The built-in map playback models the planned science timing. Aircraft dynamics, turns,
+wind, actual signal coherence, and antenna tilt are not validated by that geometric preview.
+
 ## Aircraft connection and control - WIP (9/29/26)
 THIS IS A BIG WIP STILL, UNFINISHED -jack
 
@@ -107,6 +141,52 @@ It flies a hexa X from the mission's pad with the aircraft's mission, speed, yaw
 RTL, land and failsafe settings copied from the parameter file. Attitude, rate,
 motor and battery-voltage settings stay at SITL's 3S hexa: the Aurelia X6 is a
 heavy 6S airframe, and those numbers make the simulator overpowered and twitchy.
+
+### Auto-record per phase
+
+For a science plan the payload strip's **Auto** popup offers **Each phase**: every phase on the
+run card (e.g. hover 1, hover 2, shoreline passes) becomes its own recording. Each one starts on
+arrival at the phase's first waypoint and ends when its last waypoint is finished, so a hover's
+final hold is kept; transits between phases are not recorded. **One range** is the old single
+start/stop. Up to 4 phases. The NUC follows the mission itself either way, and an operator Stop or
+RTL ends the whole plan. This needs the NUC payload software from the same commit
+(`HERON_Payload/deploy/update.sh`); an older NUC refuses it and the strip says so.
+
+### Simulate on ArduCopter SITL, or dry-run the payload
+
+The Simulate tab's top bar picks the simulator:
+
+| Choice | What flies | Payload strip |
+|---|---|---|
+| **ArduCopter SITL · X6 MAX** | Real ArduCopter firmware with the X6 MAX frame model (`sitl/x6max.json`) and tune (`sitl/x6max_sitl.parm`) | Simulated payload |
+| **Dry run · real FC + NUC** | Same SITL | The real NUC, reached through the real flight controller |
+| **Quick preview** | The old interface simulator (not ArduPilot) | Simulated payload |
+
+SITL needs the one-time build at the top of `scripts/sitl.py` (`~/ardupilot`, or set `ARDUPILOT`).
+It starts on the launch pad of the mission on Plan, at real-time speed, and takes about a minute
+after starting for GPS/EKF before it will arm. Its flight log is in `output/sitl_sim/logs/`.
+
+**Dry run** records real SDR data on the NUC while SITL "flies" the mission. The real flight
+controller stays on stock firmware and disarmed; it only relays MAVLink between SITL and the NUC
+on TELEM2, so mission-triggered recording (start at WP1, stop at the last survey waypoint), the
+static holds and the payload commands all take their in-flight path:
+
+    planner ─TCP─▶ SITL (system 2) ─▶ relay ─USB─▶ flight controller ─TELEM2─▶ NUC
+
+1. Props off. Plug the flight controller into this computer by USB and power the NUC on TELEM2.
+2. On the NUC set `HERON_SYSTEM_ID=2` in `/etc/heron/payload.env` and
+   `sudo systemctl restart heron-payload`. (SITL must use a different system ID from the real
+   flight controller, which drops packets that carry its own ID.)
+3. Simulate → **Dry run · real FC + NUC**, pick the flight controller's USB port, **Start dry run**.
+   If the Fly tab was connected to that port it is released automatically.
+4. Upload & verify, arm the payload's auto-record, and launch as usual.
+5. Afterwards **set `HERON_SYSTEM_ID=1` back on the NUC and restart heron-payload before flying.**
+   The Fly tab's payload strip shows no signal until you do.
+
+Only SITL's heartbeat and mission progress, and messages addressed to the payload, are passed to
+the flight controller; nothing is addressed to it, so it cannot be armed from the dry run. The RF
+the NUC records is whatever the bench antenna sees: this tests the capture pipeline (triggers,
+timing, files, HERON Studio import), not the reflection geometry. Use the SITL log for the track.
 
 Choose the actual aircraft system ID (default 1). The service uses ground-station
 system 255 / component 190 and accepts the selected autopilot component 1 only.

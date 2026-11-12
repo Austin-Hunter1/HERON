@@ -71,11 +71,20 @@ def flight_api(service, name="flight", prefix="/api/flight"):
     def rtl():
         return jsonify(service.rtl())
 
+    @bp.post("/skip-wait")
+    def skip_wait():
+        return jsonify(service.skip_wait())
+
+    @bp.post("/cancel-launch")
+    def cancel_launch():
+        return jsonify(service.abort_launch())
+
     @bp.post("/<action>")
     def action(action):
         data = request.get_json() or {}
         return jsonify(service.submit(
             action, data.get("plan_id"), data.get("confirmation"), data.get("wait_until_start", True),
+            without_recording=bool(data.get("without_recording", False)),
         )), 202
 
     return bp

@@ -56,6 +56,38 @@ class FlightTests(unittest.TestCase):
         self.assertEqual(finish(self.service)["state"], "complete")
         self.assertTrue(self.service.link.armed)
 
+    def test_skip_wait_arms_without_sitting_through_the_countdown(self):
+        from datetime import datetime, timedelta, timezone
+        self.service.plans[self.plan_id]["meta"]["start"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=40)
+        ).isoformat()
+        self.upload()
+        self.service.submit("launch", self.plan_id, "LAUNCH", wait_until_start=True)
+        deadline = time.monotonic() + 3
+        while "Waiting" not in self.service.job["message"] and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertFalse(self.service.link.armed)
+        self.service.skip_wait()
+        self.assertEqual(finish(self.service)["state"], "complete")
+        self.assertTrue(self.service.link.armed)
+
+    def test_cancel_before_zero_does_not_arm_or_change_mode(self):
+        from datetime import datetime, timedelta, timezone
+        self.service.plans[self.plan_id]["meta"]["start"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=40)
+        ).isoformat()
+        self.upload()
+        self.service.submit("launch", self.plan_id, "LAUNCH", wait_until_start=True)
+        deadline = time.monotonic() + 3
+        while "Waiting" not in self.service.job["message"] and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.service.abort_launch()
+        job = finish(self.service)
+        self.assertEqual(job["state"], "error")
+        self.assertIn("canceled before arming", job["message"])
+        self.assertFalse(self.service.link.armed)
+        self.assertEqual(self.service.link.mode_id, 0)
+
     def test_upload_readback_launch_rtl(self):
         self.assertFalse(self.service.preflight(self.plan_id)["ready"])
         self.upload()

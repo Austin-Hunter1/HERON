@@ -466,7 +466,7 @@ def _timeline(pad, hovers, h_agl, speed, loiter_s, min_leg_s=15.0, pad_hold_s=No
             segs.append((t, t + hold, "hold", pad["lat"], pad["lon"]))
             t += hold
     for i, hov in enumerate(hovers):
-        fly = max(min_leg_s, haversine_m(cur_lat, cur_lon, hov["lat"], hov["lon"]) / max(speed, 1.0))
+        fly = max(min_leg_s, haversine_m(cur_lat, cur_lon, hov["lat"], hov["lon"]) / max(float(hov.get("speed_mps", speed)), 1.0))
         arrive = t + fly
         want = hov.get("t_in_window") or 0
         extra = max(0.0, want - arrive) if want else 0.0
@@ -680,6 +680,8 @@ def plan(
     survey_pattern: str = "fill",
     edge: dict | None = None,
     lead_in=None,
+    science_stages=None,
+    any_water=None,
 ) -> dict:
     if survey_style not in ("continuous", "hover") or roi_mode not in ("none", "per_point", "body_yaw"):
         raise ValueError("Invalid survey or pointing mode.")
@@ -705,7 +707,18 @@ def plan(
 
     survey_info = None
     survey_line = None
-    if mode == "file":
+    if mode == "science":
+        from engine.science import build_science
+        if roi_mode != "body_yaw":
+            raise ValueError("Science phases use aircraft heading for reflection tracking.")
+        hovers, survey_info = build_science(sats, lake, science_stages, start, pad,
+            h_agl, speed_mps, elev_mask, antenna_offset_deg, max_wp, any_water=any_water)
+        target_list = []
+        survey_style = "continuous"
+        loiter_s = 0.0
+        lead_in = False
+        segs, total_s = _timeline(pad, hovers, h_agl, speed_mps, 0, min_leg_s=0, pad_hold_s=0)
+    elif mode == "file":
         hovers = []
         for i, w in enumerate(waypoints or []):
             lat = float(w["lat"])
@@ -723,6 +736,10 @@ def plan(
                 "fallback": False,
                 "loiter_s": float(w["loiter_s"]) if w.get("loiter_s") is not None else loiter_s,
             }
+            if w.get("speed_mps") is not None:
+                hov["speed_mps"] = float(w["speed_mps"])
+            if w.get("preserve_waypoint"):
+                hov["preserve_waypoint"] = True
             if w.get("splash_lat") is not None and w.get("splash_lon") is not None:
                 hov["splash_lat"] = float(w["splash_lat"])
                 hov["splash_lon"] = float(w["splash_lon"])
@@ -745,7 +762,7 @@ def plan(
                 ring.append(list(ring[0]))
             target_list.append({"name": tgt.get("name") or f"area {i + 1}", "coordinates": ring})
         segs, total_s = _timeline(
-            pad, hovers, h_agl, speed_mps, loiter_s, min_leg_s=0.8, pad_hold_s=pad_hold_s or 0
+            pad, hovers, h_agl, speed_mps, loiter_s, min_leg_s=0 if any(h.get("preserve_waypoint") for h in hovers) else 0.8, pad_hold_s=pad_hold_s or 0
         )
     elif mode in ("click", "manual"):
         hovers = []
@@ -944,7 +961,7 @@ def plan(
         segs, total_s = _timeline(pad, hovers, h_agl, speed_mps, survey_loiter, min_leg_s=0.8)
         loiter_s = survey_loiter
 
-    if survey_info and survey_style == "continuous":
+    if survey_info and survey_style == "continuous" and mode != "science":
         survey_info.update(_sweep_tracking_check(sats, hovers, start, h_agl, elev_mask))
 
     for i, hov in enumerate(hovers):
@@ -995,11 +1012,16 @@ def plan(
     target_hits = {tgt["name"]: 0 for tgt in target_list}
     last_hdg = 0.0
     used_sids = {h.get("prn") for h in hovers if h.get("prn")}
+    if mode == "science":
+        step_s = min(step_s, 5)
+        used_sids |= {sid for h in hovers for sid in h.get("target_sids", [])}
 
     for t in _sample_times(segs, end, step_s):
         dt = start + timedelta(seconds=t)
         dlat, dlon, phase, course = _pos_at(t, segs, pad, hovers)
         alt, gs, vs = _alt_gs(t, segs, h_agl, speed_mps)
+        if phase.startswith("to_"):
+            gs = hovers[int(phase.split("_")[1])-1].get("speed_mps", gs)
         if survey_line is not None and alt >= 5.0:
             pin_lat, pin_lon, pin_sid = _river_splash_at(t, segs, hovers, survey_line, phase)
             if pin_lat is not None:
@@ -1046,6 +1068,9 @@ def plan(
                 if on_water and (measuring or mode == "file"):
                     best_prns[sat.sid] = max(best_prns.get(sat.sid, 0), el)
                 aimed = bool(aim_sid) and sat.sid == aim_sid
+                tracked = aimed
+                if mode == "science" and (phase.startswith("hover_") or phase.startswith("to_")):
+                    tracked = sat.sid in hovers[int(phase.split("_")[1])-1].get("target_sids", [])
                 specs.append(
                     {
                         "prn": sat.sid,
@@ -1058,6 +1083,7 @@ def plan(
                         "on_water": on_water,
                         "in_target": bool(in_targets),
                         "aimed": aimed,
+                        "tracked": tracked,
                         "targets": in_targets,
                         "extra_m": None if extra != extra else round(extra, 1),
                         "samples": None if samples != samples else round(samples, 1),
@@ -1086,6 +1112,20 @@ def plan(
                 ),
             }
         )
+
+    if mode == "science":
+        for phase_info in survey_info["phases"]:
+            selected = [fr for fr in frames if phase_info["start_s"] <= fr["t"] <= phase_info["end_s"] and fr["measuring"]]
+            phase_info["max_pointing_offset_deg"] = round(max((
+                abs((s["az"] - antenna_offset_deg - fr["drone"]["hdg"] + 180) % 360 - 180)
+                for fr in selected for s in fr["speculars"] if s["prn"] in phase_info["satellites"]), default=0), 2)
+            phase_info["reflection_surfaces"] = {sid: sorted({"water" if s["on_water"] else "land"
+                for fr in selected for s in fr["speculars"] if s["prn"] == sid}) for sid in phase_info["satellites"]}
+            for sid, surfaces in phase_info["reflection_surfaces"].items():
+                if phase_info["type"] == "hover" and "land" in surfaces:
+                    survey_info["warnings"].append(f"{phase_info['name']}: {sid}'s predicted reflection reaches land during the hover.")
+                if phase_info["type"] == "passes" and len(surfaces) < 2:
+                    survey_info["warnings"].append(f"{phase_info['name']}: {sid} does not show both water and land in the sampled preview. Adjust the endpoints.")
 
     if survey_info and roi_mode == "body_yaw":
         pointing_errors = [abs((s["az"] - antenna_offset_deg - fr["drone"]["hdg"] + 180) % 360 - 180)
@@ -1142,6 +1182,7 @@ def plan(
             "fallback_hovers": [h["name"] for h in hovers if h.get("fallback")],
             "hold_s": next((t1 - t0 for t0, t1, ph, *_ in segs if ph == "hold"), 0),
             "mode": mode,
+            "loiter_mixed": mode == "science",
             "roi_mode": roi_mode,
             "antenna_offset_deg": antenna_offset_deg,
             "survey_style": survey_style,

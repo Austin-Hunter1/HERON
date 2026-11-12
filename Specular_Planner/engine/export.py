@@ -68,7 +68,7 @@ def lead_in_point(pad: dict, hovers: list[dict]) -> tuple[float, float] | None:
 def _lead(plan: dict):
     """Lead-in for body-yaw plans. Imports record whether their file had one."""
     meta = plan.get("meta") or {}
-    if meta.get("roi_mode") != "body_yaw":
+    if meta.get("roi_mode") != "body_yaw" or meta.get("mode") == "science":
         return None
     if "lead_in" in meta and not meta["lead_in"]:
         return None
@@ -128,6 +128,8 @@ def qgc_wpl(plan: dict) -> str:
     meta = plan["meta"]
     h = float(meta["h_agl"])
     pad = plan["pad"]
+    if meta.get("mode") == "science":
+        return _science_wpl(plan)
     hovers = plan.get("hovers") or [plan["hover"]]
     hold_s = int(round(float(meta.get("hold_s") or 0)))
     speed = max(0.5, float(meta.get("speed_mps") or 8.0))
@@ -162,10 +164,15 @@ def qgc_wpl(plan: dict) -> str:
     prev = None
     used_roi = False
     for k, hov in enumerate(hovers):
+        leg_speed = float(hov.get("speed_mps", speed))
+        if abs(leg_speed - speed) > 1e-6:
+            lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, DO_CHANGE_SPEED, 1, leg_speed, 0, 0, 0, 0, 0))
+            idx += 1
+            speed = leg_speed
         delay = int(round(float(hov.get("loiter_s") if hov.get("loiter_s") is not None else default_loiter)))
         delay = max(0, min(delay, 65535))
         lat, lon = float(hov["lat"]), float(hov["lon"])
-        if prev and abs(prev[0] - lat) < 1e-7 and abs(prev[1] - lon) < 1e-7:
+        if prev and not hov.get("preserve_waypoint") and abs(prev[0] - lat) < 1e-7 and abs(prev[1] - lon) < 1e-7:
             # Same spot as last item: add dwell onto it instead of a duplicate WP.
             for j in range(len(lines) - 1, -1, -1):
                 parts = lines[j].split("\t")
@@ -191,6 +198,9 @@ def qgc_wpl(plan: dict) -> str:
         lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_WAYPOINT, delay, 0, 0, 0, lat, lon, h))
         idx += 1
         prev = (lat, lon)
+    if abs(speed - float(meta.get("speed_mps") or 8.0)) > 1e-6:
+        lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, DO_CHANGE_SPEED, 1, float(meta.get("speed_mps") or 8.0), 0, 0, 0, 0, 0))
+        idx += 1
     if used_roi:
         lines.append(_row(idx, 0, FRAME_GLOBAL, DO_SET_ROI, 0, 0, 0, 0, 0, 0, 0))
         idx += 1
@@ -202,6 +212,67 @@ def qgc_wpl(plan: dict) -> str:
             lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, CONDITION_YAW, home_yaw, 15, 0, 0, 0, 0, 0))
             idx += 1
     lines.append(_row(idx, 0, FRAME_RELATIVE_ALT, NAV_RTL, 0, 0, 0, 0, pad["lat"], pad["lon"], 0))
+    return "\n".join(lines) + "\n"
+
+
+# A heading this close to the one already commanded is met at once (CONDITION_YAW finishes
+# within 2 deg), so it can go before a speed change without delaying it.
+SAME_HEADING_DEG = 20.0
+
+
+def _science_wpl(plan):
+    """Speed and heading commands go BEFORE the waypoint they apply to.
+
+    ArduPilot starts the DO/CONDITION commands that sit between two NAV commands when the first
+    NAV finishes, so they act on the leg to the second NAV and during its hold. Checked in SITL
+    (ArduCopter 4.6.3): a CONDITION_YAW written after a 10 s hold only turned the aircraft after
+    that hold ended. Hover samples keep separate NAV holds even when coordinates are identical.
+
+    When a speed change and a heading share a waypoint, the heading goes first if it barely
+    changes. ArduPilot runs one DO/CONDITION at a time and every new waypoint resets the yaw to
+    "look at next waypoint"; with the speed change first, the yaw command started a few loop
+    ticks later from that look-ahead heading, so at a pass start the nose swung about 55 degrees
+    off and crawled back at 15 deg/s (SITL 4.6.3, ~6 s of bad heading at the start of each pass).
+    A heading command that is already met finishes at once, so the speed change still applies
+    straight away. A real turn keeps the speed change first, so the leg is not flown slowly
+    while the aircraft turns.
+    """
+    meta, pad = plan['meta'], plan['pad']
+    h, transit = meta['h_agl'], meta['speed_mps']
+    lines = ["QGC WPL 110"]
+    def add(cmd, *, lat=0, lon=0, alt=0, p1=0, p2=0, frame=FRAME_RELATIVE_ALT):
+        seq = len(lines)-1
+        lines.append(_row(seq, int(seq == 0), frame, cmd, p1, p2, 0, 0, lat, lon, alt))
+    add(NAV_WAYPOINT, lat=pad['lat'], lon=pad['lon'], frame=FRAME_GLOBAL)
+    add(NAV_TAKEOFF, lat=pad['lat'], lon=pad['lon'], alt=h)
+    add(DO_SET_ROI, frame=FRAME_GLOBAL)
+    add(DO_CHANGE_SPEED, p1=1, p2=transit)
+    speed = transit
+    state = {'yaw': None}
+
+    def leg(new_speed, yaw, rate):
+        """Speed + heading for the leg to the next waypoint, in the order explained above."""
+        change = new_speed is not None
+        small = yaw is not None and state['yaw'] is not None and \
+            abs((yaw - state['yaw'] + 180) % 360 - 180) <= SAME_HEADING_DEG
+        if yaw is not None and (small or not change):
+            add(CONDITION_YAW, p1=yaw, p2=rate)
+        if change:
+            add(DO_CHANGE_SPEED, p1=1, p2=new_speed)
+        if yaw is not None and change and not small:
+            add(CONDITION_YAW, p1=yaw, p2=rate)
+        if yaw is not None:
+            state['yaw'] = yaw
+
+    for hov in plan['hovers']:
+        new_speed = None
+        if abs(hov['speed_mps'] - speed) > 1e-6:          # speed of the leg that arrives here
+            speed = new_speed = hov['speed_mps']
+        leg(new_speed, hov['yaw_deg'], hov.get('yaw_rate') or 15)
+        add(NAV_WAYPOINT, lat=hov['lat'], lon=hov['lon'], alt=h, p1=hov['loiter_s'])
+    # Return with RTL. It ignores the mission's speed changes and flies at RTL_SPEED (0 on the
+    # X6, so WPNAV_SPEED, 8 m/s), and with WP_YAW_BEHAVIOR 1 it turns to face home by itself.
+    add(NAV_RTL, lat=pad['lat'], lon=pad['lon'])
     return "\n".join(lines) + "\n"
 
 
@@ -278,6 +349,8 @@ def _mission_meta_line(plan: dict | None) -> str | None:
             "ring": [[round(float(p[0]), 6), round(float(p[1]), 6)] for p in ring],
         })
     payload = {}
+    if plan.get("meta", {}).get("mode") == "science":
+        payload["science"] = True          # commands lead their waypoint; keep same-spot holds apart
     if plan.get("pad") and (plan.get("hovers") or plan.get("hover")) and _lead(plan):
         payload["lead_in"] = True
     if any(track):
@@ -343,7 +416,8 @@ def _near_m(lat1: float, lon1: float, lat2: float, lon2: float, tol_m: float = 3
     return math.hypot(north, east) <= tol_m
 
 
-def route_from_wpl(text: str, lead_in: bool = False) -> dict:
+def route_from_wpl(text: str, lead_in: bool = False, commands_follow_nav: bool = False,
+                   keep_holds: bool = False) -> dict:
     """
     Launch point, cruise, and fly-to points from a Mission Planner file.
 
@@ -362,6 +436,7 @@ def route_from_wpl(text: str, lead_in: bool = False) -> dict:
     warnings: list[str] = []
     h_agl = None
     speed = None
+    current_speed = 8.0
     hold_s = 0.0
     hovers: list[dict] = []
     current = None
@@ -393,8 +468,12 @@ def route_from_wpl(text: str, lead_in: bool = False) -> dict:
         cmd = it["command"]
         if cmd == NAV_TAKEOFF:
             h_agl = float(it["alt"])
-        elif cmd == DO_CHANGE_SPEED and float(it["p2"]) > 0 and speed is None:
-            speed = float(it["p2"])
+        elif cmd == DO_CHANGE_SPEED and float(it["p2"]) > 0:
+            current_speed = float(it["p2"])
+            if speed is None:
+                speed = current_speed
+            if commands_follow_nav and current is not None:
+                hovers[current]["speed_mps"] = current_speed
         elif cmd in (NAV_WAYPOINT, NAV_LOITER_TIME) and (abs(it["lat"]) > 1e-7 or abs(it["lon"]) > 1e-7):
             delay = max(0.0, float(it["p1"]))
             at_home = _near_m(it["lat"], it["lon"], pad["lat"], pad["lon"])
@@ -414,6 +493,8 @@ def route_from_wpl(text: str, lead_in: bool = False) -> dict:
                     "lon": float(it["lon"]),
                     "alt": float(it["alt"]),
                     "loiter_s": delay,
+                    "speed_mps": current_speed,
+                    "preserve_waypoint": commands_follow_nav or keep_holds,
                     "name": f"WP{len(hovers) + 1}",
                 }
             )
@@ -561,7 +642,7 @@ def validate_wpl(text: str, plan: dict | None = None) -> dict:
         unique_hovers = []
         for hov in hovers:
             pt = (round(float(hov["lat"]), 7), round(float(hov["lon"]), 7))
-            if not unique_hovers or unique_hovers[-1] != pt:
+            if hov.get("preserve_waypoint") or not unique_hovers or unique_hovers[-1] != pt:
                 unique_hovers.append(pt)
         hold = int(round(float((plan.get("meta") or {}).get("hold_s") or 0))) >= 8
         expect = len(unique_hovers) + (1 if hold else 0) + (1 if _lead(plan) else 0)
@@ -589,6 +670,32 @@ def validate_wpl(text: str, plan: dict | None = None) -> dict:
 
 def run_card(plan: dict) -> str:
     m = plan["meta"]
+    if m.get("mode") == "science":
+        lines = ["HERON run card — science phases", f"Takeoff UTC: {m['start']}",
+            f"Above Home: {m['h_agl']} m ({m['h_agl'] * 3.28084:.0f} ft)",
+            f"Transit: {m['speed_mps']} m/s; total ~{m['total_s']/60:.1f} min", ""]
+        for i, phase in enumerate(m['survey']['phases']):
+            task = f"hover {phase['duration_s']:g} s" if phase['type'] == 'hover' else f"{phase['count']} passes at {phase['speed_mps']:g} m/s, spacing {phase['spacing_m']:g} m"
+            lines.append(f"{i+1}. {phase['name']}: {task}; targets {', '.join(phase['satellites'])}; primary {phase['primary']}")
+            if phase['type'] == 'hover' and phase.get('record_from_wp', phase['first_wp']) > phase['first_wp']:
+                lines.append(f"   Arrive WP{phase['first_wp']} (facing travel), turn to the satellite at WP{phase['record_from_wp']}, "
+                             f"observe WP{phase['record_from_wp'] + 1}–WP{phase['last_wp']}")
+                lines.append(f"   Observation +{phase['start_s']:.1f}s to +{phase['end_s']:.1f}s")
+            else:
+                lines.append(f"   Start +{phase['start_s']:.1f}s, end +{phase['end_s']:.1f}s; WP{phase['first_wp']}–WP{phase['last_wp']}")
+        rec = [i for i, ph in enumerate(m['survey']['phases']) if ph.get('record', True) is not False]
+        if not rec:
+            lines += ["", "Recording: none planned (start it by hand)"]
+        elif m.get('recording_mode') == 'continuous':
+            a, b = m['survey']['phases'][rec[0]], m['survey']['phases'][rec[-1]]
+            lines += ["", f"Recording: one file, WP{a['first_wp']} to WP{b['last_wp']}"]
+        else:
+            lines += ["", "Recording: one file per phase: " + ", ".join(
+                f"{i+1}. {m['survey']['phases'][i]['name']} (WP{m['survey']['phases'][i]['first_wp']}–{m['survey']['phases'][i]['last_wp']})" for i in rec)]
+        lines += ["", "Hover positions are fixed; heading setpoints update every 10 s. Passes use the first listed satellite's reflection geometry.",
+            "Other targets are modeled simultaneously; shared antenna reception and coherence are not guaranteed."]
+        lines += m['survey'].get('warnings', [])
+        return "\n".join(lines) + "\n"
     if m.get("mode") in ("click", "manual"):
         lines = [
             "HERON run card — clicked waypoints",

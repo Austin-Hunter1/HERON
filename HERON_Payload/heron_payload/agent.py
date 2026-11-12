@@ -129,6 +129,8 @@ class Agent:
                     data = {}
                     if action == "arm":
                         data = dict(start_seq=int(round(m.param2)), stop_seq=int(round(m.param3)))
+                    elif action == "arm_segments":
+                        data = dict(segments=P.segments_from_params(m.param2, m.param3, m.param5, m.param6, m.param7))
                     self.controller.execute(action, data)
             except ValueError as exc:
                 result, reason = P.RESULT_DENIED, str(exc)

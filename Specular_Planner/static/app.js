@@ -232,10 +232,11 @@ function satDetailHtml(row, live) {
 function areaTrackPrns(plan) {
   const meta = (plan && plan.meta) || {};
   const survey = meta.survey || {};
-  const area = meta.mode === "survey" || meta.mode === "areas" || (meta.mode === "file" && survey.aim_sid);
+  const area = meta.mode === "science" || meta.mode === "survey" || meta.mode === "areas" || (meta.mode === "file" && survey.aim_sid);
   if (!area) return new Set();
   const ids = new Set();
   if (survey.aim_sid) ids.add(survey.aim_sid);
+  for (const phase of survey.phases || []) for (const sid of phase.satellites) ids.add(sid);
   if (survey.last_sid) ids.add(survey.last_sid);
   (survey.sids || []).forEach((sid) => sid && ids.add(sid));
   (plan.hovers || []).forEach((hov) => hov.prn && ids.add(hov.prn));
@@ -534,11 +535,13 @@ function paintFlightBounces(plan) {
   document.getElementById("nLake").textContent = `(${(cov.counts && cov.counts.lake) || 0})`;
   document.getElementById("nLand").textContent = `(${(cov.counts && cov.counts.land) || 0})`;
   const box = document.getElementById("prnToggles");
+  const scienceTargets = plan.meta.mode === "science" ? areaTrackPrns(plan) : null;
+  if (scienceTargets) document.getElementById("lyrLand").checked = true;
   box.innerHTML = prns
     .map((p) => {
       const n = bouncePrn[p].nLake + bouncePrn[p].nLand;
       return `<label class="prn-chip" style="border-color:${sidColor(p)};color:${sidColor(p)}">
-        <input type="checkbox" data-prn="${p}" checked /> ${p} <span>(${n})</span>
+        <input type="checkbox" data-prn="${p}" ${!scienceTargets || scienceTargets.has(p) ? "checked" : ""} /> ${p} <span>(${n})</span>
       </label>`;
     })
     .join("");
@@ -1043,6 +1046,11 @@ document.getElementById("btnClear").onclick = () => {
 
 map.on("click", (e) => {
   if (document.body.dataset.view !== "plan") return;
+  if (missionMode === "science") {
+    L.DomEvent.stop(e);
+    window.HeronScience.pick(e.latlng);
+    return;
+  }
   if (missionMode === "ground") {
     L.DomEvent.stop(e);
     groundClick(e.latlng);
@@ -1259,7 +1267,11 @@ function resetMission({ keepSelection = false } = {}) {
 function setMode(m) {
   if (m !== missionMode) resetMission();
   missionMode = m;
+  window.HeronScience?.setVisible(m === "science");
+  document.getElementById("scienceTools").classList.toggle("hidden", m !== "science");
+  document.getElementById("loiter").closest("label").classList.toggle("hidden", m === "science");
   const modeStates = [
+    ["modeScience", m === "science"],
     ["modeClick", m === "click"],
     ["modeAreas", m === "areas"],
     ["modeSurvey", m === "survey"],
@@ -1494,7 +1506,7 @@ async function computePlan() {
   const btn = document.getElementById("go");
   btn.disabled = true;
   const msg =
-    missionMode === "survey"
+    missionMode === "science" ? "Planning science phases…" : missionMode === "survey"
       ? isEdgePattern() ? "Laying passes across the shoreline…" : "Tiling the waterbody…"
       : missionMode === "click"
         ? "Speculars along your route…"
@@ -1556,6 +1568,15 @@ async function computePlan() {
       } else {
         body.coverage_pct = Number(coverage);
       }
+    }
+    if (missionMode === "science") {
+      body.science_stages = window.HeronScience.stages();
+      body.science_recording = window.HeronScience.recording();
+      body.water_overlay = window.HeronScience.waterSource();
+      body.antenna_offset_deg = Number(document.getElementById("scienceOffset").value);
+      body.roi_mode = "body_yaw";
+      body.max_wp = 400;
+      body.step_s = 5;
     }
     if (missionMode === "click") body.waypoints = clickWps;
     const r = await fetch("/api/plan", {
@@ -1999,7 +2020,7 @@ function paintSummary(plan) {
   const m = plan.meta || {};
   const sum = document.getElementById("summary");
   const mode =
-    m.mode === "file" ? "Waypoint file"
+    m.mode === "science" ? "Science mission" : m.mode === "file" ? "Waypoint file"
       : m.mode === "survey" ? (m.survey?.pattern === "edge" ? "Shoreline edge" : "Tile water")
         : m.mode === "click" || m.mode === "manual" ? "Route"
           : "Measure";
@@ -2023,6 +2044,7 @@ function paintSummary(plan) {
       ${statCell("Hover", m.loiter_mixed ? "mixed" : Number(m.loiter_s) < 0.05 ? "fly-through" : (m.loiter_s ?? "—"), m.loiter_mixed || Number(m.loiter_s) < 0.05 ? "" : "s / WP")}
       ${statCell("L5 on water", prns.length)}
     </div>
+    ${m.mode === "science" ? window.HeronScience.summary(m.survey) : ""}
     ${m.survey?.pattern === "edge" && m.survey.edge_style === "across" ? `<p>Shoreline edge · ${m.survey.n_passes} back-and-forth passes across ${(m.survey.shore_m / 1000).toFixed(2)} km of ${m.survey.whole_shore ? "the whole shore" : "shore"}, one every ${m.survey.edge_pass_m} m · ${m.survey.edge_water_m} m over water to ${m.survey.edge_land_m} m inland (${m.survey.lanes_km} km of passes). Look for the jump in reflected power on each pass.</p>` : ""}
     ${m.survey?.pattern === "edge" && m.survey.edge_style !== "across" ? `<p>Shoreline edge · ${m.survey.n_passes} lanes along ${(m.survey.shore_m / 1000).toFixed(2)} km of ${m.survey.whole_shore ? "the whole shore" : "shore"} (${m.survey.lanes_km} km flown) · offsets ${m.survey.edge_offsets_m.map((d) => (d > 0 ? "+" : "") + d).join(", ")} m. The edge is where reflected power jumps between the land and water lanes.</p>` : ""}
     ${m.survey?.sweep_bearing_deg != null ? `<p>${escHtml(String(m.survey.sweep_bearing_deg))}° sweep · ${m.survey.n_passes} passes · lanes every ${m.survey.lane_spacing_m} m · strip ≈ ${m.survey.footprint_m} m wide</p>` : ""}
@@ -2093,6 +2115,7 @@ function showPlan(plan) {
   planLeadOff = hasLeadIn(plan) ? 1 : 0;
   const dense = hovers.length > 48;
   hovers.forEach((h, i) => {
+    if (m.mode === "science" && h.loiter_s > 0 && i > 0 && hovers[i-1].phase_id === h.phase_id) return;
     const keepLabel = !dense || i === 0 || i === hovers.length - 1 || i % Math.ceil(hovers.length / 24) === 0;
     wrapLngs(h.lon).forEach((lon) => {
       L.circleMarker([h.lat, lon], {
@@ -2112,7 +2135,7 @@ function showPlan(plan) {
         }),
       })
         .bindTooltip(
-          `WP${i + 1 + planLeadOff} · ${h.name}` +
+          `WP${i + 1 + planLeadOff} · ${escHtml(h.name)}` +
             (h.prn ? `  ${h.prn} @ ${Math.round(h.el)}°` : "  centroid (no sat lined up)") +
             ((h.geometry_s ?? h.t_in_window) != null ? `  geometry +${Math.round(h.geometry_s ?? h.t_in_window)}s` : ""),
           { direction: "top" }
@@ -2135,6 +2158,7 @@ function showPlan(plan) {
     });
   }
 
+  if (m.mode === "science") map.fitBounds(L.latLngBounds(pts), {padding: [40,40], maxZoom: 16});
   paintFlightBounces(plan);
   paintSurveyLock(plan);
   paintSummary(plan);
@@ -2469,13 +2493,21 @@ async function loadWaypointFile(file, gen) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "Could not read that waypoint file.");
     if (gen !== planGen) return;
-    if (missionMode !== "click") setMode("click");
-    clickWps = [];
-    paintClickWps();
+    // A science mission built here comes back editable: its phases go into the science editor, and
+    // the exact file stays loaded until something is changed and the mission is built again.
+    const editable = !!(data.science_setup && window.HeronScience);
+    if (editable) {
+      if (missionMode !== "science") setMode("science");
+      window.HeronScience.load(data.science_setup);
+    } else {
+      if (missionMode !== "click") setMode("click");
+      clickWps = [];
+      paintClickWps();
+    }
     const m = data.meta || {};
     if (m.h_agl != null) document.getElementById("h_agl").value = m.h_agl;
     if (m.speed_mps != null) document.getElementById("speed").value = m.speed_mps;
-    if (m.loiter_s != null && !m.loiter_mixed) document.getElementById("loiter").value = m.loiter_s;
+    if (m.loiter_s != null && !m.loiter_mixed && !editable) document.getElementById("loiter").value = m.loiter_s;
     if (padMarker && data.pad) {
       padMarker.setLatLng([data.pad.lat, data.pad.lon]);
       syncPadWrap();
@@ -2487,7 +2519,17 @@ async function loadWaypointFile(file, gen) {
     }
     const warn = (data.import_warnings || []).filter(Boolean).join(" ");
     const n = (data.hovers || []).length;
-    setStatus(warn || `Loaded ${file.name}. ${n} waypoint${n === 1 ? "" : "s"}. Playback and simulator updated.`, !!warn);
+    setStatus(warn || (editable
+      ? `Loaded ${file.name} as a science mission. Edit the phases below and Build mission, or fly it as loaded.`
+      : `Loaded ${file.name}. ${n} waypoint${n === 1 ? "" : "s"}. Playback and simulator updated.`), !!warn);
+    if (editable && data.outdated_order) {
+      // Old heading order: hovers would sit 10 s at the travel heading before turning. Build it again.
+      setStatus(`${file.name} uses the old heading order (hovers turned 10 s late). Rebuilding it…`);
+      await computePlan();
+      if (lastPlan?.meta?.mode === "science" && !lastPlan.meta.outdated_order) {
+        setStatus(`Rebuilt ${file.name} with the corrected heading order: each hover turns to its satellite, then records. Write it to the drone again.`);
+      }
+    }
   } catch (e) {
     if (gen === planGen) setStatus(String(e.message || e), true);
   } finally {
@@ -2505,6 +2547,7 @@ document.getElementById("wpFile").addEventListener("change", () => {
   loadWaypointFile(file, gen);
 });
 
+document.getElementById("modeScience").onclick = () => setMode("science");
 document.getElementById("modeClick").onclick = () => setMode("click");
 document.getElementById("modeGround").onclick = () => setMode("ground");
 document.getElementById("g_from").addEventListener("change", paintGroundZone);

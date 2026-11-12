@@ -6,7 +6,7 @@ The deterministic demo uses the same mission validation and preflight policy.
 from __future__ import annotations
 
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import math
@@ -72,6 +72,9 @@ NAV_COMMANDS = {16, 22}
 ALLOWED_COMMANDS = {16, 20, 22, 115, 178, 201}
 # Launch never skips these: without them HERON cannot tell what or where the aircraft will fly.
 REQUIRED_CHECKS = {"link", "vehicle", "mission", "verified"}
+# Read the mission and the safety parameters in this window before the planned
+# takeoff, so arming starts when the clock hits zero instead of after the read.
+PREP_LEAD_S = 25
 DEFAULT_SKIPPED_CHECKS = {"arming", "fence_circle", "route_radius", "failsafes"}
 # MAV_SEVERITY: 0-3 error, 4 warning, 5-6 info, 7 debug.
 HERON_INFO, HERON_ERROR = 6, 3
@@ -138,6 +141,22 @@ def flight_items(wpl):
     if items[-1]["command"] != 20 or sum(i["command"] == 22 for i in items) != 1:
         raise FlightError("Mission must have one initial TAKEOFF and finish with RTL.")
     return items
+
+
+def mission_waypoints(items):
+    """The waypoints the Plan page and run card number WP1..WPn.
+
+    Takeoff and RTL are not counted. A science mission flies home on an ordinary waypoint right
+    before its RTL (so the return keeps transit speed and faces home); that leg is the return,
+    not a numbered waypoint.
+    """
+    wps = [i for i in items if i["command"] == 16 and i["seq"] > 0]
+    nav = [i for i in items if i["seq"] > 0 and i["command"] in (16, 20, 21, 22)]
+    if wps and nav and nav[-1]["command"] == 20 and len(nav) >= 2 and nav[-2] is wps[-1]:
+        rtl, last = nav[-1], wps[-1]
+        if (rtl["lat"] or rtl["lon"]) and distance(last, rtl) < 5:
+            wps = wps[:-1]
+    return wps
 
 
 def has_position(item):
@@ -224,6 +243,14 @@ class FlightService:
         self.lock = threading.RLock()
         self.operation_lock = threading.Lock()
         self.cancel = threading.Event()
+        self.release_wait = threading.Event()
+        self.aborting = False
+        self.wait_until_start = True
+        # Payload recording hooks, set by engine/payload.py: ready(plan_id) -> (ok, message) for the
+        # preflight row; arm(plan_id, verify_only) -> summary, raising FlightError when it can't.
+        self.payload_ready = None
+        self.payload_arm = None
+        self.without_recording = False
         self.transports = set(transports) if transports else None
         self.link = None
         self.link_info = None
@@ -453,6 +480,12 @@ class FlightService:
                      if origin and far >= radius else "" if origin else ": needs a GPS position"))
             check("rtl_alt", 0 <= p.get("RTL_ALT", -1) / 100 <= ceiling,
                   "Configured return altitude fits below the altitude fence")
+        if self.payload_ready is not None:
+            try:
+                ok, text = self.payload_ready(plan_id)
+            except Exception as exc:                     # never let the payload break the checks
+                ok, text = False, f"Payload check failed: {exc}"
+            check("payload", ok, text)
         verified = self.verified
         check("verified", verified and verified["plan_id"] == plan_id and link and verified["generation"] == s.get("generation"),
               "This mission was uploaded and read back from this aircraft")
@@ -472,11 +505,12 @@ class FlightService:
         items = self._items(verified["plan_id"])
         if seq <= 0 or not items:
             return None
+        wps = mission_waypoints(items)
         if seq >= len(items):
-            wps = [i for i in items if i["command"] == 16 and i["seq"] > 0]
             return self._returning(telemetry, items, wps, seq)
-        wps = [i for i in items if i["command"] == 16 and i["seq"] > 0]
         it = items[seq] if seq < len(items) else None
+        if it is not None and wps and it["seq"] > wps[-1]["seq"]:
+            return self._returning(telemetry, items, wps, seq)       # the home leg before RTL
         if it is None or it["command"] != 16:
             nxt = next((i for i in items[seq + 1:] if i["command"] == 16 and i["seq"] > 0), None) if it else None
             if nxt is None:
@@ -537,9 +571,11 @@ class FlightService:
 
     def _set_onboard(self, items, plan_id, source):
         """Remember the mission read back from the aircraft, flyable or not."""
+        number = {w["seq"]: n for n, w in enumerate(mission_waypoints(items), 1)}
         onboard = {"source": source, "count": len(items), "plan_id": plan_id, "error": None,
                    "generation": self.link.snapshot().get("generation") if self.link else None,
-                   "path": [{"seq": i["seq"], "lat": i["lat"], "lon": i["lon"], "alt": i["alt"], "command": i["command"]}
+                   "path": [{"seq": i["seq"], "lat": i["lat"], "lon": i["lon"], "alt": i["alt"], "command": i["command"],
+                             "wp": number.get(i["seq"])}
                             for i in items[1:] if i["command"] in NAV_COMMANDS and (i["lat"] or i["lon"])],
                    "roi": onboard_rois(items)}
         if plan_id:
@@ -561,7 +597,7 @@ class FlightService:
                     "link": copy.deepcopy(self.link_info), "target": self._target(s),
                     "mission": self._summary(plan_id) if plan_id else None, "onboard": copy.deepcopy(onboard)}
 
-    def submit(self, action, plan_id=None, confirmation=None, wait_until_start=True):
+    def submit(self, action, plan_id=None, confirmation=None, wait_until_start=True, without_recording=False):
         if action not in {"refresh", "upload", "launch", "read"}:
             raise FlightError("Unknown flight action.")
         with self.lock:
@@ -572,8 +608,16 @@ class FlightService:
             if action == "launch" and confirmation != "LAUNCH":
                 self.operation_lock.release()
                 raise FlightError("Confirm launch before arming.")
+            if action == "launch" and self.aborting:
+                self.aborting = False
+                self.cancel.clear()
+                self.operation_lock.release()
+                raise FlightError("Launch canceled before arming.")
             self.cancel.clear()
+            self.release_wait.clear()
+            self.aborting = False
             self.wait_until_start = bool(wait_until_start)
+            self.without_recording = bool(without_recording) and action == "launch"
             self.job = {"state": "running", "action": action, "message": f"Starting {action}…"}
         threading.Thread(target=self._run, args=(action, plan_id), daemon=True, name="flight-operation").start()
         return {"accepted": True}
@@ -586,6 +630,8 @@ class FlightService:
 
     def guard(self):
         if self.cancel.is_set():
+            if self.aborting:
+                raise FlightError("Launch canceled before arming.")
             raise FlightError("Launch/upload interrupted by Return home.")
         if not self.link or not self.link.snapshot().get("connected"):
             raise FlightError("Aircraft link is stale. No further launch commands were sent.")
@@ -600,6 +646,12 @@ class FlightService:
                     self.job.update(state="complete" if flyable else "error", message=result)
                 self.event(result, severity=HERON_INFO if flyable else 4)
                 return
+            if action == "launch":
+                # Arm the payload first, so a payload problem shows the moment Fly is held instead of
+                # at the end of a countdown. It is checked (and re-armed if needed) again before the motors.
+                self._arm_payload(plan_id)
+                # Long countdowns wait here, still disarmed, and do the slow read in the last few seconds.
+                self._delay_until_prep_window(plan_id)
             self.phase("Reading aircraft status and safety parameters…")
             # Upload works before GPS Home exists; launch needs it.
             unread = link.refresh(self.cancel, need_home=action == "launch")
@@ -632,10 +684,18 @@ class FlightService:
                 except Exception:
                     self.verified = None
                     raise
-                link.refresh(self.cancel)
+                self.guard()
+                self.verified = {"plan_id": plan_id, "generation": link.snapshot()["generation"],
+                                 "count": len(items), "hash": self.plan(plan_id)["hash"]}
                 self._require_ready(plan_id)
-                self._wait_for_planned_takeoff(plan_id)
+                self._arm_payload(plan_id, verify_only=True)
+                self._consume_skip()
+                start = self._planned_start(plan_id)
+                if start:
+                    self._sleep_until(start, start)
+                self._consume_skip()
                 self._require_ready(plan_id)
+                self._arm_payload(plan_id, verify_only=True)
                 self.phase("Selecting GUIDED mode…")
                 link.mode(4, self.cancel)
                 self._require_ready(plan_id)
@@ -663,7 +723,7 @@ class FlightService:
             self.event(result)
         except Exception as exc:
             message = str(exc)
-            if action == "launch":
+            if action == "launch" and "canceled before arming" not in message:
                 message += " Check aircraft state; use Return home or the RC override if needed."
             with self.lock:
                 self.job.update(state="error", message=message)
@@ -709,31 +769,66 @@ class FlightService:
         n = len(onboard["path"])
         return error or f"Read {len(items) - 1} mission items from the aircraft ({n} waypoints). Ready to fly after launch checks."
 
-    def _wait_for_planned_takeoff(self, plan_id):
-        """Stay disarmed until the plan's UTC takeoff, so the sky matches the preview.
-
-        Arming early would trip DISARM_DELAY. Return home cancels the wait.
-        """
+    def _planned_start(self, plan_id):
+        """UTC takeoff the countdown is holding for, or None when launch should arm now."""
+        if not self.wait_until_start:
+            return None
         raw = (self.plan(plan_id).get("meta") or {}).get("start")
         if not raw:
-            return
+            return None
         start = datetime.fromisoformat(str(raw))
         if start.tzinfo is None:
             start = start.replace(tzinfo=timezone.utc)
-        start = start.astimezone(timezone.utc)
-        if not self.wait_until_start:
+        return start.astimezone(timezone.utc)
+
+    def _consume_skip(self):
+        """Fly now ends the countdown. The mission read still runs; arming follows it immediately."""
+        if not self.release_wait.is_set():
+            return False
+        if self.wait_until_start:
             self.event("Planned takeoff time skipped. Reflections follow the clock from now.")
+        self.wait_until_start = False
+        return True
+
+    def _delay_until_prep_window(self, plan_id):
+        """Stay disarmed until the read should start, so it finishes as the clock hits zero."""
+        start = self._planned_start(plan_id)
+        if not start:
             return
+        if (start - datetime.now(timezone.utc)).total_seconds() > PREP_LEAD_S:
+            self._sleep_until(start - timedelta(seconds=PREP_LEAD_S), start)
+        self._consume_skip()
+
+    def _sleep_until(self, when, takeoff):
+        """Wait until `when`, disarmed. The status line names `takeoff`; the page counts the seconds."""
+        announced = False
         while True:
+            if self._consume_skip():
+                return
             self.guard()
-            remaining = (start - datetime.now(timezone.utc)).total_seconds()
-            if remaining <= 0:
-                if remaining < -1:
+            remaining = (takeoff - datetime.now(timezone.utc)).total_seconds()
+            if datetime.now(timezone.utc) >= when:
+                if when == takeoff and remaining < -1:
                     self.event("Planned takeoff time has passed. Launching now; the reflection has moved.")
                 return
-            self.phase(f"Waiting for planned takeoff {start.strftime('%H:%M:%S')} UTC ({int(remaining)} s). "
-                       "Motors stay disarmed.")
-            time.sleep(min(1.0, remaining))
+            if not announced:
+                announced = True
+                self.phase(f"Waiting for planned takeoff {takeoff.strftime('%H:%M:%S')} UTC. Motors stay disarmed.")
+            self.release_wait.wait(min(0.4, max(0.05, (when - datetime.now(timezone.utc)).total_seconds())))
+
+    def skip_wait(self):
+        """End the countdown and arm as soon as the mission read is done."""
+        self.release_wait.set()
+        return {"message": "Flying now."}
+
+    def abort_launch(self):
+        """Stop a countdown before the motors arm. Does not change the flight mode."""
+        link = self.link
+        if link and self.job.get("state") == "running" and link.snapshot().get("armed"):
+            raise FlightError("Aircraft is already armed. Use Return home.")
+        self.aborting = True
+        self.cancel.set()
+        return {"message": "Launch canceled before arming."}
 
     def _confirm_home(self, link):
         """RTL and the fence use Home. ArduPilot resets it at arming unless Home is locked."""
@@ -751,10 +846,26 @@ class FlightService:
         raise FlightError(f"Home is {away} from the aircraft after arming, so RTL would not come back here. {done} "
                           "Check for a locked Home (DO_SET_HOME) in Mission Planner.")
 
+    def _arm_payload(self, plan_id, verify_only=False):
+        """Arm the payload with this mission's recording plan and confirm what it reports back.
+        Skipped only by "Fly without recording" or by switching off the Payload check."""
+        if self.payload_arm is None:
+            return
+        if self.without_recording or "payload" in self.skipped:
+            if not verify_only:
+                self.event("Flying without payload recording (chosen at launch).", severity=4)
+            return
+        if not verify_only:
+            self.phase("Arming payload recording for this mission…")
+        summary = self.payload_arm(plan_id, verify_only)
+        if summary:
+            self.event(summary)
+
     def _require_ready(self, plan_id, allow_armed=False):
         self.guard()
         failed = [c["message"] for c in self.preflight(plan_id)["checks"] if not c["ok"] and c["enabled"]
-                  and not (allow_armed and c["key"] == "landed")]
+                  and not (allow_armed and c["key"] == "landed")
+                  and not (self.without_recording and c["key"] == "payload")]
         if allow_armed and "landed" not in self.skipped:
             s = self.link.snapshot()
             grounded = dict(s, armed=False)
@@ -804,6 +915,7 @@ class DemoLink:
         self.dwell = 0
         self.vertical_speed = 0
         self.heading = 0.0
+        self.yaw_target = None      # (heading, deg/s) from CONDITION_YAW, held like ArduCopter's fixed yaw
         self.roll = 0.0
         self.pitch = 0.0
         self.ground_speed = 0.0
@@ -821,7 +933,12 @@ class DemoLink:
         """Move toward target like a multirotor: yaw to the leg, bank in turns, nose down in cruise."""
         d = distance(self.position, target)
         turn = 0.0
-        if d > 2:
+        if self.yaw_target is not None:
+            want, rate = self.yaw_target
+            error = (want - self.heading + 540) % 360 - 180
+            turn = max(-rate * dt, min(rate * dt, error))
+            self.heading = (self.heading + turn) % 360
+        elif d > 2:
             want = bearing(self.position, target)
             error = (want - self.heading + 540) % 360 - 180
             turn = max(-120 * dt, min(120 * dt, error))
@@ -855,6 +972,7 @@ class DemoLink:
             if self.mode_id == 6 or it["command"] == 20:
                 if self.mode_id != 6:
                     self.speed = self.WP_SPEED  # RTL flies at WPNAV_SPD, not the mission's speed change.
+                    self.yaw_target = None
                 self.mode_id = 6
                 d = self._fly_to(self.home, dt)
                 if d < 2:
@@ -890,6 +1008,9 @@ class DemoLink:
                 # DO_CHANGE_SPEED types 0 and 1 set horizontal speed; 2 and 3 are climb and descent.
                 if it["command"] == 178 and it["p2"] > 0 and int(it["p1"]) in (0, 1):
                     self.speed = it["p2"]
+                # Like ArduPilot, a command between two NAVs starts when the first NAV finishes.
+                if it["command"] == 115:
+                    self.yaw_target = (it["p1"] % 360, it["p2"] or 15)
                 self.current += 1
         else:
             self.ground_speed = 0

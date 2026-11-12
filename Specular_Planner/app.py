@@ -27,6 +27,7 @@ from engine.export import (
 )
 from engine.flight import DEFAULT_SKIPPED_CHECKS, LIVE_TRANSPORTS, FlightService
 from engine.flight_api import flight_api
+from engine.sitl_link import SimService
 from engine.planner import (
     DEFAULT_H_AGL,
     DEFAULT_HOVER,
@@ -64,7 +65,8 @@ from engine.rtk import RtkService, rtk_api
 
 app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
 flight = FlightService(LIVE_TRANSPORTS, DATA / "launch_checks_fly.json", DEFAULT_SKIPPED_CHECKS)
-sim = FlightService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_CHECKS)
+# Simulate: quick demo, ArduCopter SITL (X6 MAX model), or a dry run through the real FC and NUC.
+sim = SimService({"demo"}, DATA / "launch_checks_sim.json", DEFAULT_SKIPPED_CHECKS, peer=flight)
 app.register_blueprint(flight_api(flight))
 app.register_blueprint(flight_api(sim, name="sim", prefix="/api/sim"))
 app.register_blueprint(payload_api(flight, sim))
@@ -110,7 +112,8 @@ def lake_for(body: dict) -> dict:
     ident = Path(str(body.get("water_overlay") or "")).name
     if not ident:
         return lake()
-    hit = _LAKE_WITH.get(ident)
+    cache_key = (ident, body.get("mode") == "science")
+    hit = _LAKE_WITH.get(cache_key)
     if hit is None:
         folder = DATA / "overlays" / ident
         try:
@@ -122,7 +125,7 @@ def lake_for(body: dict) -> dict:
         own = [{"type": "Feature", "geometry": f["geometry"],
                 "properties": {"name": label, "kind": "lake", "source": "flight", "overlay": ident}}
                for f in water.get("features") or []]
-        hit = _LAKE_WITH[ident] = {"type": "FeatureCollection", "features": own + list(lake().get("features") or [])}
+        hit = _LAKE_WITH[cache_key] = {"type": "FeatureCollection", "features": own if body.get("mode") == "science" else own + list(lake().get("features") or [])}
     return hit
 
 
@@ -287,11 +290,17 @@ def api_plan():
             coverage_pct=float(body.get("coverage_pct", 100)),
             survey_pattern=body.get("survey_pattern", "fill"),
             edge=body.get("edge"),
+            science_stages=body.get("science_stages"),
+            any_water=lake() if body.get("mode") == "science" else None,
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    if result["meta"].get("mode") == "science":
+        result["meta"]["recording_mode"] = "continuous" if body.get("science_recording") == "continuous" else "phases"
+    if body.get("water_overlay"):
+        result["meta"]["water_overlay"] = Path(str(body["water_overlay"])).name   # so a re-load can rebuild it
     OUTPUT.mkdir(exist_ok=True)
     stamp = start.strftime("%Y%m%d_%H%M")
     wp_name = f"HERON_{stamp}.waypoints"
@@ -315,6 +324,88 @@ def api_plan():
     return jsonify(result)
 
 
+def saved_phases(filename, wpl, start=None):
+    """Science phases from the plan JSON the planner saved next to an exported .waypoints file.
+
+    The .waypoints header has no phase list, so re-loading HERON_<stamp>.waypoints picks it up from
+    output/HERON_<stamp>.json, if that file describes the same mission (same waypoint count)."""
+    try:
+        # HERON_<stamp>.waypoints sits next to HERON_<stamp>.json. A re-import copy
+        # (HERON_import_<stamp>.waypoints) or a renamed file is matched by its takeoff time instead.
+        names = [Path(filename).stem + ".json"]
+        if start is not None:
+            names.append(f"HERON_{start.astimezone(timezone.utc).strftime('%Y%m%d_%H%M')}.json")
+        meta = None
+        for name in names:
+            sidecar = OUTPUT / name
+            if sidecar.is_file():
+                cand = json.loads(sidecar.read_text())
+                if start is None or str(cand.get("start", "")).startswith(start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M")):
+                    meta = cand
+                    break
+        if meta is None:
+            return {}
+        phases = (meta.get("survey") or {}).get("phases") or []
+        nav = sum(1 for line in wpl.splitlines()[1:]
+                  if len(line.split("\t")) > 9 and line.split("\t")[3] == "16" and line.split("\t")[0] != "0")
+        last = max((int(ph["last_wp"]) for ph in phases), default=0)
+        if not phases or last > nav or nav - last > 2:
+            return {}
+        keep = ("type", "name", "first_wp", "last_wp", "satellites", "primary", "duration_s", "start_s", "end_s", "record",
+                "record_from_wp")
+        out = [{k: ph[k] for k in keep if k in ph} for ph in phases]
+        for ph in out:
+            ph.setdefault("satellites", [])
+        s = meta.get("survey") or {}
+        return {"phases": out, "recording_mode": meta.get("recording_mode") or "phases",
+                "aim": {k: s[k] for k in ("aim_sid", "aim_el", "aim_az") if s.get(k) is not None},
+                "setup": science_setup_from(meta, phases)}
+    except Exception:
+        return {}
+
+
+def overlay_holding(phases):
+    """The flight water outline the phases' points were picked on (plans saved before it was recorded)."""
+    from shapely.geometry import Point, shape
+    points = [Point(float(pt["lon"]), float(pt["lat"])) for ph in phases for pt in ph.get("points") or []]
+    for meta_file in sorted((DATA / "overlays").glob("*/meta.json"), reverse=True):
+        try:
+            m = json.loads(meta_file.read_text())
+            water = json.loads((meta_file.parent / m["water"]["file"]).read_text())
+            shapes = [shape(f["geometry"]) for f in water.get("features") or []]
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if any(s.contains(pt) for s in shapes for pt in points):
+            return meta_file.parent.name
+    return ""
+
+
+def science_setup_from(meta, phases):
+    """The Plan tab's science setup (as Save setup writes it) rebuilt from a saved science plan, so a
+    re-loaded mission can be edited and built again. The pad is filled in from the waypoint file."""
+    if meta.get("mode") != "science":
+        return None
+    out = []
+    for ph in phases:
+        common = {"type": ph["type"], "name": ph.get("name") or ph["type"], "record": ph.get("record", True) is not False,
+                  "satellites": ", ".join(ph.get("satellites") or []),
+                  "points": [{"lat": float(pt["lat"]), "lon": float(pt["lon"])} for pt in ph.get("points") or []]}
+        if ph["type"] == "hover":
+            common["duration_s"] = float(ph.get("duration_s") or 120)
+        else:
+            for k, default in (("count", 3), ("speed_mps", 3), ("spacing_m", 25), ("water_m", 200), ("land_m", 100)):
+                common[k] = ph.get(k, default)
+            common["count"] = int(common["count"])
+        out.append(common)
+    start = datetime.fromisoformat(str(meta["start"])).astimezone(timezone.utc)
+    return {"version": 1, "phases": out, "altitude_m": float(meta.get("h_agl") or 121.92),
+            "transit_mps": float(meta.get("speed_mps") or 8), "antenna_offset_deg": float(meta.get("antenna_offset_deg") or 0),
+            "start": start.strftime("%Y-%m-%dT%H:%M"), "water_overlay": meta.get("water_overlay") or overlay_holding(phases),
+            "elev_mask": float(meta.get("elev_mask") or DEFAULT_MASK),
+            "constellations": list(meta.get("constellations") or ["G", "E", "C"]),
+            "recording_mode": meta.get("recording_mode") or "phases"}
+
+
 @app.post("/api/plan/import")
 def api_plan_import():
     """Load a Mission Planner .waypoints file and rebuild the playback for it."""
@@ -326,7 +417,8 @@ def api_plan_import():
         saved_start = takeoff_from_wpl(raw) or takeoff_from_name(body.get("filename"))
         saved_meta = heron_meta_from_wpl(raw)
         wpl = normalize_wpl(raw)
-        route = route_from_wpl(wpl, lead_in=bool(saved_meta.get("lead_in")))
+        route = route_from_wpl(wpl, lead_in=bool(saved_meta.get("lead_in")), commands_follow_nav=bool(saved_meta.get("commands_follow_nav")),
+                               keep_holds=bool(saved_meta.get("science")))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     start_raw = body.get("start")
@@ -389,6 +481,17 @@ def api_plan_import():
     # The imported file flies as-is; record and draw whether it has a lead-in.
     result["meta"]["lead_in"] = bool(route["lead_in"])
     result["route_line"] = plan_route_line(result, route["lead_in"] or False)
+    saved = saved_phases(safe, wpl, start)
+    if saved:
+        # Same phases and target satellites as when the plan was built (all highlighted, as on Plan).
+        if not isinstance(result["meta"].get("survey"), dict):
+            result["meta"]["survey"] = {}
+        result["meta"]["survey"].setdefault("phases", saved["phases"])
+        result["meta"].setdefault("recording_mode", saved["recording_mode"])
+        for k, v in saved["aim"].items():
+            result["meta"]["survey"].setdefault(k, v)
+        if saved.get("setup"):
+            result["science_setup"] = {**saved["setup"], "pad": {"lat": route["pad"]["lat"], "lon": route["pad"]["lon"]}}
     OUTPUT.mkdir(exist_ok=True)
     stamp = start.strftime("%Y%m%d_%H%M%S")
     wp_name = f"HERON_import_{stamp}.waypoints"
@@ -399,6 +502,10 @@ def api_plan_import():
     (OUTPUT / wp_name).write_bytes(annotate_wpl(wpl, result["meta"].get("start"), result).encode("utf-8"))
     (OUTPUT / card_name).write_bytes(run_card(result).encode("utf-8"))
     result["import_warnings"] = route["warnings"]
+    # Science files from before Nov 11 2026 put each heading AFTER its waypoint, so ArduPilot turned
+    # one hold late (the aircraft sat 10 s at the travel heading before turning). Rebuild those.
+    result["outdated_order"] = bool(saved_meta.get("commands_follow_nav")) or bool(saved and any(
+        ph.get("type") == "hover" and "record_from_wp" not in ph for ph in saved["phases"]))
     result["exports"] = {
         "waypoints": f"/api/export/{wp_name}",
         "runcard": f"/api/export/{card_name}",

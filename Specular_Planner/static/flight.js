@@ -5,6 +5,7 @@
   window.addEventListener("unhandledrejection", (event) => console.error("Flight UI request:", String(event.reason)));
   const el = (id) => document.getElementById(id);
   const VIEWS = ["plan", "sim", "fly"];
+  const SIM_KINDS = ["sitl", "dryrun", "demo"];
   const NETWORK = {
     udp: { label: "UDP · ELRS Wi-Fi", host: "0.0.0.0", port: 14550, hostLabel: "Listen address" },
     herelink_hotspot: { label: "UDP · HereLink hotspot", host: "0.0.0.0", port: 14550, hostLabel: "Listen address" },
@@ -38,6 +39,7 @@
   let showTrail = true;
   let showReflections = true;
   let portsKey = "";
+  let simPortsKey = "";
   let eventsKey = "";
   let checksKey = "";
   let logFilter = "all";
@@ -130,8 +132,9 @@
 
   async function action(name, path, body = {}) {
     const s = services[name];
-    if (s.pending && path !== "rtl" && path !== "disconnect") return;
-    s.pending = true;
+    const side = path === "skip-wait" || path === "cancel-launch";
+    if (s.pending && !side && path !== "rtl" && path !== "disconnect") return false;
+    if (!side) s.pending = true;
     render();
     try {
       const result = await api(name, path, body);
@@ -139,17 +142,24 @@
       if (path === "connect") await api(name, "refresh", {});
       s.nextPoll = 0;
       await poll(name);
+      return true;
     } catch (error) {
       message(error.message, true);
+      return false;
     } finally {
-      s.pending = false;
+      if (!side) s.pending = false;
       render();
     }
   }
 
   function setView(next) {
     if (!VIEWS.includes(next)) next = "plan";
-    if (next !== view) cancelWait();
+    if (next !== view) {
+      const name = active();
+      const hold = waiting;
+      cancelWait();
+      if (hold) action(name, "cancel-launch");
+    }
     view = next;
     document.body.dataset.view = next;
     document.querySelectorAll(".ab-tabs [data-view]").forEach((tab) => {
@@ -237,7 +247,7 @@
 
     const dense = onboard.path.length > 48;
     const every = Math.ceil(onboard.path.length / 24);
-    const wpNumber = new Map(onboard.path.map((p, i) => [p.seq, i + 1]));
+    const wpNumber = wpNumbers(onboard);
     const bySeq = new Map(onboard.path.map((p) => [p.seq, p]));
     const roiStep = rois.length > 80 ? Math.ceil(rois.length / 80) : 1;
     rois.forEach((r, i) => {
@@ -252,15 +262,19 @@
         .addTo(layer);
     });
     onboard.path.forEach((p, i) => {
+      // Same numbering as the Plan page and run card: WPn is the n-th waypoint (takeoff and RTL
+      // are not counted). "item #" is ArduPilot's mission item number, used in its messages.
+      const n = wpNumber.get(p.seq);
+      if (!n) return;
       const fill = onboard.error ? "#ff6b5e" : "#1f6feb";
       L.circleMarker([p.lat, p.lon], { radius: dense ? 3 : 7, color: "#fff", weight: dense ? 1 : 2, fillColor: fill, fillOpacity: 1 })
-        .bindTooltip(`WP${i + 1} · item #${p.seq} · ${Math.round(p.alt)} m above Home`, { direction: "top" })
+        .bindTooltip(`WP${n} · item #${p.seq} · ${Math.round(p.alt)} m above Home`, { direction: "top" })
         .addTo(layer);
-      if (dense && i && i !== onboard.path.length - 1 && i % every) return;
+      if (dense && n > 1 && i !== onboard.path.length - 1 && (n - 1) % every) return;
       L.marker([p.lat, p.lon], {
         interactive: false,
         keyboard: false,
-        icon: L.divIcon({ className: "", html: `<div class="wp-label">WP${i + 1}</div>`, iconSize: [40, 16], iconAnchor: [20, 22] }),
+        icon: L.divIcon({ className: "", html: `<div class="wp-label">WP${n}</div>`, iconSize: [40, 16], iconAnchor: [20, 22] }),
       }).addTo(layer);
     });
   }
@@ -376,6 +390,21 @@
     select.value = [...select.options].some((o) => o.value === keep) ? keep : "auto";
   }
 
+  function renderSimPorts() {
+    // The dry run opens the flight controller's USB port itself; the Fly tab lists the ports.
+    const ports = services.flight.state?.auto?.ports || [];
+    const key = JSON.stringify(ports);
+    if (key === simPortsKey) return;
+    simPortsKey = key;
+    const select = el("simPort");
+    const keep = select.value;
+    const sorted = [...ports].sort((a, b) => Number(!!b.autopilot) - Number(!!a.autopilot));
+    select.replaceChildren(...(sorted.length ? sorted.map((p) => new Option(
+      `${p.device}${p.autopilot ? " · flight controller" : ""}`, p.device))
+      : [new Option("No USB ports", "")]));
+    if ([...select.options].some((o) => o.value === keep && keep)) select.value = keep;
+  }
+
   function syncConnFields() {
     const choice = el("connPort").value;
     const info = NETWORK[choice];
@@ -416,9 +445,18 @@
 
     const sim = services.sim;
     const simOn = attachedOf("sim");
-    el("simButton").textContent = simOn ? "Stop simulator" : sim.pending ? "Starting…" : "Start simulator";
+    const simTransport = sim.state?.telemetry?.transport;
+    if (simOn && SIM_KINDS.includes(simTransport)) el("simKind").value = simTransport;
+    const dry = el("simKind").value === "dryrun";
+    renderSimPorts();
+    el("simKind").disabled = simOn || sim.pending;
+    el("simPort").classList.toggle("hidden", !dry);
+    el("simPort").disabled = simOn || sim.pending;
+    el("simFlag").textContent = dry ? "Dry run" : "Simulation";
+    const verb = dry ? "dry run" : "simulator";
+    el("simButton").textContent = simOn ? `Stop ${verb}` : sim.pending ? "Starting…" : `Start ${verb}`;
     el("simButton").classList.toggle("stop", simOn);
-    el("simButton").disabled = sim.pending && !simOn;
+    el("simButton").disabled = (sim.pending && !simOn) || (!simOn && dry && !el("simPort").value);
   }
 
   function renderStatusBar(name, tel, connected) {
@@ -443,7 +481,7 @@
     const amps = pct != null && finite(tel.battery_current) ? tel.battery_current : null;
     el("abCurrent").textContent = amps == null ? "—" : `${amps.toFixed(1)} A`;
     const link = el("abLink");
-    link.textContent = !connected ? "LOST" : name === "sim" ? "SIM" : `${Number(tel.heartbeat_age || 0).toFixed(1)} s`;
+    link.textContent = !connected ? "LOST" : name === "sim" ? (tel.transport === "dryrun" ? "DRY RUN" : "SIM") : `${Number(tel.heartbeat_age || 0).toFixed(1)} s`;
     link.className = connected ? "good" : "bad";
     const ready = el("abReady");
     ready.dataset.state = !connected ? "lost" : tel.armed ? "armed" : st?.preflight?.ready ? "ready" : "check";
@@ -458,7 +496,11 @@
       radar.dataset.state = "idle";
       el("emptyKicker").textContent = "Simulate";
       el("emptyTitle").textContent = "Simulator is off";
-      el("emptyText").textContent = "Fly your mission on a simulated quadcopter before the real one. Nothing is sent to hardware.";
+      el("emptyText").textContent = {
+        sitl: "Fly your mission on real ArduCopter firmware (SITL) with the X6 MAX model. Nothing is sent to hardware.",
+        dryrun: "SITL flies the mission while the real flight controller stays disarmed and relays to the NUC, so the NUC records as if it were flying. Props off; NUC on HERON_SYSTEM_ID=2.",
+        demo: "Quick preview: an interface simulator, not ArduPilot. Nothing is sent to hardware.",
+      }[el("simKind").value];
       primary.textContent = services.sim.pending ? "Starting…" : "Start simulator";
       primary.disabled = services.sim.pending;
       secondary.textContent = "Build a mission";
@@ -560,8 +602,17 @@
       : unflyable ? "Rebuild it in HERON or fix it in Mission Planner" : "Write the plan, or read the drone's mission";
     el("stepUpload").classList.toggle("done", verified);
 
-    const flyable = disarmed && !busy && !!id && ready && verified;
-    const launching = busy && st?.job?.action === "launch";
+    // The launch job is already running while the countdown shows (it reads the aircraft near zero).
+    const countingDown = waiting && (s.pending || (st?.job?.state === "running" && st?.job?.action === "launch"));
+    if (waiting && st?.job?.action === "launch" && st?.job?.state === "error") {
+      waiting = false;
+      confirmingPlan = null;
+      stopCountdown();
+      resetHold();
+      message(st.job.message, true);
+    }
+    const flyable = disarmed && (!busy || countingDown) && !!id && ready && verified;
+    const launching = busy && st?.job?.action === "launch" && !countingDown;
     if (waiting && !flyable) {
       waiting = false;
       confirmingPlan = null;
@@ -681,7 +732,7 @@
         ? `Home${pos ? ` · ${fmtDist(meters(tel.position, tel.home || target))}` : ""}`
         : target.taking_off
         ? "Takeoff"
-        : `WP ${target.seq}${pos ? ` · ${fmtDist(meters(tel.position, target))}` : ""}`)
+        : `WP${target.wp || target.seq}${pos ? ` · ${fmtDist(meters(tel.position, target))}` : ""}`)
       : connected && tel.mission_current != null ? `Item ${tel.mission_current}` : "—";
     const inferredGround = connected && tel.armed === false && tel.fresh?.position
       && finite(tel.relative_alt) && tel.relative_alt > -5 && tel.relative_alt < 3
@@ -731,13 +782,27 @@
     return sev <= 3 ? "sev-error" : sev === 4 ? "sev-warn" : sev === 7 ? "sev-debug" : "sev-info";
   }
 
-  function renderLog(st) {
+  // ArduPilot numbers every mission item (headings and speed changes too); the planner numbers
+  // only the waypoints. Map one to the other so messages can name the waypoint.
+  function wpNumbers(onboard) {
+    return new Map((onboard?.path || []).filter((p) => p.wp).map((p) => [p.seq, p.wp]));
+  }
+
+  function logText(event, wpNumber) {
+    if (event.source !== "ardupilot" || !wpNumber.size) return event.text;
+    const m = /^(Mission: (\d+) WP|Reached command #(\d+))$/.exec(event.text);
+    const n = m && wpNumber.get(Number(m[2] || m[3]));
+    return n ? `${event.text} (WP${n})` : event.text;
+  }
+
+  function renderLog(st, name) {
+    const wpNumber = wpNumbers(name ? onboardOf(name) : null);
     const events = (st?.events || []).filter((e) => logFilter === "all" || (e.source || "heron") === logFilter);
     el("flightMessageCount").textContent = String(events.length);
     const latest = events.at(-1);
     el("logLatest").textContent = latest ? latest.text : "No aircraft messages yet";
     el("logLatest").className = `log-latest ${latest ? severityClass(latest.severity ?? 6) : ""}`;
-    const key = `${logFilter}:${events.length}:${latest?.id ?? latest?.time ?? ""}`;
+    const key = `${logFilter}:${events.length}:${latest?.id ?? latest?.time ?? ""}:${wpNumber.size}`;
     if (key === eventsKey) return;
     eventsKey = key;
     el("flightEvents").replaceChildren(...events.slice().reverse().map((event) => {
@@ -751,7 +816,7 @@
       src.className = `src ${event.source === "ardupilot" ? "ap" : "heron"}`;
       src.textContent = event.source === "ardupilot" ? "AP" : "HERON";
       const text = document.createElement("span");
-      text.textContent = event.text;
+      text.textContent = logText(event, wpNumber);
       li.append(time, src, text);
       return li;
     }));
@@ -1002,7 +1067,7 @@
     }
     renderMission(name, st, tel, connected);
     renderInstruments(name, st, tel, connected);
-    renderLog(st);
+    renderLog(st, name);
   }
 
   function openPopover(open) {
@@ -1077,7 +1142,19 @@
   el("simButton").onclick = () => {
     if (attachedOf("sim")) return action("sim", "disconnect");
     const pad = typeof padMarker !== "undefined" && padMarker ? padMarker.getLatLng() : null;
-    action("sim", "connect", { transport: "demo", ...(pad ? { home: { lat: pad.lat, lon: pad.lng } } : {}) });
+    const kind = el("simKind").value;
+    const body = { transport: kind, ...(pad ? { home: { lat: pad.lat, lon: pad.lng } } : {}) };
+    if (kind === "dryrun") Object.assign(body, { device: el("simPort").value, baud: 115200 });
+    if (kind !== "demo") message(kind === "dryrun" ? "Starting SITL and the dry-run relay…" : "Starting ArduCopter SITL…");
+    action("sim", "connect", body);
+  };
+  try {
+    const saved = localStorage.getItem("heron.simKind");
+    if (SIM_KINDS.includes(saved)) el("simKind").value = saved;
+  } catch (_) { /* storage unavailable */ }
+  el("simKind").onchange = () => {
+    try { localStorage.setItem("heron.simKind", el("simKind").value); } catch (_) { /* storage unavailable */ }
+    render();
   };
   el("emptyPrimary").onclick = () => {
     if (view === "sim") return el("simButton").click();
@@ -1242,12 +1319,26 @@
     waiting = true;
     resetHold();
     const clock = clockParts(when);
+    const name = confirmingPlan.name;
+    const id = confirmingPlan.id;
     el("waitClock").textContent = `${clock.utc} UTC · ${clock.local} ${clock.tz}`;
+    // The aircraft reads the mission during this countdown, so arming starts at zero.
+    action(name, "launch", { plan_id: id, confirmation: "LAUNCH", wait_until_start: true }).then((ok) => {
+      if (!ok && waiting) {
+        cancelWait();
+        render();
+      }
+    });
     const tick = () => {
       const left = when.getTime() - Date.now();
       el("countdownValue").textContent = remainText(left);
       el("countdownValue").classList.toggle("long", remainText(left).length > 5);
-      if (left <= 0) return sendLaunch();
+      if (left <= 0) {
+        waiting = false;
+        stopCountdown();
+        render();
+        return;
+      }
       countdown = setTimeout(tick, 200);
     };
     tick();
@@ -1325,10 +1416,22 @@
     if (event.key === " " || event.key === "Enter") resetHold();
   });
   launch.addEventListener("contextmenu", (event) => event.preventDefault());
-  el("flightSkipWait").onclick = () => sendLaunch();
+  el("flightSkipWait").onclick = () => {
+    if (launchSent || services[active()]?.state?.job?.state === "running") {
+      action(active(), "skip-wait");
+      waiting = false;
+      stopCountdown();
+      render();
+      return;
+    }
+    sendLaunch();
+  };
   el("flightCancelLaunch").onclick = () => {
+    const name = confirmingPlan?.name || active();
+    const sent = launchSent || services[name]?.state?.job?.action === "launch";
     cancelWait();
     render();
+    if (sent) action(name, "cancel-launch");
   };
 
   L.DomEvent.disableClickPropagation(el("deck"));

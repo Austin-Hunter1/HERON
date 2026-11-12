@@ -89,6 +89,24 @@ class Controller:
                 self.plan = dict(start_seq=start, stop_seq=stop)
                 self.state = "AUTO_ARMED"
                 self.event(f"Auto-record armed: mission items {start} to {stop}")
+            elif action == "arm_segments":
+                segs = check_segments(data.get("segments"))
+                if self.state == "AUTO_ARMED" and self.plan and self.plan.get("segments") == segs:
+                    return self.snapshot()
+                if self.state != "READY":
+                    raise ValueError({"IDLE": "No setup loaded on the payload.",
+                                      "RECORDING": "Already recording; stop first.",
+                                      "FAULT": "Payload fault: " + str(self.fault)}.get(self.state, "Payload is not ready."))
+                index = 0
+                cur = self.cube["current"] if self.cube["mode"] == "AUTO" else None
+                if cur is not None:
+                    while index < len(segs) and segs[index][1] < cur:
+                        index += 1
+                    if index == len(segs):
+                        raise ValueError(f"Aircraft is already past mission item {segs[-1][1]}. Use Record now.")
+                self.plan = dict(segments=segs, index=index, start_seq=segs[index][0], stop_seq=segs[index][1])
+                self.state = "AUTO_ARMED"
+                self.event("Auto-record armed per phase: items " + ", ".join(f"{a}-{b}" for a, b in segs))
             elif action == "reset":
                 if self.state in ("RECORDING", "FINALIZING"):
                     raise ValueError("Stop recording first.")
@@ -121,6 +139,8 @@ class Controller:
         self.started, self.origin = self.clock(), origin
         self.state = "RECORDING"
         where = f" at item {self.plan['start_seq']}" if origin == "mission" and self.plan else ""
+        if origin == "mission" and self.plan and "segments" in self.plan:
+            where += f", phase {self.plan['index'] + 1} of {len(self.plan['segments'])}"
         self.event(f"REC START{where} ({origin})")
 
     def _stop(self, reason, suppress=False):
@@ -173,6 +193,9 @@ class Controller:
                 return
             start, stop = self.plan["start_seq"], self.plan["stop_seq"]
             seq = self.cube["current"]
+            if "segments" in self.plan:
+                self._follow_segments(reached, current, seq)
+                return
             if self.state == "RECORDING" and (reached == stop or (current is not None and current > stop)):
                 self._stop(f"REC STOP at item {stop} (survey done)", suppress=True)
                 return
@@ -186,6 +209,44 @@ class Controller:
                 self.event(f"Late start: arrival at item {start} not seen, now at item {seq}")
             elif seq is not None and seq > stop:
                 self._stop(f"Auto-record cancelled: already past item {stop}", suppress=True)
+
+    def _follow_segments(self, reached, current, seq):
+        """Per-phase auto-record: record each [start, stop] segment, re-arm for the next one in between."""
+        plan = self.plan
+        segs = plan["segments"]
+        start, stop = plan["start_seq"], plan["stop_seq"]
+        n, i = len(segs), plan["index"]
+        if self.state == "RECORDING":
+            # A segment ends when its last item is finished (current moves past it), keeping a hover's final hold.
+            if current is not None and current > stop:
+                self._stop(f"REC STOP after item {stop} (phase {i + 1} of {n} done)", suppress=True)
+                if self.state == "READY" and i + 1 < n:
+                    self._arm_segment(plan, i + 1)
+            return
+        if self.state != "AUTO_ARMED" or not (self.cube["armed"] and self.cube["mode"] == "AUTO"):
+            return
+        if seq is not None and seq > stop:
+            j = i
+            while j < n and segs[j][1] < seq:
+                j += 1
+            if j == n:
+                self._stop(f"Auto-record cancelled: already past item {stop}", suppress=True)
+                return
+            self.event(f"Skipped phase {i + 1} of {n}: aircraft already at item {seq}")
+            self._arm_segment(plan, j)
+            start, stop, i = plan["start_seq"], plan["stop_seq"], j
+        if reached == start:
+            self._start("mission")
+        elif reached is None and seq is not None and start < seq <= stop:
+            self._start("mission")
+            self.event(f"Late start: arrival at item {start} not seen, now at item {seq}")
+
+    def _arm_segment(self, plan, index):
+        plan["index"] = index
+        plan["start_seq"], plan["stop_seq"] = plan["segments"][index]
+        self.plan = plan
+        self.state = "AUTO_ARMED"
+        self.event(f"Waiting for items {plan["start_seq"]}-{plan["stop_seq"]} (phase {index + 1} of {len(plan['segments'])})")
 
     def tick(self):
         with self.lock:
@@ -221,3 +282,20 @@ class Controller:
                         elapsed_s=round(self.clock()-self.started, 1) if self.state == "RECORDING" and self.started else 0,
                         remaining_minutes=round(max(0, h["disk_free_gb"]-reserve)/e["gb_per_min"], 1) if e["gb_per_min"] else None,
                         cube=copy.deepcopy(self.cube), events=list(self.events)[-15:], **h)
+
+
+def check_segments(segments):
+    """[[start, stop], ...] in mission order, 1..MAX_SEGMENTS of them, not overlapping."""
+    from .protocol import MAX_SEGMENTS
+    try:
+        segs = [[s[0], s[1]] for s in segments]
+    except (TypeError, IndexError, KeyError):
+        raise ValueError("Auto-record segments must be [start, stop] pairs.")
+    if not 1 <= len(segs) <= MAX_SEGMENTS:
+        raise ValueError(f"Auto-record takes 1 to {MAX_SEGMENTS} phases.")
+    prev = 0
+    for a, b in segs:
+        if type(a) is not int or type(b) is not int or not 1 <= a <= b <= 999 or a <= prev:
+            raise ValueError("Each phase must start after the previous one ends, and before it stops.")
+        prev = b
+    return segs

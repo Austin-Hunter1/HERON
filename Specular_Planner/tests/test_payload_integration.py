@@ -77,7 +77,8 @@ class LiveLinkTests(unittest.TestCase):
         deadline = time.monotonic() + 3
         while self.monitor.status()["setup"] is None and time.monotonic() < deadline:
             time.sleep(0.05)
-        self.assertEqual(self.monitor.status()["setup"], presets()[0]["name"])
+        # The payload appends " (NUC SSD)" when no data drive is mounted, as on a test machine.
+        self.assertTrue(self.monitor.status()["setup"].startswith(presets()[0]["name"]))
 
     def test_record_and_stop_survive_a_lost_ack(self):
         self.drop_next_ack = True
@@ -100,6 +101,25 @@ class LiveLinkTests(unittest.TestCase):
             time.sleep(0.05)
         s = self.monitor.status()
         self.assertEqual((s["state"], s["auto"]), ("ARMED", dict(start_seq=4, stop_seq=28)))
+
+    def test_arm_per_phase_over_mavlink(self):
+        self.monitor.command("arm_segments", segments=[[4, 26], [28, 50], [52, 122]])
+        self.assertEqual(self.controller.plan["segments"], [[4, 26], [28, 50], [52, 122]])
+        deadline = time.monotonic() + 3
+        while not (self.monitor.status()["auto"] or {}).get("segments") and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.monitor.status()["auto"], dict(start_seq=4, stop_seq=26, segment=1, segments=3))
+
+    def test_old_nuc_explains_the_update(self):
+        real = self.controller.execute
+
+        def old(action, data=None):
+            if action == "arm_segments":
+                raise ValueError("unknown payload action 5")
+            return real(action, data)
+        self.controller.execute = old
+        with self.assertRaisesRegex(ValueError, "older than this planner"):
+            self.monitor.command("arm_segments", segments=[[4, 26]])
 
     def test_offline_when_payload_goes_quiet(self):
         self.stop.set()
@@ -149,3 +169,52 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def science_plan(service):
+    """Two 3-point hovers and a 4-point pass block, then the homebound waypoint (as the exporter writes it)."""
+    rows = ["QGC WPL 110", "0\t1\t0\t16\t0\t0\t0\t0\t40.08\t-105.23\t0\t1",
+            "1\t0\t3\t22\t0\t0\t0\t0\t40.08\t-105.23\t100\t1"]
+    seq = 2
+    for i in range(11):
+        rows.append(f"{seq}\t0\t3\t16\t10\t0\t0\t0\t{40.081 + i * 1e-4}\t-105.23\t100\t1")
+        rows.append(f"{seq + 1}\t0\t3\t115\t300\t15\t0\t0\t0\t0\t0\t1")
+        seq += 2
+    rows.append(f"{seq}\t0\t3\t20\t0\t0\t0\t0\t0\t0\t0\t1")
+    meta = {"mode": "science", "hold_s": 0, "survey": {"phases": [
+        {"type": "hover", "name": "Group observation", "first_wp": 1, "last_wp": 3},
+        {"type": "hover", "name": "Second observation", "first_wp": 4, "last_wp": 6},
+        {"type": "passes", "name": "Shoreline passes", "first_wp": 7, "last_wp": 10}]}}
+    return service.register_plan("\n".join(rows) + "\n", meta)
+
+
+class PhaseApiTests(unittest.TestCase):
+    def setUp(self):
+        from engine.payload import survey_waypoints
+        self.survey_waypoints = survey_waypoints
+        self.sim = FlightService({"demo"})
+        self.pid = science_plan(self.sim)
+
+    def test_phases_map_to_mission_items(self):
+        w = self.survey_waypoints(self.sim, self.pid)
+        self.assertEqual([(p["start_seq"], p["stop_seq"]) for p in w["phases"]], [(2, 6), (8, 12), (14, 20)])
+        self.assertEqual(w["phases"][2]["name"], "Shoreline passes")
+
+    def test_api_arms_phases_on_the_sim_payload(self):
+        app = Flask(__name__)
+        bp = payload_api(FlightService({"serial"}), self.sim)
+        app.register_blueprint(bp)
+        try:
+            c = app.test_client()
+            token = c.get("/api/payload/session").get_json()["token"]
+            r = c.post("/api/payload/command", headers={"X-Payload-Token": token},
+                       json={"mode": "sim", "action": "arm_segments", "plan_id": self.pid,
+                             "segments": [[2, 6], [8, 12], [14, 20]]})
+            self.assertEqual(r.status_code, 200, r.get_json())
+            self.assertEqual(r.get_json()["auto"], dict(start_seq=2, stop_seq=6, segment=1, segments=3))
+            bad = c.post("/api/payload/command", headers={"X-Payload-Token": token},
+                         json={"mode": "sim", "action": "arm_segments", "plan_id": self.pid, "segments": [[2, 99]]})
+            self.assertEqual(bad.status_code, 409)
+        finally:
+            for m in bp.monitors.values():
+                m.closed.set()

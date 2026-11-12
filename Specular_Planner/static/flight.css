@@ -137,6 +137,7 @@ body[data-view="fly"] .ab-tabs button[aria-selected="true"] { background: var(--
   cursor: pointer;
 }
 #connPort { min-width: 118px; max-width: 250px; }
+#simPort { min-width: 118px; max-width: 220px; }
 .ab-conn select:disabled { color: var(--deck-muted); cursor: default; opacity: 0.75; }
 .ab-conn select option,
 .ab-conn select optgroup { color: #e7eef3; background: #17222c; }
