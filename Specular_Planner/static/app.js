@@ -2633,6 +2633,48 @@ function showTakeoffLocal() {
   note.textContent = `${raw.replace("T", " ")} UTC is ${local} here.`;
 }
 
+// Trimble GNSS Planning Online opens on its sky plot from a link (the format its own Share button
+// makes). It numbers satellites its own way: G n -> n, R n -> 37+n, E n -> 200+n,
+// C01-C37 -> 263+n, C38+ -> 328+n. It starts on the whole UTC hour; its slider moves from there.
+function trimbleSatNumber(id) {
+  const m = /^([GREC])0*(\d+)$/.exec(String(id).trim().toUpperCase());
+  if (!m) return null;
+  const n = Number(m[2]);
+  return { G: n, R: 37 + n, E: 200 + n, C: n <= 37 ? 263 + n : 328 + n }[m[1]];
+}
+
+function trimbleSkyplotUrl() {
+  const raw = document.getElementById("start").value;
+  const when = raw ? new Date(`${raw}Z`) : new Date();
+  when.setUTCMinutes(0, 0, 0);
+  const at = padMarker ? padMarker.getLatLng() : map.getCenter();
+  const names = { G: "GPS", E: "Galileo", C: "BeiDou" };
+  let systems = ["G", "E", "C"].filter((c) => document.getElementById(`c${c}`)?.checked);
+  const params = new URLSearchParams();
+  if (missionMode === "science" && window.HeronScience) {
+    const ids = [...new Set(window.HeronScience.stages()
+      .flatMap((p) => String(Array.isArray(p.satellites) ? p.satellites.join(",") : p.satellites || "").split(/[\s,]+/))
+      .map((x) => x.trim().toUpperCase()).filter(Boolean))];
+    const nums = ids.map(trimbleSatNumber).filter(Boolean);
+    if (nums.length) {
+      params.set("satellites", nums.join(","));
+      systems = [...new Set(ids.map((x) => x[0]))].filter((c) => names[c]);
+    }
+  }
+  params.set("satSystems", (systems.length ? systems : ["G", "E", "C"]).map((c) => names[c]).join("|"));
+  params.set("restoreSats", "0");
+  params.set("target", "skyplot");
+  params.set("cutoffDeg", String(Number(document.getElementById("mask").value) || 20));
+  params.set("durationHours", "6");
+  params.set("utcTime", when.toISOString().slice(0, 19));
+  params.set("hgt", "1600");
+  params.set("lonDeg", at.lng.toFixed(6));
+  params.set("latDeg", at.lat.toFixed(6));
+  return `https://www.gnssplanning.com/#/embedded?${params.toString().replace(/%7C/g, "|").replace(/%2C/g, ",").replace(/%3A/g, ":")}`;
+}
+
+document.getElementById("btnTrimble").onclick = () => window.open(trimbleSkyplotUrl(), "_blank", "noopener");
+
 document.getElementById("start").addEventListener("change", () => {
   showTakeoffLocal();
   scheduleSky();
