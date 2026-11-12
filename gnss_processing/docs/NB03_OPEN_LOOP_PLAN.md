@@ -772,8 +772,10 @@ is later work.
 
 ### 9.4 Calibrating the hardware delay and phase
 
-$\tau_{hw}$: the lag of the DDM peak (refined by a parabola, or by a fit of the
-known correlation shape) minus the model, averaged over high-SNR satellites.
+$\tau_{hw}$: the lag of the DDM peak (refined between the grid lags by a parabola
+through the top three lags, or by early-late equality $A(x-d) = A(x+d)$; config
+`acquisition.peak_method`, D-103) minus the model, averaged over high-SNR
+satellites.
 It is common to all satellites of one band and one channel. A large
 satellite-dependent residual means a geometry error, not a hardware delay.
 

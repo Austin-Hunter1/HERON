@@ -28,12 +28,13 @@ CHOICES = {
     ("models", "geoid"): {"geoid18", "egm2008", "constant", "none"},
     ("models", "ionosphere"): {"nequick_g", "klobuchar", "ionex", "none"},
     ("models", "troposphere"): {"saastamoinen", "gpt3", "none"},
+    ("acquisition", "peak_method"): {"parabola", "early_late"},
 }
 
 NUMBERS = [
     ("openloop", "model_rate_hz"), ("openloop", "coherent_ms"), ("openloop", "lag_step_chips"),
     ("openloop", "lag_margin_chips"), ("acquisition", "incoherent_blocks"),
-    ("acquisition", "p_fa_total"), ("phase", "slip_search"), ("phase", "process_accel_mps2"),
+    ("acquisition", "p_fa_total"), ("acquisition", "peak_half_spacing_chips"), ("phase", "slip_search"), ("phase", "process_accel_mps2"),
     ("phase", "min_cn0_dbhz"), ("phase", "coherence_window"), ("phase", "coherence_min"),
     ("leakage", "window_blocks"), ("leakage", "min_turns"), ("leakage", "strong_fraction"),
     ("surface", "rms_height_m"), ("models", "geoid_epoch_year"), ("models", "gps_minus_utc_s"),
@@ -41,6 +42,7 @@ NUMBERS = [
 
 POSITIVE = {("openloop", "model_rate_hz"), ("openloop", "coherent_ms"),
             ("openloop", "lag_step_chips"), ("acquisition", "incoherent_blocks"),
+            ("acquisition", "peak_half_spacing_chips"),
             ("leakage", "window_blocks")}
 
 

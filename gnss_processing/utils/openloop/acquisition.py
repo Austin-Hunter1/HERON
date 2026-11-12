@@ -38,7 +38,7 @@ class DdmResult:
     doppler_offsets_hz: np.ndarray
     noise_power: float
     threshold: float
-    peak_lag_chips: float        # refined by a parabola
+    peak_lag_chips: float        # refined between the lags by `peak_method`
     peak_doppler_hz: float
     snr_db: float
     detected: bool
@@ -56,6 +56,74 @@ def noise_lag_mask(lags: np.ndarray, noise_chips: tuple[float, float]) -> np.nda
     return (lags >= noise_chips[0]) & (lags <= noise_chips[1])
 
 
+PEAK_METHODS = {"parabola", "early_late"}
+
+
+def parabola_peak_lag(lags: np.ndarray, power: np.ndarray, peak_index: int) -> float:
+    """
+    The peak lag from a parabola through the top three lags of the POWER.
+
+    It looks only at the tip, so a second path near the peak moves it less than
+    `early_late_peak_lag` does. For a sharp triangle (L1 C/A) it is biased by an
+    amount that depends on where the peak sits between two lags: up to about
+    0.1 of the lag step (0.026 chip at 0.25, 0.004 chip at 0.05). Keep the lag
+    step fine when this method is used. At the edge of the lags, or when the
+    three values do not curve down, the grid lag is returned unchanged.
+    """
+    lag = float(lags[peak_index])
+    if 0 < peak_index < len(lags) - 1:
+        y0, y1, y2 = power[peak_index - 1], power[peak_index], power[peak_index + 1]
+        den = y0 - 2 * y1 + y2
+        if den < 0:
+            lag += 0.5 * (y0 - y2) / den * (lags[1] - lags[0])
+    return lag
+
+
+def early_late_peak_lag(lags: np.ndarray, amplitude: np.ndarray, peak_index: int,
+                        half_spacing_chips: float) -> float:
+    """
+    The peak lag of a symmetric waveform, between the grid lags.
+
+    Finds x where the early and the late values are equal:
+
+        A(x - d) = A(x + d),     d = half_spacing_chips
+
+    with A linearly interpolated between the grid lags. For any symmetric peak
+    this is exact when x - d and x + d fall on the straight slopes, so the shape
+    of the tip does not matter: sharp (L1 C/A at a wide bandwidth) or rounded
+    (L5 through the front-end filter). A parabola through the three top samples
+    is NOT exact for a triangle: on a 0.25-chip grid it moved an L1 C/A peak by
+    up to 0.026 chip (26 ns) in the x2 data check of 2026-11-12.
+
+    Give the AMPLITUDE (|Z|, or the square root of a power), not the power: the
+    slopes of the power are curved. A constant noise floor does not move x.
+
+    The search is within one grid step of `peak_index`. When x - d or x + d is
+    outside the lags, or there is no sign change (noise), the grid lag is
+    returned unchanged.
+    """
+    lags = np.asarray(lags, dtype=float)
+    a = np.asarray(amplitude, dtype=float)
+    step = lags[1] - lags[0]
+    lo, hi = lags[peak_index] - step, lags[peak_index] + step
+    if lo - half_spacing_chips < lags[0] or hi + half_spacing_chips > lags[-1]:
+        return float(lags[peak_index])
+
+    def g(x):
+        return np.interp(x - half_spacing_chips, lags, a) - np.interp(x + half_spacing_chips, lags, a)
+
+    g_lo, g_hi = g(lo), g(hi)
+    if not g_lo < 0 < g_hi:
+        return float(lags[peak_index])
+    for _ in range(50):  # bisection; g is piecewise linear and rises through the peak
+        mid = 0.5 * (lo + hi)
+        if g(mid) < 0:
+            lo = mid
+        else:
+            hi = mid
+    return float(0.5 * (lo + hi))
+
+
 def delay_doppler_map(
     ol: OpenLoopOutput,
     *,
@@ -64,6 +132,8 @@ def delay_doppler_map(
     coherent_blocks: int = 1,
     p_fa_total: float = 1e-3,
     search_chips: tuple[float, float] | None = None,
+    peak_method: str = "parabola",
+    peak_half_spacing_chips: float = 0.5,
 ) -> DdmResult:
     """
     Detect the reflection in the wiped waveforms `wiped` (K, M, J) of one component.
@@ -71,7 +141,21 @@ def delay_doppler_map(
     `coherent_blocks` sums that many blocks coherently before |.|^2 (plan 9.2).
     `search_chips` limits the peak search (default: all lags outside the noise
     window).
+
+    `peak_method` (`acquisition.peak_method` in the config, D-103) refines the
+    peak lag between the grid lags:
+
+    - "parabola": through the top three lags of the power. Looks only at the tip,
+      so a second path near the peak (the direct leakage, C-9) moves it less.
+      Biased for a sharp peak on a coarse grid (L1 C/A: up to 0.004 chip on a
+      0.05-chip grid, 0.026 chip on a 0.25-chip grid).
+    - "early_late": `early_late_peak_lag` with `peak_half_spacing_chips`. Exact
+      for any symmetric peak, but a second path near the peak makes the slopes
+      unequal and pulls it (up to 0.05 chip for leakage at 0.3 amplitude and
+      0.117 chip, the synthetic notebook case).
     """
+    if peak_method not in PEAK_METHODS:
+        raise ValueError(f"peak_method {peak_method!r}; allowed: {sorted(PEAK_METHODS)}")
     zc = coherent_sum(wiped, coherent_blocks)
     power = np.mean(np.abs(zc) ** 2, axis=0)  # (M, J)
     n_i = zc.shape[0]
@@ -87,12 +171,11 @@ def delay_doppler_map(
     sub = np.where(search[None, :], power, -np.inf)
     m, j = np.unravel_index(int(np.argmax(sub)), sub.shape)
     peak = power[m, j]
-    lag = float(lags[j])
-    if 0 < j < len(lags) - 1:
-        y0, y1, y2 = power[m, j - 1], power[m, j], power[m, j + 1]
-        den = y0 - 2 * y1 + y2
-        if den < 0:
-            lag += 0.5 * (y0 - y2) / den * (lags[1] - lags[0])
+    if peak_method == "early_late":
+        lag = early_late_peak_lag(lags, np.sqrt(np.maximum(power[m], 0.0)), int(j),
+                                  peak_half_spacing_chips)
+    else:
+        lag = parabola_peak_lag(lags, power[m], int(j))
     snr = 10 * np.log10(max(peak - noise, 1e-30) / noise)
     return DdmResult(power, lags, ol.doppler_offsets_hz, noise, thr, lag,
                      float(ol.doppler_offsets_hz[m]), float(snr), bool(peak > thr), n_i)

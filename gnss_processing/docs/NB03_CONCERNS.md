@@ -299,17 +299,46 @@ phase spectrum of the first real test.
 
 ## C-14. Hardware-delay calibration from one DDM peak
 
-`acquisition.estimate_tau_hw_s` takes the parabola-refined DDM peak. Risks:
+`acquisition.estimate_tau_hw_s` takes the refined DDM peak. Risks:
 
+- **No simple peak refinement is exact for every case** (found 2026-11-12, D-103).
+  `acquisition.peak_method` selects one of two:
+  - `parabola` (default): through the top three lags of the power. For the
+    sharp L1 C/A triangle it is biased by where the peak sits between two lags:
+    up to 0.026 chip (about 26 ns) on a 0.25-chip grid (seen in the x2 open-loop
+    demonstration) and up to 0.004 chip on the 0.05-chip grid of the config.
+  - `early_late`: A(x - d) = A(x + d) on the amplitude, with
+    d = `acquisition.peak_half_spacing_chips`. Exact for any symmetric peak (no
+    grid bias), but a second path near the peak makes the two slopes unequal
+    and pulls it.
+
+  Worst-case error (chip) with a model of the L1 C/A triangle, the peak at any
+  place between two lags:
+
+  | Case                                  | parabola | early_late (d = 0.5) |
+  |---------------------------------------|----------|----------------------|
+  | sharp peak, 0.25-chip grid            | 0.026    | 0.000                |
+  | sharp peak, 0.05-chip grid            | 0.004    | 0.000                |
+  | rounded peak (L5-like), 0.05 grid     | 0.000    | 0.000                |
+  | + leakage 0.3 at -0.117 chip, sharp   | 0.016    | 0.050                |
+  | + leakage 0.3 at -0.117 chip, rounded | 0.030    | 0.050                |
+
+  In the synthetic notebook (L1 leakage at 0.3 and -0.117 chip) the parabola
+  gave 29.6 ns and early_late 18.8 ns for a 30 ns truth. Real L1 C/A data will
+  probably have leakage (C-9), so the default is the parabola with a fine lag
+  step. The proper fix is a two-path fit (reflection and leakage triangles with
+  the known separation from the model), not built yet.
 - For L1 C/A the direct leakage peak is within about 0.2 chip of the reflection
-  and pulls the peak (C-9).
+  and pulls the peak (C-9), with either method (table above).
 - Diffuse scattering makes the waveform asymmetric and moves the peak late.
 - One satellite gives one value; use several high-SNR satellites and look at the
   spread (a large spread is a geometry error, not a hardware delay).
 - The detection threshold assumes independent lags. Lags closer than one chip are
   correlated, so the threshold is conservative.
 
-The synthetic test recovers a quarter-chip delay to 0.06 chip.
+The synthetic DDM test (no leakage) recovers a quarter-chip delay to 0.03 chip
+with both methods. A unit test slides the peak across a full grid step for
+`early_late_peak_lag`.
 
 ## C-15. Plan items not built in this draft
 
@@ -321,7 +350,8 @@ The synthetic test recovers a quarter-chip delay to 0.06 chip.
 - The second OL pass (plan 10.5): `ReflectionModel.excess_bias_m` is the hook, but
   no fit drives it yet.
 - Mode B carrier phase: only the Mode B code phase is computed.
-- Retrackers other than the parabola on the peak (leading edge, model fit, the
+- Retrackers other than the parabola and early-late equality on the peak (a two-path
+  fit with the leakage (C-14), leading edge, model fit, the
   learned retracker of Yang 2025).
 - Notebook 03 in the pipeline window (plan phase 9).
 - RHCP and LHCP together: the notebook runs one nadir channel per run

@@ -60,6 +60,8 @@ acquisition:
   incoherent_blocks: 50
   p_fa_total: 1.0e-3
   doppler_offsets_hz: [-25.0, 0.0, 25.0]
+  peak_method: parabola           # parabola | early_late: DDM peak-lag refinement for tau_hw (D-103)
+  peak_half_spacing_chips: 0.5    # early_late only: half spacing d; x +- d must lie on the slopes
 
 phase:
   slip_search: 2

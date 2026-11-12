@@ -199,7 +199,8 @@ def test_l5_pilot_overlay_offset_search():
 
 # ---------------------------------------------------------------- Phase 4
 
-def test_ddm_detects_weak_reflection_and_hardware_delay():
+@pytest.mark.parametrize("method", ["parabola", "early_late"])
+def test_ddm_detects_weak_reflection_and_hardware_delay(method):
     sig = GpsL1CA(11)
     world = synthetic.SyntheticWorld()
     tau_hw = 0.25 / 1.023e6  # a quarter chip
@@ -211,10 +212,35 @@ def test_ddm_detects_weak_reflection_and_hardware_delay():
                                   model=m, lags_chips=lags)
     wiped = phase.wipe(ol, sig, ref, 0)
     ddm = acquisition.delay_doppler_map(ol, wiped=wiped, noise_chips=(-6.0, -3.0),
-                                        coherent_blocks=20, search_chips=(-1.5, 1.5))
+                                        coherent_blocks=20, search_chips=(-1.5, 1.5),
+                                        peak_method=method)
     assert ddm.detected
     est, _ = acquisition.estimate_tau_hw_s([ddm.peak_lag_chips], 1.023e6)
-    assert est == pytest.approx(tau_hw, abs=0.06 / 1.023e6)
+    # No leakage here. Early-late gave 0.001 to 0.010 chip over seeds 3 to 5.
+    assert est == pytest.approx(tau_hw, abs=0.03 / 1.023e6)
+    with pytest.raises(ValueError, match="peak_method"):
+        acquisition.delay_doppler_map(ol, wiped=wiped, noise_chips=(-6.0, -3.0),
+                                      peak_method="centroid")
+
+
+@pytest.mark.parametrize("shape", ["triangle", "rounded"])
+def test_early_late_peak_lag_is_exact_between_lags(shape):
+    """
+    The DDM peak refinement must not depend on where the peak sits between
+    two lags. A parabola failed this for the sharp L1 C/A triangle (up to
+    0.026 chip on a 0.25-chip grid, x2 data, 2026-11-12).
+    """
+    lags = np.arange(-4.0, 3.0001, 0.25)
+    fine = np.arange(-6.0, 6.0, 0.001)
+    kernel = np.exp(-0.5 * (np.arange(-0.3, 0.3001, 0.001) / 0.08) ** 2)
+    for true in np.linspace(-0.6, -0.35, 26):  # the peak crosses a full grid step
+        tri = np.maximum(1.0 - np.abs(fine - true), 0.0)
+        if shape == "rounded":  # a symmetric front-end filter rounds the tip
+            tri = np.convolve(tri, kernel / kernel.sum(), mode="same")
+        amp = np.interp(lags, fine, tri) + 0.05  # plus a constant noise floor
+        j = int(np.argmax(amp))
+        est = acquisition.early_late_peak_lag(lags, amp, j, 0.5)
+        assert est == pytest.approx(true, abs=2e-3), (shape, true, est)
 
 
 def test_ddm_no_false_detection_on_noise():
