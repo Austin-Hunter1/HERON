@@ -107,6 +107,20 @@
       "caption": "Nathan",
       "want": "Team member in the field.",
       "max_px": 1400
+    },
+    "drone-ground": {
+      "source": "website/src/img/photos/drone.heic",
+      "file": "drone.jpg",
+      "alt": "Two team members prepare the HERON hexacopter on the launch mat, with the payload rack below it",
+      "credit": "",
+      "want": "The drone on the ground with the payload fitted."
+    },
+    "payload-photo": {
+      "source": "website/src/img/photos/payload.heic",
+      "file": "payload.jpg",
+      "alt": "The payload rack, with SDR mock-up boards in its rails, mounted under the Aurelia X6",
+      "credit": "",
+      "want": "The payload hardware on the aircraft."
     }
   },
   "galleries": {

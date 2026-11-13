@@ -8,6 +8,10 @@ The public HERON website (decisions D-102 to D-107 in `docs/DECISIONS.md`).
 | `/course/` | The GNSS signal course | `docs/teaching/` (built by `docs/teaching/build.py`) |
 | `/sim/` | Jack Abrams' mission planner, running in the browser | `Specular_Planner/` + `HERON_Payload/` from a git ref, and `planner/` |
 
+The course and the planner keep their own layouts, so they get a floating
+menu button (☰) instead of the site's top bar: `nav/site_nav.js`, with the
+links from `site.json` → `nav`. The build adds it to both pages.
+
 ## Build and preview
 
 From the repository root:

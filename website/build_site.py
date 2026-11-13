@@ -53,7 +53,7 @@ SKIP = re.compile(r"(__pycache__|\.pyc$|\.pyd$|\.so$|\.dll$|\.exe$|\.dist-info|\
 def load_settings() -> dict:
     """Read site.json and check the keys the build needs."""
     data = json.loads(SETTINGS.read_text(encoding="utf-8"))
-    need = ["domain", "out_dir", "pages_src", "images", "course_build", "planner"]
+    need = ["domain", "out_dir", "pages_src", "images", "course_build", "planner", "nav"]
     missing = [k for k in need if k not in data]
     if missing:
         raise SystemExit(f"{SETTINGS}: missing keys {missing}")
@@ -160,6 +160,23 @@ def build_pages(cfg: dict, out: Path) -> int:
     return count
 
 
+def inject_nav(page: str, cfg: dict, here: str, pos: str) -> str:
+    """Add the site menu (☰) to a page that keeps its own layout.
+
+    The course and the planner have their own top bars, so they get a
+    floating menu button instead of the site's top bar (nav/site_nav.js).
+    """
+    nav = cfg["nav"]
+    data = {"root": "../", "here": here, "pos": pos, "logo": nav["logo"], "links": nav["links"]}
+    snippet = (
+        f"<script>window.HERON_NAV = {json.dumps(data, ensure_ascii=False)};</script>\n"
+        '<script src="../site_nav.js" defer></script>\n'
+    )
+    if "</body>" not in page:
+        raise SystemExit(f"the {here} page has no </body>; cannot add the site menu")
+    return page.replace("</body>", snippet + "</body>", 1)
+
+
 def build_course(cfg: dict, out: Path) -> None:
     """Build the course straight into /course/index.html."""
     dest = out / "course" / "index.html"
@@ -167,6 +184,8 @@ def build_course(cfg: dict, out: Path) -> None:
     subprocess.run(
         [sys.executable, str(REPO / cfg["course_build"]), "--out", str(dest)], check=True
     )
+    page = dest.read_text(encoding="utf-8")
+    dest.write_text(inject_nav(page, cfg, "course", "top-right"), encoding="utf-8")
 
 
 def _git(*args: str) -> str:
@@ -286,6 +305,7 @@ def build_planner(cfg: dict, out: Path, deps_dir: Path | None) -> int:
     page = page.replace("</head>", inject + "</head>", 1)
     page = re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + "\n" + banner, page, count=1)
     page = re.sub(r"<title>.*?</title>", f"<title>{pcfg['title']}</title>", page, count=1)
+    page = inject_nav(page, cfg, "sim", "bottom-left")
     (dest / "index.html").write_text(page, encoding="utf-8")
     size = (dest / "planner_bundle.zip").stat().st_size / 1e6
     print(f"planner: {source}; bundle {size:.1f} MB")
@@ -302,6 +322,7 @@ def build(final: bool, deps_dir: Path | None = None) -> tuple[Path, int]:
     reviews = build_pages(cfg, out)
     build_course(cfg, out)
     reviews += build_planner(cfg, out, deps_dir)
+    shutil.copy2(REPO / cfg["nav"]["script"], out / "site_nav.js")
     # GitHub Pages: the custom domain, and no Jekyll processing.
     (out / "CNAME").write_text(cfg["domain"] + "\n", encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")

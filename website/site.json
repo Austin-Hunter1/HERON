@@ -30,5 +30,32 @@
       "markupsafe",
       "ssl"
     ]
+  },
+  "nav": {
+    "_comment": "The menu (☰) on the course and planner pages, which keep their own layout. key matches the page; path is from the site root.",
+    "script": "website/nav/site_nav.js",
+    "logo": "img/heron-logo.png",
+    "links": [
+      {
+        "key": "home",
+        "label": "Home",
+        "path": ""
+      },
+      {
+        "key": "about",
+        "label": "About HERON",
+        "path": "about/"
+      },
+      {
+        "key": "course",
+        "label": "GNSS signal course",
+        "path": "course/"
+      },
+      {
+        "key": "sim",
+        "label": "Mission planner demo",
+        "path": "sim/"
+      }
+    ]
   }
 }

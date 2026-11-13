@@ -33,3 +33,7 @@
 #web-banner.min { padding: 5px 8px; }
 #web-banner.min > :not(.tag) { display: none; }
 #web-banner.min .tag::after { content: " ⓘ"; font-weight: 600; }
+
+/* The site menu button (☰, nav/site_nav.js) sits in the bottom-left
+   corner; the web-demo tag sits just to its right. */
+#web-banner { left: 64px; bottom: 16px; }
