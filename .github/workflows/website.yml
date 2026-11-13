@@ -1,0 +1,65 @@
+# Build and publish herongnss.org on GitHub Pages (D-104).
+#
+# The build runs website/build_site.py. It counts the "review" markers
+# in the draft pages. The deploy job runs only when the count is zero,
+# so draft text never goes live. The job summary shows the count.
+#
+# One-time setup in the repository: Settings > Pages > Source:
+# "GitHub Actions"; custom domain herongnss.org (build_site.py also
+# writes the CNAME file).
+name: Publish herongnss.org
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/teaching/**"
+      - "HERON_DEPLOY_SOFTWARE/Base_Software/src/heron_base/web/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      reviews: ${{ steps.site.outputs.reviews }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the site
+        id: site
+        run: python website/build_site.py
+      - name: Report review markers
+        run: |
+          if [ "${{ steps.site.outputs.reviews }}" != "0" ]; then
+            echo "### Not deployed: ${{ steps.site.outputs.reviews }} review marker(s) left in website/src" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Site built with no review markers; deploying" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.site.outputs.reviews == '0'
+        with:
+          path: website/_site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.reviews == '0'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

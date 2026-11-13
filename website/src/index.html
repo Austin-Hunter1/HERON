@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--HEAD-->
+<title>HERON · GNSS reflectometry from a drone</title>
+<meta name="description" content="HERON maps surface water from a drone with reflected GNSS signals. A CU Boulder graduate project.">
+</head>
+<body>
+<!--TOP-->
+<main>
+  <section class="hero">
+    <div class="kicker">CU Boulder · graduate project</div>
+    <h1>Mapping surface water with reflected satellite signals</h1>
+    <p class="lede">GPS, Galileo and BeiDou satellites transmit all the time. Some of that signal bounces off the ground, and water reflects it much more strongly than dry soil. HERON flies a drone that records the direct and the reflected signals, then measures where the water is.</p>
+  </section>
+
+  <div class="doors">
+    <a class="door" href="about/">
+      <span class="n">01 · THE PROJECT</span>
+      <b>About HERON</b>
+      <span>What we measure, how the payload works, the signals we record, and where the project stands.</span>
+      <span class="go">Read more →</span>
+    </a>
+    <a class="door" href="course/">
+      <span class="n">02 · LEARN</span>
+      <b>GNSS signal course</b>
+      <span>An interactive 90-minute course: trilateration, codes and correlation, acquisition, tracking loops, signal design and GNSS-R geometry. It uses real HERON data.</span>
+      <span class="go">Open the course →</span>
+    </a>
+    <a class="door" href="sim/">
+      <span class="n">03 · TRY IT</span>
+      <b>Ground station simulation</b>
+      <span>The real HERON ground station page, with a simulated payload and radio link in your browser. Start a recording, cut the link, fail a radio, fill the disk.</span>
+      <span class="go">Launch the simulation →</span>
+    </a>
+  </div>
+
+  <h2>In one paragraph</h2>
+  <p>A drone carries two kinds of antenna: one looks up at the satellites, and one looks down at the ground. Four software-defined radios, locked to one shared clock, record raw radio samples from both on two GNSS frequency bands. After the flight, ground software finds each satellite in the recordings, compares the reflected signal with the direct one, and uses precise drone positions to place each reflection on a map. <span class="review">Check this summary against the current mission statement.</span></p>
+</main>
+<!--FOOT-->
+</body>
+</html>

@@ -10,3 +10,6 @@ Specular_Planner/data/launch_checks_*.json
 
 # KiCad local history (per-user backups)
 .history/
+
+# Built website (website/build_site.py)
+website/_site/

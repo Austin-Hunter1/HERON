@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--HEAD-->
+<title>About HERON · herongnss.org</title>
+<meta name="description" content="What HERON measures, how the drone payload records direct and reflected GNSS signals, and where the project stands.">
+</head>
+<body>
+<!--TOP-->
+<main>
+  <!-- Draft written from docs/ (GETTING_STARTED, REQUIREMENTS, PAYLOAD_ARCHITECTURE,
+       HARDWARE, DECISIONS). Each class="review" span is a claim the team must
+       check. build_site.py does not deploy while one is left. -->
+  <section class="hero">
+    <div class="kicker">About the project</div>
+    <h1>HERON</h1>
+    <p class="lede">A drone payload that records direct and reflected GNSS signals, and the ground software that turns those recordings into a map of surface water. <span class="review">Expand the acronym HERON here if it has one.</span></p>
+  </section>
+
+  <h2>The idea: GNSS reflectometry</h2>
+  <div class="grid2">
+    <div>
+      <p>Navigation satellites send radio signals at about 1.2 and 1.6 GHz. A small part of each signal reflects off the ground near the <em>specular point</em>, the place where the angle of incidence equals the angle of reflection. Calm water is a good mirror at these frequencies, so a reflection from water is much stronger and more coherent than a reflection from dry soil or vegetation.</p>
+      <p>From orbit, missions such as CYGNSS use this effect over large areas. From a drone flying tens of metres up, the reflecting area is small, so the map can show small ponds, wetlands and flooded fields. <span class="review">Confirm the planned flight altitude and the target features.</span></p>
+    </div>
+    <figure class="figure">
+      <svg class="geo" viewBox="0 0 440 260" role="img" aria-labelledby="geo-t">
+        <title id="geo-t">A satellite signal reaches the drone directly, and also by reflection from water below.</title>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
+        <rect class="ground" x="0" y="212" width="440" height="48"/>
+        <rect class="water" x="150" y="212" width="190" height="10" rx="5"/>
+        <line class="ray direct" x1="52" y1="34" x2="292" y2="92" marker-end="url(#ah)"/>
+        <polyline class="ray refl" points="52,34 252,212 300,118" marker-end="url(#ah)"/>
+        <g class="body"><rect x="18" y="16" width="34" height="16" rx="3"/><rect class="panel" x="2" y="20" width="14" height="8"/><rect class="panel" x="54" y="20" width="14" height="8"/></g>
+        <g class="body"><rect x="282" y="96" width="40" height="14" rx="4"/><rect x="264" y="90" width="22" height="4" rx="2"/><rect x="318" y="90" width="22" height="4" rx="2"/></g>
+        <rect class="ant-up" x="298" y="86" width="8" height="10"/><rect class="ant-down" x="298" y="110" width="8" height="10"/>
+        <text class="lbl" x="28" y="50" text-anchor="middle">satellite</text>
+        <text class="lbl direct" x="332" y="80">up: direct</text>
+        <text class="lbl refl" x="332" y="132">down: reflected</text>
+        <text class="lbl" x="252" y="204" text-anchor="middle">specular point</text>
+        <text class="lbl" x="245" y="244" text-anchor="middle">water</text>
+      </svg>
+      <figcaption>The up-looking antenna receives the direct signal. The down-looking antenna receives the reflection. The reflected path is longer by about 2&nbsp;h&nbsp;sin(elevation).</figcaption>
+    </figure>
+  </div>
+
+  <h2>What the system does</h2>
+  <ul class="facts">
+    <li><b>Record in flight.</b> The payload records raw radio samples (IQ) from the direct and the reflected antennas. It does no science processing in the air.</li>
+    <li><b>Monitor from the ground.</b> A ground station laptop shows live health over the drone's telemetry radio, and starts and stops the recording. If the link drops, the payload keeps recording. <a href="../sim/">Try the ground station simulation.</a></li>
+    <li><b>Position precisely.</b> A GNSS base station on the ground gives correction data, so the drone position is known to centimetre level (RTK and PPK).</li>
+    <li><b>Process after the flight.</b> Ground software acquires and tracks each satellite in the direct recording, measures the reflected power, and maps each reflection to its specular point.</li>
+  </ul>
+
+  <h2>The payload</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Six coherent channels</h3>
+      <p>Two channels record the <b>direct</b> signal from an up-looking right-hand circularly polarised (RHCP) antenna, one for each frequency band. Four channels record the <b>reflected</b> signal from a down-looking antenna in both RHCP and LHCP, for each band. Comparing the two polarisations helps tell smooth water from rough or vegetated ground. <span class="review">The antenna-to-channel map is still a draft in PAYLOAD_ARCHITECTURE.md.</span></p>
+    </div>
+    <div class="card">
+      <h3>Four radios, one clock</h3>
+      <p>Two Ettus B210 and two Ettus B200 software-defined radios make the six channels. A HERON-designed clock board gives all four the same 10 MHz reference (from a ±0.5 ppm temperature-compensated oscillator) and the same one-pulse-per-second signal, so all channels start on the same edge and stay coherent with each other.</p>
+    </div>
+    <div class="card">
+      <h3>A small computer</h3>
+      <p>An Intel NUC (NUC7i3DNB) runs the recorders and the payload supervisor. It writes 8-bit complex samples to a dedicated SATA SSD, with the operating system on a separate NVMe drive.</p>
+    </div>
+    <div class="card">
+      <h3>Talks over the autopilot's radio</h3>
+      <p>The payload does not depend on the flight controller's state, but it uses the Cube autopilot's telemetry link as its radio: HERON messages travel inside MAVLink <code>TUNNEL</code> messages to the ground station.</p>
+    </div>
+  </div>
+
+  <h2>The signals</h2>
+  <p>HERON records seven open-service signals from three constellations, on two carrier frequencies. One recorded channel per band holds every signal in that band; the processing separates them by their codes.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Band</th><th>Carrier</th><th>Signals</th><th>Chip rate</th></tr></thead>
+    <tbody>
+      <tr><td>L1 / E1 / B1C</td><td>1575.42 MHz</td><td><span class="sys" style="background:var(--gps)"></span>GPS L1 C/A, GPS L1C · <span class="sys" style="background:var(--gal)"></span>Galileo E1 · <span class="sys" style="background:var(--bds)"></span>BeiDou B1C</td><td>1.023 Mchip/s</td></tr>
+      <tr><td>L5 / E5a / B2a</td><td>1176.45 MHz</td><td><span class="sys" style="background:var(--gps)"></span>GPS L5 · <span class="sys" style="background:var(--gal)"></span>Galileo E5a · <span class="sys" style="background:var(--bds)"></span>BeiDou B2a</td><td>10.23 Mchip/s</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">The faster L5-band codes resolve shorter path differences, which suits the short reflected paths of a low-flying drone. The <a href="../course/#s08">signal plan part of the course</a> explains why.</p>
+
+  <h2>Where the project stands</h2>
+  <ul class="facts">
+    <li><span class="status">done</span> Ground recordings with the SDRs: the processing tools acquire and track all six recorded signal types (GPS L1 C/A, L1C, L5; Galileo E5a; BeiDou B1C, B2a) in the October 2026 test collects. <span class="review">Confirm which results the team wants to show publicly.</span></li>
+    <li><span class="status">done</span> Ground station software: live health display (terminal and web), start/stop control, GNSS logging.</li>
+    <li><span class="status">in progress</span> Clock board revision D is ready to order; the payload rack is designed in Fusion 360.</li>
+    <li><span class="status">next</span> Hardware integration of the recorder and the MAVLink link, then ground tests over water, then flight tests. <span class="review">Update with the current schedule.</span></li>
+  </ul>
+
+  <h2>Team</h2>
+  <p><span class="review">Add the team members, advisors, sponsors and acknowledgements that the team agrees to publish.</span></p>
+  <p class="small">HERON builds on SURGE, a 2022 CU Boulder single-radio GNSS-R project. <span class="review">Confirm this description of SURGE.</span></p>
+</main>
+<!--FOOT-->
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "_comment": "Settings of the herongnss.org build (website/build_site.py). Paths are relative to the repository root.",
+  "domain": "herongnss.org",
+  "out_dir": "website/_site",
+  "pages_src": "website/src",
+  "course_build": "docs/teaching/build.py",
+  "dashboard_page": "HERON_DEPLOY_SOFTWARE/Base_Software/src/heron_base/web/index.html",
+  "sim_dir": "website/sim",
+  "sim_files": ["heron_sim.js", "sim_shim.js", "sim.css", "sim_config.json", "scenario.json", "snapshot_template.json"],
+  "sim_title": "HERON ground station · simulation"
+}
