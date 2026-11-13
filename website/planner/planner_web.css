@@ -1,0 +1,35 @@
+/* planner_web.css - The web-demo banner and loading screen on /sim/.
+ * Both float above Jack's planner page, so its own layout is unchanged. */
+#web-banner {
+  position: fixed; left: 10px; bottom: 10px; z-index: 5000; max-width: min(560px, calc(100vw - 20px));
+  display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center;
+  padding: 7px 12px; border-radius: 10px; background: rgba(13, 34, 48, .92); color: #e6eef3;
+  font: 12.5px/1.35 system-ui, "Segoe UI", sans-serif; box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+}
+#web-banner a { color: #8fd0ea; font-weight: 600; text-decoration: none; }
+#web-banner .tag { background: #ffd166; color: #111; font-weight: 800; letter-spacing: .08em; padding: 1px 7px; border-radius: 4px; }
+#web-banner .src { opacity: .7; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+#web-banner .review { background: #3a3216; color: #ffd166; border-radius: 4px; padding: 0 4px; }
+#web-banner .review::before { content: "REVIEW: "; font-weight: 700; }
+#web-banner button { background: none; border: 0; color: #9fb3c0; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 0 0 4px; }
+
+#web-loading {
+  position: fixed; inset: 0; z-index: 6000; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, #1d3c4d, #0b151c 70%); color: #e6eef3;
+  font: 15px/1.45 system-ui, "Segoe UI", sans-serif;
+}
+#web-loading .box { display: grid; justify-items: center; gap: 10px; text-align: center; max-width: 420px; padding: 24px; }
+#web-loading img { width: 120px; height: auto; animation: web-pulse 2s ease-in-out infinite; }
+#web-loading b { font-size: 22px; letter-spacing: .02em; }
+#web-loading .msg { font-family: ui-monospace, Consolas, monospace; color: #8fd0ea; }
+#web-loading .sub { color: #9fb3c0; font-size: 13px; }
+#web-loading.failed .msg { color: #ff9a8a; }
+#web-loading.failed img { animation: none; }
+@keyframes web-pulse { 50% { transform: scale(1.05); opacity: .85; } }
+@media (prefers-reduced-motion: reduce) { #web-loading img { animation: none; } }
+
+/* Small tag by default; a click on the tag shows the full banner. */
+#web-banner .tag { cursor: pointer; }
+#web-banner.min { padding: 5px 8px; }
+#web-banner.min > :not(.tag) { display: none; }
+#web-banner.min .tag::after { content: " ⓘ"; font-weight: 600; }

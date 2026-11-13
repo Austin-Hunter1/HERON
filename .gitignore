@@ -13,3 +13,10 @@ Specular_Planner/data/launch_checks_*.json
 
 # Built website (website/build_site.py)
 website/_site/
+website/_cache/
+
+# Website photo originals (HEIC, full size, with GPS metadata). Only the
+# clean copies in website/src/img/photos/web/ are committed and published.
+website/src/img/photos/*
+!website/src/img/photos/web/
+!website/src/img/photos/.gitkeep

@@ -1,0 +1,121 @@
+{
+  "_comment": "Photos of herongnss.org. A page asks for one slot with <!--PHOTO:name--> or for a list with <!--GALLERY:name-->. 'source' is the original (repo-relative); website/tools/prepare_photos.py writes a clean web copy to website/src/img/photos/web/<file> (upright, resized, no GPS or other metadata). A slot with no 'file' shows a labelled placeholder with a review marker, so the site does not deploy without it. 'caption' shows under a gallery photo; 'credit' shows on the photo.",
+  "web": {
+    "max_px": 2400,
+    "quality": 82
+  },
+  "slots": {
+    "hero": {
+      "source": "website/src/img/photos/CaribouLake.jpg",
+      "file": "caribou-lake.jpg",
+      "alt": "A blue alpine lake below a jagged granite ridge in the Colorado Rockies",
+      "credit": "",
+      "want": "Wide landscape with water and mountains."
+    },
+    "about-banner": {
+      "source": "website/src/img/photos/Columbine_Lake.jpg",
+      "file": "columbine-lake.jpg",
+      "alt": "Columbine Lake under a cloudy sky, ringed by pines and a rocky cirque",
+      "credit": "",
+      "want": "Wide landscape for the About page banner."
+    },
+    "site-main": {
+      "source": "website/src/img/photos/boulder_res.png",
+      "file": "boulder-reservoir-aerial.jpg",
+      "alt": "Drone view of the Boulder Reservoir shoreline in autumn, with dry ground and open water",
+      "credit": "",
+      "want": "Our main test area from the air."
+    },
+    "drone": {
+      "source": "website/src/img/photos/drone_flight.png",
+      "file": "drone-flight.jpg",
+      "alt": "The HERON hexacopter hovering low over a field with the payload slung below",
+      "credit": "",
+      "want": "The drone in flight with the payload fitted."
+    },
+    "drone-high": {
+      "source": "website/src/img/photos/drone_bank.png",
+      "file": "drone-bank.jpg",
+      "alt": "The HERON hexacopter banking against a clear blue sky",
+      "credit": "",
+      "want": "The drone high in the sky."
+    },
+    "antennas": {
+      "source": "docs/images/antennas/ant-04-ardusimple-helical.jpg",
+      "file": "antenna-helical.jpg",
+      "alt": "The ArduSimple helical GNSS antenna with its cable",
+      "credit": "",
+      "want": "The antennas on the aircraft."
+    },
+    "payload": {
+      "source": "Hardware/clock_board_revD/project/fab/heron_clock_revD_top.png",
+      "file": "clock-board-revd.jpg",
+      "alt": "Render of the HERON clock board revision D, which feeds 10 MHz and PPS to the four radios",
+      "credit": "Render",
+      "want": "The payload hardware."
+    },
+    "ground-station": {
+      "source": "website/src/img/photos/Jack&Frances.heic",
+      "file": "field-jack-frances.jpg",
+      "alt": "Jack and Frances beside the GNSS base station tripod at the flying field",
+      "credit": "",
+      "caption": "Jack & Frances",
+      "want": "The ground station in the field.",
+      "max_px": 1400
+    },
+    "team-andras": {
+      "source": "website/src/img/photos/Andras.heic",
+      "file": "field-andras.jpg",
+      "alt": "Andras sighting through a camera on a ground mat at the flying field",
+      "credit": "",
+      "caption": "Andras",
+      "want": "Team member in the field.",
+      "max_px": 1400
+    },
+    "team-austin": {
+      "source": "website/src/img/photos/Austin.heic",
+      "file": "field-austin.jpg",
+      "alt": "Austin holding the controller at the field, with the Flatirons behind",
+      "credit": "",
+      "caption": "Austin",
+      "want": "Team member in the field.",
+      "max_px": 1400
+    },
+    "team-grace": {
+      "source": "website/src/img/photos/Grace.heic",
+      "file": "field-grace.jpg",
+      "alt": "Grace holding a radio antenna in a field",
+      "credit": "",
+      "caption": "Grace",
+      "want": "Team member in the field.",
+      "max_px": 1400
+    },
+    "team-jack-frances": {
+      "source": "website/src/img/photos/Jack&Frances.heic",
+      "file": "field-jack-frances.jpg",
+      "alt": "Jack and Frances at the GNSS base station tripod",
+      "credit": "",
+      "caption": "Jack & Frances",
+      "want": "Team members in the field.",
+      "max_px": 1400
+    },
+    "team-nathan": {
+      "source": "website/src/img/photos/Nathan.heic",
+      "file": "field-nathan.jpg",
+      "alt": "Nathan working on equipment at the flying field",
+      "credit": "",
+      "caption": "Nathan",
+      "want": "Team member in the field.",
+      "max_px": 1400
+    }
+  },
+  "galleries": {
+    "team": [
+      "team-austin",
+      "team-andras",
+      "team-grace",
+      "team-jack-frances",
+      "team-nathan"
+    ]
+  }
+}

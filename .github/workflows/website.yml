@@ -1,4 +1,4 @@
-# Build and publish herongnss.org on GitHub Pages (D-104).
+# Build and publish herongnss.org on GitHub Pages (D-104, D-106).
 #
 # The build runs website/build_site.py. It counts the "review" markers
 # in the draft pages. The deploy job runs only when the count is zero,
@@ -15,8 +15,11 @@ on:
     paths:
       - "website/**"
       - "docs/teaching/**"
-      - "HERON_DEPLOY_SOFTWARE/Base_Software/src/heron_base/web/**"
       - ".github/workflows/website.yml"
+  # The /sim/ page follows Jack's planner branch (site.json planner.git_ref),
+  # which does not push to main. Rebuild once a day to pick up his changes.
+  schedule:
+    - cron: "17 9 * * *"
   workflow_dispatch:
 
 permissions:
@@ -38,9 +41,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Fetch the planner branch
+        run: |
+          ref=$(python -c "import json; print(json.load(open('website/site.json'))['planner']['git_ref'])")
+          case "$ref" in
+            origin/*) git fetch --no-tags origin "${ref#origin/}:refs/remotes/$ref" ;;
+          esac
       - name: Build the site
         id: site
         run: python website/build_site.py
+      - name: Smoke-test the planner backend
+        # The same browser patches, under CPython, against the planner the
+        # build used. A failure here (for example after a planner change)
+        # stops the deploy.
+        run: |
+          pip install --quiet -r website/planner/requirements-pyodide.txt shapely
+          python website/planner/smoke_test.py website/_cache/planner_src
       - name: Report review markers
         run: |
           if [ "${{ steps.site.outputs.reviews }}" != "0" ]; then
