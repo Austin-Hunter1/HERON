@@ -24,6 +24,47 @@ function toast(msg, err = false) {
 const fmtBytes = (b) => b == null ? "" : b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : b > 1e3 ? (b / 1e3).toFixed(0) + " KB" : b + " B";
 const fmtDur = (s) => s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const pct = (a, b) => b ? (100 * a / b) : 0;
+// camera-solve frame step; same rule as studio/ingest.py solve_step()
+const solveStep = (st, fps) => {
+  if (st.solve === "quick") return 12;
+  if (st.solve === "custom") return Math.max(1, Math.round((fps || 24) / Math.max(+st.solve_fps || 6, 0.1)));
+  return 1;
+};
+function solveFpsOptions(fps, sel) {
+  fps = fps || 24; sel = +sel || 6;
+  const seen = new Set(), opts = [];
+  for (const want of [1, 2, 3, 4, 6, 8, 12, 15, 20, 30]) {
+    const step = Math.max(1, Math.round(fps / want));
+    if (step <= 1 || seen.has(step)) continue;          // step 1 is Full
+    seen.add(step); opts.push([want, step]);
+  }
+  if (!opts.some(([w]) => w === sel)) sel = opts.reduce((a, b) => Math.abs(b[0] - sel) < Math.abs(a[0] - sel) ? b : a, opts[0])[0];
+  return opts.map(([w, step]) => `<option value="${w}" ${w === sel ? "selected" : ""}>${+(fps / step).toFixed(1)} fps</option>`).join("");
+}
+const nth = (k) => k === 1 ? "every frame" : `every ${k}${k === 2 ? "nd" : k === 3 ? "rd" : "th"} frame`;
+function solveHint(v, st) {
+  if (!v?.fps || !v?.duration_s) return "";
+  const step = solveStep(st, v.fps), n = Math.ceil(v.duration_s * v.fps / step);
+  return `Solves ${n.toLocaleString()} frames: ${nth(step)}, ${+(v.fps / step).toFixed(1)} per second of video.` +
+    (n > 5000 ? " Over ~5,000 frames the solve can take many hours; 4–8 fps is usually enough." : "");
+}
+const fmtSpan = (s) => s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h`;
+const fmtRange = (lo, hi) => {
+  const a = fmtSpan(lo), b = fmtSpan(hi);
+  if (a === b) return a;
+  const ua = a.split(" ")[1], ub = b.split(" ")[1];
+  return ua === ub ? `${a.split(" ")[0]}–${b}` : `${a}–${b}`;
+};
+async function showEstimate(fid) {
+  const el = $("#estimate"); if (!el) return;
+  try {
+    const e = await api.get(`/api/flights/${fid}/estimate`);
+    el.innerHTML = `<div class="kv"><span><b>Estimated time</b></span><span class="mono"><b>${fmtRange(e.low, e.high)}</b></span></div>
+      <details><summary class="muted" style="font-size:12px">By step · ${esc(e.notes.join("; "))}</summary>
+      ${e.steps.map(s => `<div class="kv" style="font-size:12px"><span>${esc(s.label)}</span><span class="mono">${fmtRange(s.low, s.high)}</span></div>`).join("")}
+      <small class="faint" style="display:block;margin-top:4px">From ${e.mapping_fit.points} measured solves and the flights processed so far; the ranges narrow as more flights finish.</small></details>`;
+  } catch (err) { el.innerHTML = `<small class="muted">${esc(err.message)}</small>`; }
+}
 const fmtArea = (m2) => m2 == null ? "—" : m2 > 1e4 ? `${(m2 / 1e4).toFixed(1)} ha` : `${Math.round(m2).toLocaleString()} m²`;
 
 // ------------------------------------------------------------------ routing
@@ -133,10 +174,26 @@ function importView(f) {
         <div class="kv" style="margin-top:6px"><span>Works at</span><span class="mono">solve ${f.sizes.solve.width}×${f.sizes.solve.height} · water ${f.sizes.water.width}×${f.sizes.water.height}</span></div>
       </section>` : ""}
       <section aria-label="Camera solve"><p class="eyebrow" style="margin-bottom:8px">Camera solve</p>
-        <div class="grid2">
+        <div class="grid3">
           <label class="choice"><span class="row"><input type="radio" name="solve" value="quick" ${st.solve === "quick" ? "checked" : ""}><b>Quick</b></span><small>COLMAP every 12th frame, gyro in between</small></label>
-          <label class="choice"><span class="row"><input type="radio" name="solve" value="full" ${st.solve !== "quick" ? "checked" : ""}><b>Full</b></span><small>Every frame solved. Slower, steadiest overlay</small></label>
-        </div></section>
+          <label class="choice"><span class="row"><input type="radio" name="solve" value="custom" ${st.solve === "custom" ? "checked" : ""}><b>Custom</b></span><small>Pick how many frames per second to solve</small>
+            <select class="input" id="solveFps" aria-label="Frames per second to solve">${solveFpsOptions(v?.fps, st.solve_fps)}</select></label>
+          <label class="choice"><span class="row"><input type="radio" name="solve" value="full" ${!["quick", "custom"].includes(st.solve) ? "checked" : ""}><b>Full</b></span><small>Every frame solved. Slower, steadiest overlay</small></label>
+        </div>
+        <small class="muted" id="solveHint" style="display:block;margin-top:6px">${solveHint(v, st)}</small>
+        <div class="grid3" style="margin-top:8px">
+          <label class="field"><span>Long solves</span><select class="input" id="sChunks">
+            <option value="auto" ${st.solve_chunks !== "off" ? "selected" : ""}>Chunks</option>
+            <option value="off" ${st.solve_chunks === "off" ? "selected" : ""}>One solve</option></select></label>
+          <label class="field"><span>Merge chunks</span><select class="input" id="sMerge">
+            <option value="cheap" ${st.solve_merge !== "full" ? "selected" : ""}>Cheap</option>
+            <option value="full" ${st.solve_merge === "full" ? "selected" : ""}>Full</option></select></label>
+          <label class="field"><span>Tracks per frame</span><select class="input" id="sCap">
+            ${[["", "Default"], ["none", "All"], ["1000", "1,000"], ["500", "500"], ["250", "250"]].map(([k, l]) =>
+              `<option value="${k}" ${String(st.track_cap ?? "") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        </div>
+        <small class="faint" style="display:block;margin-top:4px">Chunks: overlapping pieces solved in parallel. Full merge adjusts them together (most accurate); cheap ties each to GPS on its own (fast). Fewer tracks per frame: faster mapping.</small>
+        <div class="callout" id="estimate" aria-live="polite" style="margin-top:8px"><small class="muted">Estimating time…</small></div></section>
       <section aria-label="Make"><p class="eyebrow" style="margin-bottom:6px">Make</p>
         ${[["ar_video", "AR video with reflections"], ["water", "Water map + shoreline"], ["model3d", "3D model of the shore"], ["report", "Lake report + exports"]]
           .map(([k, l]) => `<label class="row" style="min-height:30px"><input type="checkbox" data-make="${k}" ${st.make?.[k] !== false ? "checked" : ""}> ${l}</label>`).join("")}
@@ -165,9 +222,22 @@ function importView(f) {
   $("#fName").onchange = (e) => save({ name: e.target.value });
   $("#fSite").onchange = (e) => save({ site: e.target.value });
   $("#fDate").onchange = (e) => save({ date: e.target.value });
-  $$('input[name=solve]').forEach(r => r.onchange = () => save({ settings: { solve: r.value } }));
-  $$("[data-make]").forEach(c => c.onchange = () => save({ settings: { make: { [c.dataset.make]: c.checked } } }));
-  $("#rsize")?.addEventListener("change", (e) => save({ settings: { render_size: e.target.value } }));
+  const solveNow = () => ({ ...st, solve: $('input[name=solve]:checked')?.value, solve_fps: +$("#solveFps").value });
+  $$('input[name=solve]').forEach(r => r.onchange = () => { $("#solveHint").textContent = solveHint(v, solveNow()); save({ settings: { solve: r.value } }); });
+  $("#solveFps").onchange = (e) => {                     // picking a rate means "use Custom"
+    const c = $('input[name=solve][value=custom]'); c.checked = true;
+    $("#solveHint").textContent = solveHint(v, solveNow());
+    save({ settings: { solve: "custom", solve_fps: +e.target.value } });
+  };
+  const reEstimate = () => showEstimate(f.id);
+  $("#sChunks").onchange = async (e) => { await save({ settings: { solve_chunks: e.target.value } }); reEstimate(); };
+  $("#sMerge").onchange = async (e) => { await save({ settings: { solve_merge: e.target.value } }); reEstimate(); };
+  $("#sCap").onchange = async (e) => { await save({ settings: { track_cap: e.target.value || null } }); reEstimate(); };
+  $$('input[name=solve]').forEach(r => r.addEventListener("change", () => setTimeout(reEstimate, 300)));
+  $("#solveFps").addEventListener("change", () => setTimeout(reEstimate, 300));
+  reEstimate();
+  $$("[data-make]").forEach(c => c.onchange = async () => { await save({ settings: { make: { [c.dataset.make]: c.checked } } }); reEstimate(); });
+  $("#rsize")?.addEventListener("change", async (e) => { await save({ settings: { render_size: e.target.value } }); reEstimate(); });
   $("#joinCh")?.addEventListener("change", async (e) => { await save({ settings: { join_chapters: e.target.checked } }); flightView(f.id, "import"); });
   $("#cstart").onchange = (e) => save({ settings: { clip_start_in_recording_s: +e.target.value } });
   $("#welev").onchange = (e) => save({ settings: { water_elevation_m: e.target.value ? +e.target.value : null } });

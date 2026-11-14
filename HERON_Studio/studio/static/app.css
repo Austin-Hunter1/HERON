@@ -57,6 +57,8 @@ body.electron-mac .bar { padding-left: 84px }
 .input:focus { border-color: var(--info); outline: none }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+@media (max-width: 720px) { .grid3 { grid-template-columns: 1fr } }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 12px; color: var(--muted); white-space: nowrap }
 .chip.ok { color: var(--live); border-color: rgba(61,220,151,.35) } .chip.run { color: var(--info); border-color: rgba(79,214,255,.4) }
 .chip.err { color: var(--bad); border-color: rgba(255,107,94,.4) } .chip.warn { color: var(--warn); border-color: rgba(255,200,87,.4) }

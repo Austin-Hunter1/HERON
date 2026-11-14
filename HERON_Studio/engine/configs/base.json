@@ -42,6 +42,15 @@
     "frame_step": 12,
     "work_width": 960,
     "max_features": 2500,
-    "sequential_overlap": 12
+    "sequential_overlap": 12,
+    "mapper": "global",
+    "gpu": "auto",
+    "chunk_size": 1200,
+    "chunk_overlap": 150,
+    "chunk_jobs": 3,
+    "merge": "cheap",
+    "merge_ba_iters": 150,
+    "merge_gps": true,
+    "track_cap": null
   }
 }

@@ -67,13 +67,31 @@ In the desktop app, dropped files are used **where they are** (no 4 GB copy). Ti
 
 1. **Read files**: `.bin` → CSV, GoPro GPMF → gyro/accelerometer, lens, almanac, outline, engine config.
 2. **Sync clocks**: GoPro ↔ autopilot by matching vibration, searching ±15 min.
-3. **Solve the camera** (COLMAP): *Quick* every 12th frame plus gyro, or *Full* every frame.
+3. **Solve the camera** (COLMAP): *Quick* every 12th frame, *Custom* at a frame rate you
+   pick (1–12 fps of video, turned into a frame step from the clip's real rate), or *Full* every frame.
+   Above ~5,000 frames the global mapper's track building gets very slow; 4–8 fps is usually enough. Uses
+   COLMAP's global mapper (`sfm.mapper`, `"incremental"` for the old one-frame-at-a-time solver).
+   Extracted frames and the features database are reused on re-runs, so Quick after Full is cheap.
+   For the GPU, unzip a COLMAP 4.x Windows release to `~/HERON Studio/tools/colmap-<version>/` (or set
+   `HERON_COLMAP`); a folder with `cuda` in its name is preferred. `colmap-x64-windows-cuda.zip`
+   (NVIDIA) runs feature extraction and matching on the GPU, and mapping runs through it too.
+   `colmap-x64-windows-nocuda.zip` (AMD/Intel, OpenGL) does extraction only; its matcher failed on
+   an RX 5700 XT. In the 4.2.1 release Ceres has no CUDA, so bundle adjustment stays on the CPU with
+   either build. `sfm.gpu: "off"` disables all of it.
 4. **Tie to GPS**: scale and place the solve in metres.
-5. **Map the water**: every frame segmented, voted onto the ground.
+5. **Map the water**: a frame every 0.75 s is cast onto the ground and each 0.7 m cell collects what the
+   camera saw there over the whole flight. Water is ground that is smooth and grey (it mirrors the sky)
+   within 300 m of the camera, or glinting, or open blue further out; the thresholds come from the flight
+   itself. Shallow water counts as water, bare mud and sand do not, and the outline file is not used.
+   Maps from older versions are rebuilt automatically the next time this step or the render runs.
 6. **Reflections**: every satellite above the mask every 0.5 s, on water by the outline vs by the camera.
 7. **3D model**: height grid from the solved points. The water level in the model is the median ground
    height along the measured water edge (on 19 Oct this lands within 4 cm of the dense estimate).
-8. **Render AR video**.
+8. **Render AR video**: one process per CPU thread, joined without re-encoding. The camera pose between
+   solved frames is a spline through them. Where the solve is more than `pose_max_gps_error_m` (10 m) from
+   the GPS track, e.g. on the ground before take-off, the frame is the plain video with the header only and
+   has no rows in the CSV. Encoded on the NVIDIA GPU when there is one, else with libx264
+   (`encoder`: `"auto"`, `"h264_nvenc"` or `"libx264"`).
 9. **Exports + site package**.
 
 Each step runs as its own process. You can cancel, resume after a crash or app restart, or re-run

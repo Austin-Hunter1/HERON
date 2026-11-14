@@ -6,18 +6,19 @@ drone's nadir, incident signal beams from each satellite, 3-D pins with callouts
 segmented water with a live shoreline, and a glass HUD (compass tape, telemetry, map,
 sky plot, chase view of the true ground ellipses).
 
-    python3 render_v2.py --preview 44.6,75
-    python3 render_v2.py [--frame-start N --frame-end M --out file.mp4]
+    python heron.py preview --config <config.json> --t 44.6,75
+    python heron.py render  --config <config.json> [--frame-start N --frame-end M --out file.mp4]
 """
 from __future__ import annotations
-import argparse, csv, json, math, shutil, subprocess, time
+import csv, math, os, re, shutil, subprocess, sys, threading, time
 from pathlib import Path
 import numpy as np, cv2
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
-from .scene import (Scene, segment_water, horizon_mask_for, sat_state, clip_poly_front, densify, poly_ok,
+from PIL import Image, ImageDraw, ImageFont
+from .scene import (Scene, segment_water, sat_state, clip_poly_front, densify, poly_ok,
                        DATA, ROOT, CCOL, CNAME)
-from .geometry import Fisheye, CameraPose, fresnel_zone, sun_enu_dir, resolve, CACHE, OUT, clip_fps
+from .geometry import Fisheye, CameraPose, fresnel_zone, specular_point, sun_enu_dir, resolve, CACHE, OUT, clip_fps
 from .chase_view import ChaseCam, render_chase
+from .water_refine import refine
 
 F_DIR = ROOT / "fonts"
 _fc = {}
@@ -53,6 +54,16 @@ def ground_field(cam, w, h, scale, terrain):
     P[~ok] = np.nan
     return P.reshape(sh, sw, 3)
 
+def horizon_mask(cam, w, h, scale):
+    """1 where the pixel looks below the horizon. Uses the ground field's ray grid, interpolated to full size."""
+    rc, sw, sh = cam_rays(cam.lens, w, h, scale)
+    dz = (rc @ cam.R[2]).reshape(sh, sw).astype(np.float32)
+    return (cv2.resize(dz, (w, h), interpolation=cv2.INTER_LINEAR) < -0.004).astype(np.uint8)
+
+def mix(img, colour, a):
+    """img <- img + (colour - img) * a, in place. a: per-pixel weight (h, w), 0..1."""
+    t = np.subtract(np.asarray(colour, np.float32), img); t *= a[..., None]; img += t
+
 def fwidth(f):
     gy, gx = np.gradient(f); return np.hypot(gx, gy) + 1e-9
 
@@ -60,14 +71,14 @@ def line_mask(v, period, width_px, fv):
     d = (v / period - np.round(v / period)) * period
     return np.clip(1 - np.abs(d) / (fv * width_px), 0, 1)
 
-def ground_grid(G, rx, t, scale):
+def ground_grid(G, rx, t):
     """Holographic grid: 10 m minor / 50 m major lines + range rings around nadir, fading with range."""
-    x, y = G[..., 0], G[..., 1]; ok = np.isfinite(x)
-    x = np.where(ok, x, 0); y = np.where(ok, y, 0)
+    ok = np.isfinite(G[..., 0])                                             # float32 from here: 0.1 mm at 1 km, half the memory traffic
+    x = np.where(ok, G[..., 0], 0).astype(np.float32); y = np.where(ok, G[..., 1], 0).astype(np.float32)
     fx, fy = fwidth(x), fwidth(y)
     minor = np.maximum(line_mask(x, 10, 0.9, fx), line_mask(y, 10, 0.9, fy))
     major = np.maximum(line_mask(x, 50, 1.2, fx), line_mask(y, 50, 1.2, fy))
-    r = np.hypot(x - rx[0], y - rx[1]); fr = fwidth(r)
+    r = np.hypot(x - np.float32(rx[0]), y - np.float32(rx[1])); fr = fwidth(r)
     rings = np.zeros_like(r)
     for R0 in (25, 50, 100, 200):
         rings = np.maximum(rings, np.clip(1 - np.abs(r - R0) / (fr * 1.3), 0, 1))
@@ -79,15 +90,14 @@ def ground_grid(G, rx, t, scale):
     return a.astype(np.float32), r
 
 # ----------------------------------------------------------------- holographic Fresnel zone
-def holo_zone(img, glow, cam, sat_enu, az_deg, center, ring_uv, wl, color, minor_m, major_m, t, on_water, S, minimal=False, wmap=None, zoff=None):
+def holo_zone(img, glow, cam, sat_enu, az_deg, center, ring_uv, wl, color, minor_m, major_m, t, on_water, minimal=False, wmap=None, zoff=None):
     h, w = img.shape[:2]
     x0, y0 = np.floor(ring_uv.min(0)); x1, y1 = np.ceil(ring_uv.max(0)); cx, cy = ring_uv.mean(0); pad = 0.6
     x0 = int(max(0, cx - (cx - x0) * (1 + pad))); x1 = int(min(w - 1, cx + (x1 - cx) * (1 + pad)))
     y0 = int(max(0, cy - (cy - y0) * (1 + pad))); y1 = int(min(h - 1, cy + (y1 - cy) * (1 + pad)))
     if x1 <= x0 + 3 or y1 <= y0 + 3: return
     ys, xs = np.mgrid[y0:y1 + 1, x0:x1 + 1]
-    uv = np.c_[xs.ravel(), ys.ravel()].astype(np.float64)
-    P, ok = cam.ray_ground(uv); rx = cam.C
+    P, ok = cam.ray_ground_box(x0, x1, y0, y1); rx = cam.C
     base = np.linalg.norm(sat_enu - center) + np.linalg.norm(rx - center)
     v1 = P - sat_enu; v2 = P - rx; n1 = np.linalg.norm(v1, axis=1); n2 = np.linalg.norm(v2, axis=1)
     zn = ((n1 + n2 - base) / (wl / 2)).reshape(ys.shape); zn[~ok.reshape(ys.shape)] = 99
@@ -180,47 +190,53 @@ def vignette(w, h):
 # ----------------------------------------------------------------- compose
 def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
     cfg = scene.cfg; h, w = frame_bgr.shape[:2]; S = w / 1920.0; t = fidx / fps
+    if not scene.pose_trusted(vt):
+        # the image solve is off the GPS track here (e.g. on the ground before take-off): plain video, header only
+        mt, cam, lat, lon = scene.pose_imu(vt, lens); fw = cam.R[:, 2]
+        return minimal_hud(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB), scene, cfg, [], [], [], cam, scene.tel.utc(mt), mt, cam.C, None, w, h, S, 0,
+                           math.degrees(math.atan2(fw[0], fw[1])) % 360, float(np.linalg.norm(scene.tel.velocity(mt)[:2])),
+                           note="camera position not solved here · overlays hidden")
     mt, cam, lat, lon = scene.pose(vt, lens)
     rx = cam.C; dt, sats = sat_state(scene, mt, rx)
-    hz = horizon_mask_for(cam, w, h)
-    gs = 0.4
+    minimal = cfg.get("minimal", False); gs = 0.4
+    hz = horizon_mask(cam, w, h, gs)
     G = ground_field(cam, w, h, gs, scene.terrain)
     wmap = getattr(scene, "watermap", None)
     if wmap is not None:
         pw = wmap.sample(G[..., 0], G[..., 1])
         pw = cv2.resize(pw, (w, h), interpolation=cv2.INTER_LINEAR)
-        from .water_refine import refine
         pw = refine(frame_bgr, pw, hz > 0)                      # shoreline re-decided from this frame's own pixels
-        water_soft = np.clip((pw - 0.35) / 0.3, 0, 1) * (hz > 0)
+        water_soft = np.clip((pw - 0.35) / 0.3, 0, 1) * hz
         water = (water_soft > 0.5).astype(np.uint8)
     else:
         water, prior = segment_water(frame_bgr, cam, scene, hz); water_soft = water.astype(np.float32)
+    # Full-frame float work below is done in place: every extra (h, w, 3) temporary costs ~10 ms at 1080p.
     img = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
-    hz_cache = None
     # slight cinematic grade: cooler shadows, gentle contrast
-    if not cfg.get("minimal", False): img = np.clip((img - 128) * 1.04 + 128 + np.array([-3, 0, 5], np.float32), 0, 255)
+    if not minimal: img = np.clip((img - 128) * 1.04 + 128 + np.array([-3, 0, 5], np.float32), 0, 255)
     glow = np.zeros_like(img)
 
     # ---- water: soft cyan grade + shimmering shoreline
-    wm = cv2.GaussianBlur(water_soft, (0, 0), 1.0)[..., None]
-    img = img * (1 - 0.30 * wm) + (img * 0.55 + np.array(WATER, np.float32) * 0.45) * 0.30 * wm
+    mix(img, WATER, 0.135 * cv2.GaussianBlur(water_soft, (0, 0), 1.0))
     # smooth anti-aliased shoreline: contour of the mask, lightly smoothed, drawn as a 2 px line
-    cnts, _ = cv2.findContours((water_soft > 0.5).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-    shore = np.zeros((h, w), np.float32)
+    cnts, _ = cv2.findContours(water, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    shore = np.zeros((h, w), np.float32); k_ = 7; box = np.ones(2 * k_ + 1) / (2 * k_ + 1)
     for cn in cnts:
         if len(cn) < 40: continue
         p_ = cn[:, 0, :].astype(np.float32)
-        k_ = 7; p_ = np.stack([np.convolve(np.r_[p_[-k_:, i], p_[:, i], p_[:k_, i]], np.ones(2 * k_ + 1) / (2 * k_ + 1), "valid") for i in range(2)], 1)
+        p_ = np.stack([np.convolve(np.r_[p_[-k_:, i], p_[:, i], p_[:k_, i]], box, "valid") for i in range(2)], 1)
         cv2.polylines(shore, [np.int32(p_ * 16)], True, 1.0, max(2, int(2 * S)), cv2.LINE_AA, shift=4)
-    shore *= (hz > 0)
-    img = np.clip(img * (1 - 0.8 * shore[..., None]) + np.array([215, 245, 255], np.float32) * 0.8 * shore[..., None], 0, 255)
-    glow += shore[..., None] * np.array([60, 170, 255], np.float32) * 0.5
+    x_, y_, bw_, bh_ = cv2.boundingRect((shore > 0).astype(np.uint8))
+    if bw_:
+        sl = np.s_[y_:y_ + bh_, x_:x_ + bw_]; on = (shore[sl] > 0) & (hz[sl] > 0); sh_ = shore[sl][on][:, None]   # the line's pixels only
+        px = img[sl][on]; img[sl][on] = px + (np.array([215, 245, 255], np.float32) - px) * (0.8 * sh_)
+        glow[sl][on] += sh_ * (np.array([60, 170, 255], np.float32) * 0.5)
 
-    # ---- holographic ground grid (half resolution field)
-    ga, rng = ground_grid(G, rx, (t if not cfg.get('minimal') else 1e-3), gs)
-    if cfg.get('minimal'): ga = ga * 0.55
-    ga = cv2.resize(ga, (w, h), interpolation=cv2.INTER_LINEAR)[..., None]
-    img = np.clip(img + ga * ACC * 0.85, 0, 255); glow += ga * ACC * 0.35
+    # ---- holographic ground grid (0.4-scale field)
+    ga, rng = ground_grid(G, rx, (t if not minimal else 1e-3))
+    if minimal: ga = ga * 0.55
+    ga = cv2.resize(ga, (w, h), interpolation=cv2.INTER_LINEAR)[..., None] * (ACC * 0.35)
+    glow += ga; ga *= 0.85 / 0.35; img += ga; np.minimum(img, 255, out=img)
 
     # ---- zones (draped on the local surface)
     items = []
@@ -228,7 +244,7 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
         if s["el"] < cfg["elevation_mask_deg"]: continue
         hloc = scene.terrain.water_z if scene.terrain is not None else 0.0
         for _ in range(3 if scene.terrain is not None else 0):
-            c_, _, _ = fresnel_zone(s["enu"] - [0, 0, hloc], rx - [0, 0, hloc], scene.wl, 8); hloc = float(scene.terrain.height(c_[0], c_[1]))
+            c_ = specular_point(s["enu"] - [0, 0, hloc], rx - [0, 0, hloc]); hloc = float(scene.terrain.height(c_[0], c_[1]))
         off = np.array([0, 0, hloc]); camh = CameraPose(lens, cam.R, cam.C - off)
         center, ring, _ = fresnel_zone(s["enu"] - off, rx - off, scene.wl, 120)
         uvr, okr = clip_poly_front(camh, ring)
@@ -257,14 +273,14 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
     items.sort(key=lambda it: -it["dist"])
     for it in items:
         holo_zone(img, glow, it["camh"], it["s"]["enu"] - it["off"], it["s"]["az"], it["center"], it["uvr"], scene.wl,
-                  CCOL[it["s"]["const"]], it["Wd"], it["L"], t, it["wf"] is not None and it["wf"] > 0.5, S, minimal=cfg.get("minimal", False),
+                  CCOL[it["s"]["const"]], it["Wd"], it["L"], t, it["wf"] is not None and it["wf"] > 0.5, minimal=minimal,
                   wmap=wmap, zoff=it["off"])
 
     # ---- incident beams (satellite -> specular point) and 3-D pins
-    beams = np.zeros((h, w, 3), np.float32); pins = []
-    for it in (items if True else []):
+    beams = np.zeros((h, w, 3), np.float32) if items else None; pins = []
+    for it in items:
         c = np.array(CCOL[it["s"]["const"]], np.float32); P0 = it["center"] + it["off"]
-        seg = P0 + np.linspace(0, 0 if cfg.get('minimal') else 32, 40)[:, None] * it["s"]["dir"][None]
+        seg = P0 + np.linspace(0, 0 if minimal else 32, 40)[:, None] * it["s"]["dir"][None]
         su, so = clip_poly_front(cam, seg)
         for i in range(len(seg) - 1):
             if so[i] and so[i + 1] and poly_ok(su[i:i + 2]):
@@ -273,7 +289,11 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
         top = P0 + np.array([0, 0, 7.0])                                   # world-vertical pin, 7 m tall
         pu, po = clip_poly_front(cam, np.vstack([P0, top]))
         if po.all() and poly_ok(pu): pins.append((it, pu[0], pu[1]))
-    img = np.clip(img + beams * 0.75, 0, 255); glow += beams * 0.8
+    if items:
+        x_, y_, bw_, bh_ = cv2.boundingRect((beams.max(2) > 0).astype(np.uint8))
+        if bw_:
+            sl = np.s_[y_:y_ + bh_, x_:x_ + bw_]
+            img[sl] = np.minimum(img[sl] + beams[sl] * 0.75, 255); glow[sl] += beams[sl] * 0.8
     for it, p0, p1 in pins:
         c = CCOL[it["s"]["const"]]; n = 18
         for i in range(n):
@@ -284,14 +304,13 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
     sun_d, sun_az, sun_el = sun_enu_dir(dt, lat, lon); gd = sun_d * np.array([1, 1, -1.0])
     gu, gok = cam.project_dir(gd[None]); gpx = gu[0] if gok[0] and (gd @ cam.R)[2] > 0 and 0 <= gu[0, 0] < w and 0 <= gu[0, 1] < h else None
 
-    # ---- bloom
-    gl = cv2.resize(np.clip(glow, 0, 255), (w // 2, h // 2), interpolation=cv2.INTER_AREA)
+    # ---- bloom (screen blend: img + (255 - img) * bloom / 255)
+    np.minimum(glow, 255, out=glow)
+    gl = cv2.resize(glow, (w // 2, h // 2), interpolation=cv2.INTER_AREA)
     bloom = cv2.resize(cv2.GaussianBlur(gl, (0, 0), 2.5 * S) * 0.55 + cv2.GaussianBlur(gl, (0, 0), 8 * S) * 0.45, (w, h), interpolation=cv2.INTER_LINEAR)
-    if not cfg.get("minimal", False):
-        img = 255 - (255 - img) * (255 - np.clip(bloom * 0.9, 0, 255)) / 255                      # screen blend
-        img = np.clip(img * vignette(w, h), 0, 255)
-    else:
-        img = 255 - (255 - img) * (255 - np.clip(bloom * 0.25, 0, 255)) / 255                     # just a hint of glow
+    bloom *= (0.25 if minimal else 0.9) / 255; np.minimum(bloom, 1, out=bloom)          # minimal: just a hint of glow
+    bloom *= 255 - img; img += bloom
+    if not minimal: img *= vignette(w, h)
     out = img.astype(np.uint8)
 
     # ================= HUD
@@ -299,7 +318,7 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
     nw = sum(1 for it in items if it["wf"] is not None and it["wf"] > 0.5)
     spd = float(np.linalg.norm(scene.tel.velocity(mt)[:2]))
     # chase panel (rendered first so glass sits over the video)
-    if cfg.get("minimal", False): return minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, S, nw, hdg, spd)
+    if minimal: return minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, S, nw, hdg, spd)
     PW, PH = int(cfg["chase_w"] * S), int(cfg["chase_h"] * S)
     if scene.chase is None or scene.chase.W != PW: scene.chase = ChaseCam(PW, PH, cfg["chase_hfov_deg"])
     panel, plabels, dpos = render_chase(scene.chase, frame_bgr, cam, scene, sats, {it["s"]["sid"] for it in items}, CCOL, cfg)
@@ -309,7 +328,7 @@ def compose_v2(frame_bgr, scene, vt, lens, fidx, fps, rows):
                  tape=(w / 2 - 380 * S, 18 * S, w / 2 + 380 * S, 70 * S))
     for k, b in boxes.items(): glass(out, b, int(14 * S))
     out[cpy:cpy + PH, cpx:cpx + PW] = cv2.cvtColor(panel, cv2.COLOR_BGR2RGB)
-    pil = Image.fromarray(out).convert("RGBA"); hud = Image.new("RGBA", (w, h), (0, 0, 0, 0)); d = ImageDraw.Draw(hud, "RGBA")
+    hud = Image.new("RGBA", (w, h), (0, 0, 0, 0)); d = ImageDraw.Draw(hud, "RGBA")
     fT, fH, fL = F("SpaceGrotesk-700.ttf", int(25 * S)), F("SpaceGrotesk-500.ttf", int(15 * S)), F("SpaceGrotesk-700.ttf", int(19 * S))
     fM, fMs, fMx = F("JetBrainsMono-Medium.ttf", int(14 * S)), F("JetBrainsMono-Regular.ttf", int(12 * S)), F("JetBrainsMono-Regular.ttf", int(10.5 * S))
     for b in boxes.values(): frame_lines(d, b, S)
@@ -463,7 +482,7 @@ def flight_phase(mt):
         if mt < a: return f"PASS {i + 1}"
     return "PASS 10" if mt < _TURNS[-1, 1] + 66 else "RETURN"
 
-def minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, S, nw, hdg, spd):
+def minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, S, nw, hdg, spd, note=None):
     # legibility: soft dark gradient behind the header, nothing else framed
     gh = int(118 * S); g = np.linspace(0.42, 0, gh, dtype=np.float32)[:, None, None]
     out[:gh] = (out[:gh].astype(np.float32) * (1 - g)).astype(np.uint8)
@@ -482,7 +501,7 @@ def minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, 
     d.rounded_rectangle((px, y0 + 5 * S, px + pw_, y0 + 27 * S), int(11 * S), fill=(255, 196, 61, 235) if turn else (255, 255, 255, 40),
                         outline=None if turn else (255, 255, 255, 120), width=1)
     d.text((px + 9 * S, y0 + 9 * S), ph, font=fMx, fill=(20, 16, 6, 255) if turn else (*INK, 255))
-    info = f"{dt.strftime('%H:%M:%S')} UTC    {rx[2]:4.1f} m AGL    {spd:3.1f} m/s    {len(items)} zones · {nw} on water"
+    info = f"{dt.strftime('%H:%M:%S')} UTC    {rx[2]:4.1f} m AGL    {spd:3.1f} m/s    " + (note or f"{len(items)} zones · {nw} on water")
     sh((x0, y0 + 40 * S), info, fM, DIM)
     # legend (top right)
     lx = w - 32 * S; ly = y0 + 6 * S
@@ -539,28 +558,53 @@ def minimal_hud(out, scene, cfg, items, pins, sats, cam, dt, mt, rx, gpx, w, h, 
         x, y = gpx; r = 9 * S
         d.ellipse([x - r, y - r, x + r, y + r], outline=(255, 232, 150, 210), width=max(1, int(1.4 * S)))
         sh((x + 14 * S, y - 8 * S), "sun glint · predicted", fS, (255, 232, 150), a=230)
-    # footer
-    pil = Image.alpha_composite(Image.fromarray(out).convert("RGBA"), hud).convert("RGB")
-    return cv2.cvtColor(np.asarray(pil), cv2.COLOR_RGB2BGR), dict(items=len(items), on_water=nw)
+    box = hud.getbbox()                                         # alpha-over, only where something was drawn
+    if box:
+        sub = out[box[1]:box[3], box[0]:box[2]]
+        sub[:] = np.asarray(Image.alpha_composite(Image.fromarray(sub).convert("RGBA"), hud.crop(box)).convert("RGB"))
+    return cv2.cvtColor(out, cv2.COLOR_RGB2BGR), dict(items=len(items), on_water=nw)
 
-def run(config, preview="", out=None, frame_start=0, frame_end=None):
-    """Render a clip (or preview stills at the given clip times, seconds)."""
-    from types import SimpleNamespace
+ENCODERS = {   # similar quality (10 Nov cruise: NVENC 36.6 dB, x264 37.2 dB, 20 % smaller); every part of one video must use the same one (the parts are joined without re-encoding)
+    "h264_nvenc": ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "17", "-b:v", "0"],
+    "libx264": ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]}
+
+def pick_encoder(cfg, sessions=1):
+    """NVIDIA's encoder when this machine can open `sessions` of them at once, else libx264.
+    config "encoder": "auto" (default), "h264_nvenc" or "libx264"."""
+    want = cfg.get("encoder", "auto")
+    if want in ENCODERS: return want
+    test = [shutil.which("ffmpeg"), "-v", "error", "-f", "lavfi", "-i", "color=s=1920x1080:r=24:d=2", *ENCODERS["h264_nvenc"], "-pix_fmt", "yuv420p", "-f", "null", "-"]
+    try:
+        procs = [subprocess.Popen(test, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for _ in range(sessions)]
+        return "h264_nvenc" if all(p.wait(timeout=60) == 0 for p in procs) else "libx264"
+    except (OSError, subprocess.TimeoutExpired): return "libx264"
+
+def watermap_path(cfg): return CACHE / f"watermap_{Path(cfg['clip_path']).stem}{cfg.get('watermap_tag', '')}.npz"
+
+def open_clip(config):
+    """Config, scene (with its water map, built and cached on first use), video, frame rate and count, and the lens."""
     from .geometry import load_config
-    a = SimpleNamespace(preview=preview, out=out, frame_start=frame_start, frame_end=frame_end)
+    from .watermap import WaterMap, build as build_wm
     cfg = load_config(config); scene = Scene(cfg)
     cap = cv2.VideoCapture(str(resolve(cfg["clip_path"]))); fps = clip_fps(cfg); n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     W, H = cfg["output_width"], cfg["output_height"]
     lens = Fisheye(DATA / cfg["lens_profile"], W, H, cfg.get("focal_scale", 1.0))
     if getattr(scene, "sfm_cam", None) is not None:
         p = scene.sfm_cam; k = W / 1920.0; lens.fx, lens.fy, lens.cx, lens.cy = p[0] * k, p[1] * k, p[2] * k, p[3] * k; lens.D = np.array(p[4:8])
-    # world-anchored water map (built once per clip, cached)
-    from .watermap import WaterMap, build as build_wm
-    CACHE.mkdir(exist_ok=True); wmp = CACHE / f"watermap_{Path(cfg['clip_path']).stem}{cfg.get('watermap_tag', '')}.npz"
-    if wmp.exists(): scene.watermap = WaterMap.load(wmp)
+    CACHE.mkdir(exist_ok=True); wmp = watermap_path(cfg)
+    if WaterMap.current(wmp): scene.watermap = WaterMap.load(wmp)
     else:
         nwm = min(n, int(cfg.get("watermap_frames", n)))
         scene.watermap = build_wm(scene, lens, cap, fps, cfg["clip_video_start_s"], nwm, ground_field, step_s=cfg.get("watermap_step_s", 0.75)); scene.watermap.save(wmp)
+    return cfg, scene, cap, fps, n, lens
+
+def run(config, preview="", out=None, frame_start=0, frame_end=None, preroll=0):
+    """Render a clip (or preview stills at the given clip times, seconds).
+    preroll: frames before frame_start that are composed but not written, so the frame-to-frame
+    smoothing (water mask EMA, chase-cam heading) has settled when a chunk of a parallel render starts."""
+    from types import SimpleNamespace
+    a = SimpleNamespace(preview=preview, out=out, frame_start=frame_start, frame_end=frame_end)
+    cfg, scene, cap, fps, n, lens = open_clip(config); W, H = lens.w, lens.h
     rows = []
     if a.preview:
         for ts in [float(x) for x in a.preview.split(",")]:
@@ -570,19 +614,107 @@ def run(config, preview="", out=None, frame_start=0, frame_end=None):
         return
     end = n if a.frame_end is None else min(n, a.frame_end)
     dest = Path(a.out or OUT / cfg.get("output_name", "HERON_AR.mp4")); dest.parent.mkdir(exist_ok=True)
+    # as one of run_parallel's processes: its encoder choice, and one core each (they run one per CPU thread)
+    worker = os.environ.get("HERON_RENDER_WORKER"); enc = worker or pick_encoder(cfg)
+    threads = ["-threads", "2"] if worker and enc == "libx264" else []
+    if worker: cv2.setNumThreads(1)
     proc = subprocess.Popen([shutil.which("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}",
-                             "-r", f"{fps:.6f}", "-i", "-", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                             "-r", f"{fps:.6f}", "-i", "-", "-an", *ENCODERS[enc], *threads, "-pix_fmt", "yuv420p",
                              "-movflags", "+faststart", str(dest)], stdin=subprocess.PIPE)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, a.frame_start); t0 = time.time()
-    for i in range(a.frame_start, end):
+    first = max(0, a.frame_start - preroll)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, first); t0 = time.time()
+    for i in range(first, end):
         ok, fr = cap.read()
         if not ok: break
         if fr.shape[1] != W: fr = cv2.resize(fr, (W, H), interpolation=cv2.INTER_CUBIC)
-        img, info = compose_v2(fr, scene, cfg["clip_video_start_s"] + i / fps, lens, i, fps, rows); proc.stdin.write(img.tobytes())
-        if i % 240 == 0: print(f"{i}/{end} {time.time() - t0:.0f}s {info}", flush=True)
+        img, info = compose_v2(fr, scene, cfg["clip_video_start_s"] + i / fps, lens, i, fps, rows)
+        if i < a.frame_start: rows.clear(); continue                     # pre-roll: settle smoothing only
+        proc.stdin.write(img.tobytes())
+        if i % 24 == 0: print(f"{i}/{end} {time.time() - t0:.0f}s {info}", flush=True)
     proc.stdin.close(); assert proc.wait() == 0
     with dest.with_suffix(".csv").open("w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=rows[0].keys()); wr.writeheader(); wr.writerows(rows)
+        if rows: wr = csv.DictWriter(f, fieldnames=rows[0].keys()); wr.writeheader(); wr.writerows(rows)
+    print("done", dest)
+
+def run_parallel(config, out=None, jobs=None, preroll=None, chunks_per_job=4, frame_start=0, frame_end=None):
+    """Render the clip with `jobs` processes at once, then join the pieces without re-encoding.
+
+    compose_v2 is single-threaded numpy, so one process uses one core. The clip is cut into
+    jobs * chunks_per_job chunks handed out in clip order as processes free up: per-frame cost varies
+    a lot (early-flight frames, with big Fresnel zones on screen, took ~6 s vs ~1.5 s mid-flight),
+    so equal fixed shares would leave one process running long after the rest.
+    Each chunk composes `preroll` frames before its start and throws them away: the water-mask EMA
+    settles in ~10 frames and the chase-cam heading (8 %/frame) in ~60. With 48 or 96 frames the
+    first frames after a join were pixel-identical to a continuous render. The minimal look with a
+    water map has neither (no EMA, no chase cam), so by default it gets no pre-roll."""
+    from .geometry import load_config
+    from .watermap import WaterMap
+    cfg = load_config(config)
+    if not WaterMap.current(watermap_path(cfg)): open_clip(config)[2].release()     # build the water map once, here, not in every process
+    if preroll is None: preroll = 0 if cfg.get("minimal") else 64
+    cap = cv2.VideoCapture(str(resolve(cfg["clip_path"]))); total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)); cap.release()
+    f_lo = max(0, frame_start); f_hi = total if frame_end is None else min(total, frame_end); n = f_hi - f_lo
+    jobs = max(1, int(jobs or max(1, (os.cpu_count() or 2) - 1)))
+    dest = Path(out or OUT / cfg.get("output_name", "HERON_AR.mp4")); dest.parent.mkdir(parents=True, exist_ok=True)
+    parts_dir = dest.parent / f".{dest.stem}_parts"
+    if parts_dir.exists(): shutil.rmtree(parts_dir)
+    parts_dir.mkdir()
+    nc = max(1, min(n // max(4 * preroll, 240), jobs * chunks_per_job))          # a chunk is worth a process start-up (~7 s)
+    bounds = [f_lo + round(k * n / nc) for k in range(nc + 1)]
+    chunks = [(bounds[k], bounds[k + 1], parts_dir / f"part_{k:03d}.mp4") for k in range(nc) if bounds[k + 1] > bounds[k]]
+    print(f"rendering {n:,} frames: {len(chunks)} chunks, {jobs} at a time", flush=True)
+
+    heron = Path(__file__).resolve().parents[1] / "heron.py"
+    base = [sys.executable, "--engine"] if getattr(sys, "frozen", False) else [sys.executable, str(heron)]
+    env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1", PYTHONUNBUFFERED="1",
+               HERON_RENDER_WORKER=pick_encoder(cfg, sessions=jobs))
+    done = [0] * len(chunks); errs = [[] for _ in chunks]; procs = {}
+    def reader(k, p, f0):
+        for line in p.stdout:
+            line = line.rstrip()
+            m = re.match(r"(\d+)/\d+ ", line)
+            if m: done[k] = int(m.group(1)) - f0
+            elif line and not line.startswith("done "): errs[k].append(line); errs[k][:] = errs[k][-30:]
+    def launch(k):
+        f0, f1, part = chunks[k]
+        cmd = base + ["render", "--config", str(config), "--out", str(part), "--frame-start", str(f0), "--frame-end", str(f1),
+                      "--preroll", str(preroll), "--jobs", "1"]
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", env=env)
+        procs[k] = p; threading.Thread(target=reader, args=(k, p, f0), daemon=True).start()
+    todo = list(range(len(chunks))); t0 = time.time(); last = 0
+    try:
+        while todo or any(p.poll() is None for p in procs.values()):
+            for k, p in procs.items():
+                if p.poll() not in (None, 0): raise RuntimeError(f"render chunk {k} failed:" + chr(10) + chr(10).join(errs[k]))
+                if p.poll() == 0: done[k] = chunks[k][1] - chunks[k][0]
+            while todo and sum(p.poll() is None for p in procs.values()) < jobs: launch(todo.pop(0))
+            if time.time() - last > 15:
+                d = sum(done); last = time.time(); el = time.time() - t0
+                eta = f", about {el / d * (n - d) / 60:.0f} min left" if d > 0 else ""
+                print(f"{d}/{n} frames ({sum(p.poll() == 0 for p in procs.values())}/{len(chunks)} chunks done, "
+                      f"{el / 60:.1f} min{eta})", flush=True)
+            time.sleep(1)
+        for k, p in procs.items():
+            if p.returncode != 0: raise RuntimeError(f"render chunk {k} failed:" + chr(10) + chr(10).join(errs[k]))
+    except BaseException:
+        for p in procs.values():
+            if p.poll() is None: p.kill()
+        raise
+    # join: same encoder settings in every part, so the concat demuxer can copy the streams
+    lst = parts_dir / "parts.txt"
+    lst.write_text("".join(f"file '{c[2].as_posix()}'\n" for c in chunks))
+    subprocess.run([shutil.which("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+                    "-c", "copy", "-movflags", "+faststart", str(dest)], check=True)
+    with dest.with_suffix(".csv").open("w", newline="") as f:
+        header = False
+        for c in chunks:
+            pc = c[2].with_suffix(".csv")
+            lines = pc.read_text().splitlines(keepends=True) if pc.exists() else []
+            if not lines: continue
+            if not header: f.write(lines[0]); header = True
+            f.writelines(lines[1:])
+    shutil.rmtree(parts_dir, ignore_errors=True)
+    print(f"{n}/{n} frames in {(time.time() - t0) / 60:.1f} min", flush=True)
     print("done", dest)
 
 

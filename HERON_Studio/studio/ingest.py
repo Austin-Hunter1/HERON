@@ -1,5 +1,5 @@
 """Register files on a flight and turn them into engine inputs."""
-import json, shutil, subprocess
+import json, os, shutil, subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from . import detect, gpmf, dflog, store
@@ -104,6 +104,31 @@ def recording_parts(vids, settings):
 def _near_boulder(f):
     h = f.get("home") or {}
     return h.get("lat") is not None and abs(h["lat"] - 40.078) < 0.05 and abs(h["lon"] + 105.215) < 0.06
+
+
+def solve_step(settings, clip_fps):
+    """Frame step for the camera solve. quick: every 12th frame; full: every frame; custom: as close as
+    possible to settings.solve_fps frames per second of video (e.g. 6 fps of a 23.976 clip = every 4th)."""
+    mode = settings.get("solve", "full")
+    if mode == "full": return 1
+    if mode == "custom":
+        want = float(settings.get("solve_fps") or 6)
+        return max(1, int(round(float(clip_fps or 24) / max(want, 0.1))))
+    return 12
+
+
+def solve_options(settings):
+    """The engine's sfm options with the flight's solve settings applied.
+    solve_chunks: "auto" (split when there are more than 1.5 chunks of frames), "off".
+    solve_merge: "full" (merge, then one bundle adjustment of everything) or "cheap" (each chunk tied to
+    GPS on its own and stitched). track_cap: tracks kept per frame in the global mapper, None = all."""
+    base = json.loads((ENGINE_DIR / "configs" / "base.json").read_text())["sfm"]
+    o = dict(base)
+    if settings.get("solve_chunks") == "off": o["chunk_size"] = 0
+    if settings.get("solve_merge") in ("full", "cheap"): o["merge"] = settings["solve_merge"]
+    if "track_cap" in settings:
+        tc = settings["track_cap"]; o["track_cap"] = int(tc) if tc not in (None, "", "none", "0", 0) else None
+    return o
 
 
 # ------------------------------------------------------------------ quick readers
@@ -213,7 +238,7 @@ def prepare(f, log=print):
            "lens_profile": ldst.name, "focal_scale": float(st.get("focal_scale") or 1.0), "water_elevation_m": welev,
            "water_offset_m": float(st.get("water_offset_m") or 0.0), "gopro_dir": "gopro", "outline_geojson": "outline.geojson",
            "sfm_poses": "solved/sfm_poses.npz", "sync_search": st.get("sync_search", [-900, 900]),
-           "sfm": {**base["sfm"], "frame_step": 1 if st.get("solve") == "full" else 12, "work_width": f["sizes"]["solve"]["width"]}}
+           "sfm": {**solve_options(st), "frame_step": solve_step(st, v["fps"]), "work_width": f["sizes"]["solve"]["width"]}}
     if st.get("sync"): cfg["sync"] = st["sync"]
     (d / "config.json").write_text(json.dumps(cfg, indent=2))
     env = dict(t0_us=t0)
@@ -247,7 +272,31 @@ def proxy(f, log=print):
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", str(min(5, v["duration_s"] / 2)), "-i", str(src), "-frames:v", "1",
                     "-vf", f"scale={min(960, sz['width'])}:-2", str(d / "thumb.jpg")], check=True)
     if v.get("browser_playable"): return
+    out = d / "proxy.mp4"
+    # NVIDIA: decode, scale and encode on the GPU (about 4x faster than libx264 on a 4K GoPro clip, similar size).
+    if _has_nvenc():
+        log(f"Making a {sz['width']}×{sz['height']} preview copy for playback (NVIDIA GPU)…")
+        r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-i", str(src), "-an",
+                            "-vf", f"scale_cuda={sz['width']}:{sz['height']}:format=yuv420p", "-c:v", "h264_nvenc", "-preset", "p4",
+                            "-rc", "vbr", "-cq", "30", "-b:v", "0", "-movflags", "+faststart", str(out)], capture_output=True, text=True)
+        if r.returncode == 0: return
+        log("  GPU encode failed (" + (r.stderr.strip().splitlines() or ["?"])[-1][:160] + "); using the CPU")
     log(f"Making a {sz['width']}×{sz['height']} preview copy for playback…")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-an", "-vf", f"scale={sz['width']}:{sz['height']}",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-                    str(d / "proxy.mp4")], check=True)
+                    str(out)], check=True)
+
+
+_nvenc = None
+def _has_nvenc():
+    """ffmpeg was built with h264_nvenc. Without an NVIDIA GPU the attempt fails fast and the CPU encode runs.
+    HERON_NO_GPU_ENCODE=1 turns it off."""
+    global _nvenc
+    if os.environ.get("HERON_NO_GPU_ENCODE"): return False
+    if _nvenc is None:
+        try:
+            enc = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=20).stdout
+            _nvenc = "h264_nvenc" in enc
+        except Exception:
+            _nvenc = False
+    return _nvenc

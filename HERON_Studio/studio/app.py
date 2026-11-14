@@ -71,6 +71,30 @@ def new_flight():
 def get_flight(fid): return jsonify(store.load(fid))
 
 
+@app.get("/api/flights/<fid>/estimate")
+def flight_estimate(fid):
+    """Time ranges per step for the flight's current settings (query args override: solve, solve_fps,
+    render_size, solve_chunks, solve_merge, track_cap)."""
+    from . import estimate
+    f = store.load(fid); v = f.get("video")
+    if not v or not v.get("duration_s"): return err("add a video first")
+    st = dict(f.get("settings") or {})
+    for k in ("solve", "solve_fps", "render_size", "solve_chunks", "solve_merge", "track_cap"):
+        if k in request.args: st[k] = request.args[k]
+    step = ingest.solve_step(st, v["fps"])
+    ro = (f.get("sizes") or {}).get("render_options") or {}
+    rs = ro.get(st.get("render_size", "1080p")) or ro.get("1080p") or dict(width=1920, height=1080)
+    sfm = ingest.solve_options(st)
+    work = FLIGHTS_DIR / fid / "work" / "config"
+    try:
+        sys.path.insert(0, str(ENGINE_DIR)); from heron_ar.sfm import extracted, select, find_colmap
+        have = extracted(work); reuse = bool(have and select(have, step))
+        exe = find_colmap(sfm.get("colmap_exe")); gpu = bool(exe and "cuda" in str(exe).lower())
+    except Exception:
+        reuse, gpu = False, False
+    return jsonify(estimate.estimate(v, st, step, (rs["width"], rs["height"]), gpu=gpu, extracted=reuse, solve_cfg=sfm))
+
+
 @app.patch("/api/flights/<fid>")
 def patch_flight(fid):
     j = request.get_json(force=True)

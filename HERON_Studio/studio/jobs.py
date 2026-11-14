@@ -4,7 +4,7 @@ Steps write to flights/<id>/job.log; the UI polls /api/flights/<id>/job. A job c
 cancelled (kills the running child) and restarted from any step; finished steps are skipped
 unless asked.
 """
-import json, os, signal, subprocess, sys, threading, time, traceback
+import json, os, re, signal, subprocess, sys, threading, time, traceback
 from pathlib import Path
 from . import store, ingest, water
 from .config import ENGINE_DIR, APP_DIR, FLIGHTS_DIR
@@ -74,9 +74,10 @@ class Job:
             self.log(line); last = line
             p = _progress(step, line)
             if step == "solve" and "num_reg_frames=" in line:          # COLMAP: frames placed / frames extracted
-                import re
                 n = int(re.search(r"num_reg_frames=(\d+)", line).group(1))
-                tot = sum(len(list(d.glob("*.jpg"))) for d in (self.dir / "work").glob("*/images")) or 1
+                lists = list((self.dir / "work").glob("*/images.txt"))   # the frames this solve uses (may be a subset)
+                tot = (sum(len(l.read_text().split()) for l in lists) if lists else
+                       sum(len(list(d.glob("*.jpg"))) for d in (self.dir / "work").glob("*/images"))) or 1
                 p = min(99, 100 * n // tot); line = f"{n:,} of {tot:,} frames placed"
             if p is not None: self.set(step_progress=p, detail=line[-160:])
         rc = self.proc.wait(); self.proc = None
@@ -122,6 +123,11 @@ class Job:
     def cancel(self):
         self.cancelled = True
         if self.proc:
+            if os.name == "nt":
+                # terminate() would only end the venv launcher; the real interpreter and its children
+                # (COLMAP, parallel render chunks) would keep running. Kill the whole tree.
+                subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"], capture_output=True)
+                return
             try: os.killpg(self.proc.pid, signal.SIGTERM)
             except Exception: self.proc.terminate()
 
@@ -140,11 +146,22 @@ class Job:
         store.update(self.fid, lambda f: f["results"].update(sync=dict(s or {}, report=last)))
 
     def do_solve(self, cfg):
+        # solve settings changed after "Read files" still apply: refresh them in config.json
+        f = store.load(self.fid); st = f["settings"]; p = Path(cfg); c = json.loads(p.read_text())
+        c["sfm"] = {**c.get("sfm", {}), **ingest.solve_options(st), "frame_step": ingest.solve_step(st, f["video"]["fps"]),
+                    "work_width": c.get("sfm", {}).get("work_width", 960)}
+        p.write_text(json.dumps(c, indent=2))
         self.sh(engine_cmd("sfm", "--config", cfg), "solve")
 
     def do_georef(self, cfg):
         last = self.sh(engine_cmd("georef", "--config", cfg), "georef")
-        store.update(self.fid, lambda f: f["results"].update(georef=last))
+        s = json.loads(Path(cfg).read_text()).get("sync") or {}
+        def upd(f):
+            f["results"].update(georef=last)
+            if s.get("source"):                 # georef corrected the clock sync from the camera path; keep it
+                f["settings"]["sync"] = dict(rate=s["rate"], offset=s["offset"])
+                f["results"]["sync"] = dict(f["results"].get("sync") or {}, **s)
+        store.update(self.fid, upd)
 
     def do_water(self, cfg):
         c = json.loads(Path(cfg).read_text()); mid = round(c["clip_duration_s"] / 2, 1)
@@ -168,21 +185,17 @@ class Job:
 class Cancelled(Exception): pass
 
 
-import re as _re
-_GLOG = _re.compile(r"^[IWEF]\d{8} [\d:.]+\s+\d+ \S+:\d+\] (.*)")
+_GLOG = re.compile(r"^[IWEF]\d{8} [\d:.]+\s+\d+ \S+:\d+\] (.*)")
 _GLOG_SKIP = ("Name:", "Dimensions:", "Camera:", "Focal Length:", "Features:", "Mask:", "=> Image sees", "=> Continued", "=> Merged",
               "=> Filtered", "=> Completed", "=> Changed", "Matching block", "in ")
 
 
 def _progress(step, line):
     """Pull a 0-100 number out of engine output where it reports one."""
-    import re
     m = re.search(r"(\d+)/(\d+)", line)
     if step in ("render", "water") and m and int(m.group(2)) > 0: return min(99, 100 * int(m.group(1)) // int(m.group(2)))
     m = re.search(r"(\d+)%", line)
     if m: return min(99, int(m.group(1)))
-    m = re.search(r"[Rr]egistering image #?\d+ \((\d+)\)", line)
-    if m: return None
     return None
 
 

@@ -146,12 +146,38 @@ class Telemetry:
 
 # ---------------------------------------------------------------- GoPro IMU + sync
 class GoProIMU:
+    """Camera gyro + accelerometer on the video clock.
+
+    A recording joined from chapters (GoPro's 4 GB files) has each chapter's telemetry shifted by the
+    chapter's start in the joined video. A chapter's telemetry runs ~1 s past its last video frame (the
+    final packet's duration), so the joined timeline steps back at each join. Those overhanging samples
+    are dropped here so the timeline only moves forward (np.interp needs that); join times are in `joins`.
+    Note (19 Oct and 10 Nov flights): against the flight log the IMU then shows a ~1 s step at the join,
+    but the video frames don't (per-chunk GPS timing is flat across it), so the sync stays one line; a
+    step fitted from the IMU made the GPS fit worse (1.09 -> 1.70 m and 0.74 -> 1.75 m)."""
     def __init__(self, folder=DATA / "gopro1"):
         g = pd.read_csv(folder / "GYRO.csv"); a = pd.read_csv(folder / "ACCL.csv")
-        self.t = g.nominal_video_time_s.values
-        self.gyro = g[["component_0", "component_1", "component_2"]].values @ IMU2CAM.T
-        self.acc = a[["component_0", "component_1", "component_2"]].values @ IMU2CAM.T
+        cols = ["component_0", "component_1", "component_2"]
+        t, keep, self.joins = _chapter_clean(g.nominal_video_time_s.values)
+        self.t = t[keep]; self.gyro = g[cols].values[keep] @ IMU2CAM.T
+        ta, ka, _ = _chapter_clean(a.nominal_video_time_s.values); A = a[cols].values
+        if len(ta) == len(t) and np.array_equal(ka, keep): self.acc = A[keep] @ IMU2CAM.T
+        else: self.acc = np.c_[[np.interp(self.t, ta[ka], A[ka, k]) for k in range(3)]].T @ IMU2CAM.T
         self.fs = 1 / np.median(np.diff(self.t))
+
+
+def _chapter_clean(t):
+    """Times, a keep mask that drops each chapter's samples past the next chapter's start, and the joins."""
+    back = np.where(np.diff(t) < 0)[0]; keep = np.ones(len(t), bool); start = 0
+    for i in back:
+        keep[start:i + 1] &= t[start:i + 1] < t[i + 1]; start = i + 1
+    return t, keep, [float(t[i + 1]) for i in back]
+
+
+def mission_time(vt, sync):
+    """Video time -> flight-log time: vt * (1 + rate) + offset."""
+    mt = np.asarray(vt, float) * (1 + sync["rate"]) + sync["offset"]
+    return float(mt) if mt.ndim == 0 else mt
 
 def estimate_sync(imu: GoProIMU, verbose=False, search=(-120, 0)):
     """mission_t = video_t * (1 + rate) + offset, from accel-magnitude correlation."""
@@ -169,9 +195,12 @@ def estimate_sync(imu: GoProIMU, verbose=False, search=(-120, 0)):
         a, b = np.interp(tg[m] + o, td, dm), gm[m]
         if a.std() < 1e-9 or b.std() < 1e-9: return -1.0
         c = np.corrcoef(a, b)[0, 1]; return float(c) if np.isfinite(c) else -1.0
-    # coarse global search (needs >= 60 s of overlap)
+    # coarse global search. The overlap must cover at least half of the video or of the log (whichever is
+    # shorter), not just 60 s: a minute of overlap can correlate by chance, and on the 19 Oct flight (two joined
+    # chapters, 922 s) it picked +786.8 s, leaving 68 s of video inside the log, instead of the true -48.5 s.
+    need = max(fs * 60, 0.5 * min(len(tg), len(td)))
     full = np.ones(len(tg), bool)
-    best = max(((corr(o, full) if ((tg + o >= td[0]) & (tg + o <= td[-1])).sum() >= fs * 60 else -1.0, o)
+    best = max(((corr(o, full) if ((tg + o >= td[0]) & (tg + o <= td[-1])).sum() >= need else -1.0, o)
                 for o in np.arange(search[0], search[1], 0.1)))
     if best[0] <= 0: raise RuntimeError("clock sync: the video and the flight log never move together; is this the right log?")
     o0 = best[1]; rows = []
@@ -196,7 +225,7 @@ def camera_attitude(imu: GoProIMU, tel: Telemetry, sync, yaw_offset_deg=0.0,
         m = (vt >= t_range[0]) & (vt <= t_range[1]); idx = np.where(m)[0]
     else:
         idx = np.arange(len(vt))
-    mt = vt * (1 + sync["rate"]) + sync["offset"]
+    mt = mission_time(vt, sync)
     # light low-pass on accel (vibration), none on gyro
     b, a = butter(2, 5 / (imu.fs / 2)); acc = filtfilt(b, a, imu.acc, axis=0)
     gyro = imu.gyro.copy()
@@ -207,6 +236,7 @@ def camera_attitude(imu: GoProIMU, tel: Telemetry, sync, yaw_offset_deg=0.0,
     kin = tel.kin_acc(mt[idx])
     yaw_tgt = tel.yaw_at(mt[idx]) + np.deg2rad(yaw_offset_deg)
     up = np.array([0, 0, 1.0])
+    if not len(idx): return vt[idx], np.empty((0, 3, 3)), dict(gyro_bias=bias.tolist())
     # init from accel tilt + aircraft yaw
     f0 = acc[idx[0]] / np.linalg.norm(acc[idx[0]])           # 'up' in camera frame
     def from_up_yaw(u_cam, yaw):
@@ -217,19 +247,32 @@ def camera_attitude(imu: GoProIMU, tel: Telemetry, sync, yaw_offset_deg=0.0,
         fw = R1 @ np.array([0, 0, 1.0]); hd = math.atan2(fw[0], fw[1])
         return rot_axis(z, hd - yaw) @ R1
     R = from_up_yaw(f0, yaw_tgt[0])
-    out = np.empty((len(idx), 3, 3)); dt = 1 / imu.fs
-    for n, i in enumerate(idx):
-        f_w = kin[n] + 9.80665 * up
-        v_hat = R.T @ (f_w / np.linalg.norm(f_w))
-        meas = acc[i] / np.linalg.norm(acc[i])
-        e = np.cross(meas, v_hat)
-        fw = R[:, 2]; hd = math.atan2(fw[0], fw[1])
-        ey = (yaw_tgt[n] - hd + math.pi) % (2 * math.pi) - math.pi
-        w = gyro[i] + kp_tilt * e + (-k_yaw * ey) * (R.T @ up)
-        R = R @ expm_so3(w * dt)
-        u, _, vh = np.linalg.svd(R); R = u @ vh
-        out[n] = R
-    return vt[idx], out, dict(gyro_bias=bias.tolist())
+    dt = 1 / imu.fs; two_pi = 2 * math.pi
+    f_w = kin + 9.80665 * up; f_w /= np.linalg.norm(f_w, axis=1, keepdims=True)
+    meas = acc[idx] / np.linalg.norm(acc[idx], axis=1, keepdims=True)
+    # The filter is a 200 Hz recursion over the whole clip, so it runs on plain floats: the same
+    # arithmetic as R = R @ expm_so3(w * dt) per sample, ~15x faster than 3x3 numpy calls.
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = R.ravel().tolist(); out = []
+    for n, ((fx, fy, fz), (mx, my, mz), (gx, gy, gz), yt) in enumerate(zip(f_w.tolist(), meas.tolist(), gyro[idx].tolist(), yaw_tgt.tolist())):
+        vx = r00 * fx + r10 * fy + r20 * fz; vy = r01 * fx + r11 * fy + r21 * fz; vz = r02 * fx + r12 * fy + r22 * fz   # expected 'up', camera frame
+        c = -k_yaw * ((yt - math.atan2(r02, r12) + math.pi) % two_pi - math.pi)                                     # yaw pull, about world up
+        wx = (gx + kp_tilt * (my * vz - mz * vy) + c * r20) * dt
+        wy = (gy + kp_tilt * (mz * vx - mx * vz) + c * r21) * dt
+        wz = (gz + kp_tilt * (mx * vy - my * vx) + c * r22) * dt
+        t2 = wx * wx + wy * wy + wz * wz; th = math.sqrt(t2)
+        a, b = (math.sin(th) / th, (1 - math.cos(th)) / t2) if th > 1e-12 else (1.0, 0.0)
+        e00 = 1 - b * (wy * wy + wz * wz); e01 = b * wx * wy - a * wz; e02 = b * wx * wz + a * wy               # Rodrigues
+        e10 = b * wx * wy + a * wz; e11 = 1 - b * (wx * wx + wz * wz); e12 = b * wy * wz - a * wx
+        e20 = b * wx * wz - a * wy; e21 = b * wy * wz + a * wx; e22 = 1 - b * (wx * wx + wy * wy)
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = (
+            r00 * e00 + r01 * e10 + r02 * e20, r00 * e01 + r01 * e11 + r02 * e21, r00 * e02 + r01 * e12 + r02 * e22,
+            r10 * e00 + r11 * e10 + r12 * e20, r10 * e01 + r11 * e11 + r12 * e21, r10 * e02 + r11 * e12 + r12 * e22,
+            r20 * e00 + r21 * e10 + r22 * e20, r20 * e01 + r21 * e11 + r22 * e21, r20 * e02 + r21 * e12 + r22 * e22)
+        if n % 64 == 63:                                                   # rounding drift: back to the nearest rotation
+            u, _, vh = np.linalg.svd(np.array([[r00, r01, r02], [r10, r11, r12], [r20, r21, r22]]))
+            r00, r01, r02, r10, r11, r12, r20, r21, r22 = (u @ vh).ravel().tolist()
+        out.append((r00, r01, r02, r10, r11, r12, r20, r21, r22))
+    return vt[idx], np.array(out).reshape(-1, 3, 3), dict(gyro_bias=bias.tolist())
 
 def align(a, b):
     a = a / np.linalg.norm(a); b = b / np.linalg.norm(b); v = np.cross(a, b); c = np.dot(a, b)
@@ -271,11 +314,22 @@ class Fisheye:
     def unproject(self, uv):
         uv = np.atleast_2d(uv); mx = (uv[:, 0] - self.cx) / self.fx; my = (uv[:, 1] - self.cy) / self.fy
         thd = np.hypot(mx, my); th = thd.copy(); k1, k2, k3, k4 = self.D
-        for _ in range(20):
-            t2 = th * th; f = th * (1 + k1 * t2 + k2 * t2 ** 2 + k3 * t2 ** 3 + k4 * t2 ** 4) - thd
-            df = 1 + 3 * k1 * t2 + 5 * k2 * t2 ** 2 + 7 * k3 * t2 ** 3 + 9 * k4 * t2 ** 4; th -= f / df
+        for _ in range(20):                                   # Newton; converges in a handful of steps
+            t2 = th * th; f = th * (1 + t2 * (k1 + t2 * (k2 + t2 * (k3 + t2 * k4)))) - thd
+            th -= f / (1 + t2 * (3 * k1 + t2 * (5 * k2 + t2 * (7 * k3 + t2 * 9 * k4))))
+            if np.abs(f).max() < 1e-13: break
         s = np.where(thd > 1e-12, np.sin(th) / np.maximum(thd, 1e-12), 1.0)
         return np.c_[mx * s, my * s, np.cos(th)]
+
+    def pixel_rays(self):
+        """(h, w, 3) camera-frame ray through the centre of every pixel, computed once per calibration.
+        The solved intrinsics count the top-left pixel's centre as (0.5, 0.5) (COLMAP), hence the half pixel."""
+        k = (self.fx, self.fy, self.cx, self.cy, tuple(np.asarray(self.D, float)), self.w, self.h)
+        if getattr(self, "_rays_key", None) != k:
+            ys, xs = np.mgrid[0:self.h, 0:self.w]
+            self._rays = self.unproject(np.c_[xs.ravel() + 0.5, ys.ravel() + 0.5]).reshape(self.h, self.w, 3)
+            self._rays_key = k
+        return self._rays
 
 class CameraPose:
     """World->pixel for one frame."""
@@ -290,11 +344,19 @@ class CameraPose:
         d = self.lens.unproject(uv) @ self.R.T
         s = -self.C[2] / d[:, 2]; ok = s > 0
         return self.C + s[:, None] * d, ok
+    def ray_ground_box(self, x0, x1, y0, y1):
+        """ray_ground for every pixel of the box [x0..x1] x [y0..y1], row-major (same order as np.mgrid)."""
+        d = self.lens.pixel_rays()[y0:y1 + 1, x0:x1 + 1].reshape(-1, 3) @ self.R.T
+        s = -self.C[2] / d[:, 2]; ok = s > 0
+        return self.C + s[:, None] * d, ok
 
 # ---------------------------------------------------------------- reflection geometry
+def specular_point(sat, rx):
+    """Reflection point on the plane z = 0 (flat mirror: where the line receiver -> mirrored satellite crosses it)."""
+    a = rx[2] / (rx[2] + sat[2]); return np.array([rx[0] + a * (sat[0] - rx[0]), rx[1] + a * (sat[1] - rx[1]), 0.0])
+
 def fresnel_zone(sat, rx, wavelength, n=72):
-    mirror = sat.copy(); mirror[2] *= -1
-    a = rx[2] / (rx[2] - mirror[2]); center = rx + a * (mirror - rx); center[2] = 0
+    center = specular_point(sat, rx)
     base = np.linalg.norm(sat - center) + np.linalg.norm(rx - center)
     ang = np.arange(n) * 2 * np.pi / n; dirs = np.c_[np.cos(ang), np.sin(ang), np.zeros(n)]
     lo = np.zeros(n); hi = np.full(n, 2.0)

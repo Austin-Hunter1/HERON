@@ -29,10 +29,14 @@ class Terrain:
         z = (self.z[i, j] * (1 - a) * (1 - b) + self.z[i + 1, j] * a * (1 - b) + self.z[i, j + 1] * (1 - a) * b + self.z[i + 1, j + 1] * a * b)
         return np.where(inside, z, self.water_z)
 
-    def ray_hit(self, C, d, iters=6):
-        """Intersect rays C + s d with the height field (fixed-point iteration)."""
-        h = np.full(len(d), self.water_z)
+    def ray_hit(self, C, d, iters=6, tol=1e-3):
+        """Intersect rays C + s d with the height field (fixed-point iteration).
+        A ray stops iterating once its surface height moves by less than tol (m): over open water
+        that is after the first pass, so only rays that land on sloping ground pay for the rest."""
+        h = np.full(len(d), float(self.water_z)); act = np.arange(len(d))
         for _ in range(iters):
-            s = (h - C[2]) / d[:, 2]; P = C + s[:, None] * d
-            h = self.height(P[:, 0], P[:, 1])
+            s = (h[act] - C[2]) / d[act, 2]
+            hn = self.height(C[0] + s * d[act, 0], C[1] + s * d[act, 1])
+            moved = np.abs(hn - h[act]) > tol; h[act] = hn; act = act[moved]
+            if not len(act): break
         s = (h - C[2]) / d[:, 2]; return C + s[:, None] * d, s > 0
