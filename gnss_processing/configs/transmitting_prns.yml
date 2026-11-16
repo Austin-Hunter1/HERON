@@ -1,0 +1,61 @@
+# Which PRNs transmit each signal (D-104).  Notebook 01 reads this file each
+# time it runs, and searches only the PRNs that transmit the signal on the
+# collect date.  A PRN that does not transmit the signal can only give a false
+# alarm (for example G16, Block IIR, on GPS L1C).  Fewer PRNs also make the
+# search faster.  utils/transmitting_prns.py reads and checks this file.
+
+# false: search every PRN code that exists (`default_prns`), as before D-104.
+enabled: true
+
+# When the list cannot be made (no network, no Earthdata login, a file with no
+# record for the signal), true searches every PRN and prints a warning; false
+# stops notebook 01 with the reason.
+fallback_to_all_prns: true
+
+# The multi-GNSS RINEX 4 broadcast file of the collect date, on CDDIS (Earthdata
+# login, the same as the other broadcast files).  {yyyy} is the year and {ddd}
+# the day of the year.  On 2026-11-10 DLR was the only RINEX 4 producer there.
+rinex4:
+  directory: "/gnss/data/daily/{yyyy}/brdc/"
+  filename: "BRD400DLR_S_{yyyy}{ddd}0000_01D_MN.rnx.gz"
+
+# One rule for each signal, by its signal_type_id (utils/signal_interfaces.py).
+#   source: rinex4  -- the PRNs of `system` that have at least one ephemeris
+#                      record of type `message` in the RINEX 4 file that day.
+#   source: table   -- the PRNs in `tables.<signal>` valid on the collect date.
+# `requires_l5_isc: true` keeps only satellites whose CNAV records have a
+# non-zero ISC_L5I5 or ISC_L5Q5.  Block IIR-M satellites send CNAV on L2C but
+# have no L5, and their L5 ISC values are exactly 0 (checked on 2026-11-10:
+# G05, G07, G12, G15, G17, G29, G31).
+signals:
+  GPS_L1CA: {source: rinex4, system: G, message: LNAV}
+  GPS_L2C: {source: rinex4, system: G, message: CNAV}
+  GPS_L5: {source: rinex4, system: G, message: CNAV, requires_l5_isc: true}
+  # The RINEX 4 file of 2026-11-10 has no GPS CNV2 record, so GPS L1C uses the
+  # table below (user decision, D-104).
+  GPS_L1C: {source: table}
+  BDS_B1C: {source: rinex4, system: C, message: CNV1}
+  BDS_B2A: {source: rinex4, system: C, message: CNV2}
+  GAL_E5A: {source: rinex4, system: E, message: FNAV}
+
+# Hand-kept PRN lists, with the dates each PRN is valid (valid_to is the first
+# day it is not valid; null: still valid).  Edit these when a satellite is
+# launched, set healthy, or moved to another PRN.
+tables:
+  # GPS L1C is sent by GPS III and IIIF satellites only.  Taken from the IGS
+  # satellite metadata (igs_satellite_metadata.snx, release 2441, downloaded
+  # 2026-11-13 from files.igs.org): SATELLITE/IDENTIFIER block GPS-IIIA, and the
+  # SATELLITE/PRN valid-from and valid-to dates.  No GPS-IIIF satellite was in
+  # that release.
+  GPS_L1C:
+    - {prn: 4, valid_from: 2019-01-09, valid_to: 2019-07-13, svn: G074, block: GPS-IIIA}
+    - {prn: 4, valid_from: 2019-10-21, valid_to: null, svn: G074, block: GPS-IIIA}
+    - {prn: 18, valid_from: 2020-03-13, valid_to: null, svn: G075, block: GPS-IIIA}
+    - {prn: 23, valid_from: 2020-07-14, valid_to: null, svn: G076, block: GPS-IIIA}
+    - {prn: 14, valid_from: 2020-11-05, valid_to: null, svn: G077, block: GPS-IIIA}
+    - {prn: 11, valid_from: 2021-06-17, valid_to: null, svn: G078, block: GPS-IIIA}
+    - {prn: 28, valid_from: 2023-01-31, valid_to: null, svn: G079, block: GPS-IIIA}
+    - {prn: 1, valid_from: 2024-12-17, valid_to: null, svn: G080, block: GPS-IIIA}
+    - {prn: 21, valid_from: 2025-05-30, valid_to: null, svn: G081, block: GPS-IIIA}
+    - {prn: 20, valid_from: 2026-01-28, valid_to: null, svn: G082, block: GPS-IIIA}
+    - {prn: 13, valid_from: 2026-04-25, valid_to: null, svn: G083, block: GPS-IIIA}

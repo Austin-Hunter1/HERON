@@ -112,6 +112,23 @@ through the same three notebooks as the GPS signals.
 Limits that you should know: no ionosphere correction for BeiDou, B1C narrow-band
 only, and B1C has no real-data check yet. See `docs/BDS_FOLLOW_UP.md`.
 
+## Which PRNs notebook 01 searches (D-104)
+
+Notebook 01 searches only the PRNs that transmit the signal on the collect date.
+The first lines of section 4 show the list, where it came from, and the PRNs that
+were left out. A PRN that does not send the signal can only give a false alarm.
+
+- The list comes from the RINEX 4 broadcast file of the collect date (CDDIS, the
+  same Earthdata login as the other broadcast files). It is downloaded once to
+  `RESOURCES_PATH` and then read from there.
+- GPS L1C uses a dated table of GPS III PRNs in `configs/transmitting_prns.yml`,
+  because the RINEX 4 file has no GPS L1C records. **Edit that table when a GPS III
+  or IIIF satellite is launched or changes PRN** (the source is the IGS file
+  `igs_satellite_metadata.snx`).
+- Set `enabled: false` in that file to search every PRN, as before.
+- Without a network or a login, or for a collect id without `YYYYMMDD_HHMMSS`,
+  notebook 01 searches every PRN and prints a warning with the reason.
+
 ## One-click run of notebooks 00, 01 and 02 with a PDF report (D-084)
 
 `pipeline_gui/` is a desktop window that runs the three notebooks on one channel.

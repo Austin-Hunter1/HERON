@@ -52,8 +52,20 @@ def raw_config() -> dict:
 
 def test_the_shipped_config_loads():
     cfg = config_mod.load_config()
-    assert cfg.signals["L5"] == ["GpsL5", "BdsB2a"]
+    assert cfg.signals["L5"] == ["GpsL5", "BdsB2a", "GalE5a"]
     assert cfg.report.figure_grid == (1, 2)
+
+
+def test_every_shipped_signal_exists_on_its_band():
+    """A name in the config that the code cannot build would fail only inside notebook 01."""
+    from utils import signal_interfaces
+
+    cfg = config_mod.load_config()
+    for band, names in cfg.signals.items():
+        for name in names:
+            signal = getattr(signal_interfaces, name, None)
+            assert signal is not None, f"{name} is not built by utils.signal_interfaces"
+            assert signal.link.id.value == band, f"{name} is on {signal.link.id.value}, not {band}"
 
 
 @pytest.mark.parametrize(

@@ -133,6 +133,13 @@ acquisition, add `--set ACQ_THRESHOLD_DB=8.5` (dB above noise) or
 `02c_acquisition_code_phase_slices_all_prns.png` show every PRN searched against the
 threshold.
 
+Notebook 01 searches only the PRNs that transmit the signal on the collect date
+(D-104): the RINEX 4 broadcast file of that day from CDDIS, or, for GPS L1C, the
+dated GPS III table in `configs/transmitting_prns.yml`. Section 4 prints the list
+and the PRNs left out. Offline, or for a collect id without a date, it searches
+every PRN and prints a warning. To search every PRN on purpose, set
+`enabled: false` in that config file.
+
 For a weak sky, assisted acquisition (D-086) predicts the visible satellites and their
 Doppler from the CDDIS broadcast ephemeris and searches them harder:
 `--set ASSISTED_ACQUISITION=True --set "ASSIST_POSITION_GEO=(lat, lon, h)"`, and

@@ -33,15 +33,16 @@ track_duration_s: null
 signals:
   L1: [GpsL1CA, BdsB1C, GpsL1C]
   L2: [GpsL2C]
-  L5: [GpsL5, BdsB2a]
+  L5: [GpsL5, BdsB2a, GalE5a]
 
-# Signals whose checkbox is off when the window shows them.
-signals_off_by_default: [GpsL1C]
+# Signals whose checkbox is off when the window shows them.  Empty: every
+# signal of the band is on (D-084).
+signals_off_by_default: []
 
-# Signals that notebook 02 cannot navigate (GpsL1C stops in section 4: the
-# CNAV-2 ITOW needs an LDPC decoder that is not implemented).  The pipeline
-# runs notebook 01 for them and skips notebook 02.
-navigation_unsupported: [GpsL1C]
+# Signals that notebook 02 cannot navigate.  The pipeline runs notebook 01 for
+# them and skips notebook 02.  Empty since the merge of 2026-11-03: GpsL1C reads
+# CNAV-2 without LDPC (D-079, D-080) and GalE5a decodes F/NAV (D-081).
+navigation_unsupported: []
 
 # "Acquisition only" in the window runs notebook 01 up to this heading and does
 # not run notebook 02 (D-085).  The heading must be the first line of a markdown
