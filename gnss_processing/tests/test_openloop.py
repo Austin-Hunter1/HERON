@@ -276,6 +276,41 @@ def test_early_late_peak_lag_is_exact_between_lags(shape):
         assert est == pytest.approx(true, abs=2e-3), (shape, true, est)
 
 
+def test_peak_fit_uses_the_local_step_with_noise_lags_in_front():
+    """
+    The ARGO case (2026-11-10): noise lags at 1 chip in front of search lags at
+    0.1 chip. The fit took the step from the first two lags (1.0) and gave lags
+    ten times too large. Both fits must equal the fit on the search lags alone.
+    """
+    search = np.round(np.arange(-3.0, 3.0001, 0.1), 3)
+    both = np.concatenate([[-12.0, -11.0, -10.0, -9.0, -8.0], search])
+    fine = np.arange(-15.0, 5.0, 0.001)
+    true = -0.037
+    tri = np.maximum(1.0 - np.abs(fine - true), 0.0) + 0.02
+    amp_s, amp_b = np.interp(search, fine, tri), np.interp(both, fine, tri)
+    j_s, j_b = int(np.argmax(amp_s)), int(np.argmax(amp_b))
+    assert acquisition.parabola_peak_lag(both, amp_b ** 2, j_b) == pytest.approx(
+        acquisition.parabola_peak_lag(search, amp_s ** 2, j_s), abs=1e-12)
+    assert acquisition.early_late_peak_lag(both, amp_b, j_b, 0.5) == pytest.approx(
+        acquisition.early_late_peak_lag(search, amp_s, j_s, 0.5), abs=1e-12)
+    assert abs(acquisition.parabola_peak_lag(both, amp_b ** 2, j_b) - true) < 0.01
+
+
+def test_peak_fit_at_a_grid_junction_returns_the_grid_lag():
+    lags = np.array([-9.0, -8.0, -3.0, -2.9, -2.8])
+    power = np.array([0.1, 0.2, 1.0, 0.9, 0.5])  # the peak sits where the two grids meet
+    assert acquisition.parabola_peak_lag(lags, power, 2) == -3.0
+    assert acquisition.early_late_peak_lag(lags, np.sqrt(power), 2, 0.05) == -3.0
+
+
+def test_peak_fit_rejects_unsorted_lags():
+    lags = np.array([0.0, -0.1, 0.1])
+    with pytest.raises(ValueError, match="increase strictly"):
+        acquisition.parabola_peak_lag(lags, np.array([0.5, 1.0, 0.5]), 1)
+    with pytest.raises(ValueError, match="increase strictly"):
+        acquisition.early_late_peak_lag(lags, np.array([0.5, 1.0, 0.5]), 1, 0.05)
+
+
 def test_ddm_no_false_detection_on_noise():
     sig = GpsL1CA(12)
     world = synthetic.SyntheticWorld()
