@@ -16,8 +16,9 @@ The geometry is evaluated at anchor times (`model_rate_hz`, plan 8.5). The exces
 path D is then a cubic spline in uptime; its derivative gives the Doppler, so
 phase and Doppler stay consistent.
 
-Mode B, absolute (plan 8.2), is in `absolute_code_phase_ms` and
-`absolute_carrier_cycles`: a cross-check only.
+Mode B, absolute (plan 8.2), is in `absolute_code_phase_ms`: a cross-check
+only. Only the code phase is built; the Mode B carrier phase is not (concern
+C-15). The clock and delay signs follow D-105 (see `absolute_code_phase_ms`).
 """
 
 from __future__ import annotations
@@ -181,24 +182,44 @@ def absolute_code_phase_ms(
     provider: sat_states.SatelliteStateProvider,
     sat_id: str,
     *,
-    ionosphere_m: np.ndarray | None = None,
-    troposphere_m: np.ndarray | None = None,
+    reflected_iono_m: np.ndarray | None = None,
+    reflected_tropo_m: np.ndarray | None = None,
+    group_delay_s: float = 0.0,
 ) -> np.ndarray:
     """
     Mode B (plan 8.2): the reflected code phase in ms of transmit time, from the
-    geometry and the clocks alone (no direct channel):
+    geometry and the clocks alone (no direct channel). With D-105 (the code phase
+    is the transmit time, eta = t_tx(t - tau)) and t the SYSTEM time of the samples:
 
-        chi = 1e3 (t_rx - (rho_R + I + T) / c + dt_sat + dt_rx)
+        chi = 1e3 (t - (rho_R + I_R + T_R) / c - tau_grp + dt_tx(t - rho_R / c))
 
+    - t is `geometry.gpst_s`. `TimeBase.gpst` has already removed the receiver
+      clock (t = T - dt_rx), so dt_rx does NOT appear again here. An older version
+      added it a second time; on real data that left a slope equal to the clock
+      drift in Mode A minus Mode B.
+    - `reflected_iono_m` and `reflected_tropo_m` are the FULL delays of the
+      reflected path (code: + ionosphere), not the excess over the direct path.
+    - `group_delay_s` is the satellite group delay tau_grp, as the
+      `observables.signal_group_delay_s` value (-T_GD + ISC) with the sign of a
+      clock term: it is ADDED to dt_tx, as in `satellite_clock_corrections`.
+    - dt_tx is the provider's clock (with relativity) at the system transmit time.
+
+    `timebase` must be the one the geometry was computed with; a mismatch raises.
     A tracking code phase has an unknown whole-ms start value, so compare Mode A
-    and Mode B after the removal of their mean difference.
+    and Mode B after the removal of their mean difference: a constant (for example
+    an omitted group delay) then cancels, a slope or a curve does not.
     """
-    t_rx = geometry.gpst_s
-    dt_sat = provider.clock_s(sat_id, t_rx - geometry.reflected_path_m / C)
-    dt_rx = timebase.receiver_clock_s(geometry.uptime_ms)
-    extra = 0.0
-    if ionosphere_m is not None:
-        extra = extra + ionosphere_m
-    if troposphere_m is not None:
-        extra = extra + troposphere_m
-    return 1e3 * (t_rx - (geometry.reflected_path_m + extra) / C + dt_sat + dt_rx)
+    t = geometry.gpst_s
+    expected = timebase.gpst(geometry.uptime_ms)
+    if not np.allclose(expected, t, rtol=0.0, atol=1e-6):
+        raise ValueError(
+            "absolute_code_phase_ms: `timebase` does not match the geometry's GPS time "
+            f"(largest difference {np.max(np.abs(expected - t)):.3g} s); pass the TimeBase "
+            "that compute_geometry used")
+    dt_tx = provider.clock_s(sat_id, t - geometry.reflected_path_m / C) + group_delay_s
+    path = np.asarray(geometry.reflected_path_m, dtype=float)
+    if reflected_iono_m is not None:
+        path = path + reflected_iono_m
+    if reflected_tropo_m is not None:
+        path = path + reflected_tropo_m
+    return 1e3 * (t - path / C + dt_tx)

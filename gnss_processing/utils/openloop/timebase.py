@@ -35,12 +35,25 @@ class TimeBase:
     source: str = ""
 
     def gpst(self, uptime_ms) -> np.ndarray:
-        """GPS time (s) of the samples at `uptime_ms`."""
+        """
+        GPS (system) time t (s) of the samples at `uptime_ms`.
+
+        The receiver clock is already removed here: t = T - dt_rx (D-105). Code that
+        uses this time must not add dt_rx again. `gpst_anchor_s` is taken as the TRUE
+        GPS time at `uptime_anchor_ms` (notebook 02's decoded anchor), so
+        `clock_offset_at_anchor_s` does not enter this map.
+        """
         du = (np.asarray(uptime_ms, dtype=float) - self.uptime_anchor_ms) * 1e-3
         return self.gpst_anchor_s + du * (1.0 - self.clock_drift_s_per_s)
 
     def receiver_clock_s(self, uptime_ms) -> np.ndarray:
-        """Receiver clock offset dt_rx (s) at `uptime_ms` (for Mode B)."""
+        """
+        Receiver clock offset dt_rx = T - t (s) at `uptime_ms` (D-105 sign: positive
+        when the receiver clock runs ahead of GPS time).
+
+        For reports and checks only. `gpst()` already contains this term, so the
+        models (Mode A and Mode B) do not use it.
+        """
         du = (np.asarray(uptime_ms, dtype=float) - self.uptime_anchor_ms) * 1e-3
         return self.clock_offset_at_anchor_s + self.clock_drift_s_per_s * du
 
