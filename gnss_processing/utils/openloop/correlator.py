@@ -45,15 +45,26 @@ class OpenLoopOutput:
     model_code_phase_ms: np.ndarray
     model_carrier_cycles: np.ndarray
     model_doppler_hz: np.ndarray
-    model_excess_m: np.ndarray
+    model_excess_m: np.ndarray     # group (code) excess D_g at each block start (D-105)
     component_names: tuple[str, ...]
     carrier_freq_hz: float
     code_rate_chips_per_sec: float
     extras: dict = field(default_factory=dict)
+    model_excess_phase_m: np.ndarray | None = None  # phase (carrier) excess D_p (D-105)
 
     @property
     def num_blocks(self) -> int:
         return len(self.periods)
+
+    @property
+    def model_excess_phase(self) -> np.ndarray:
+        """
+        The phase (carrier) excess D_p, for the carrier-phase processing.
+
+        Outputs made before D-105 have no separate phase excess; their excess
+        ionosphere was zero, so D_p = D_g and the group excess is returned.
+        """
+        return self.model_excess_m if self.model_excess_phase_m is None else self.model_excess_phase_m
 
     def waveform(self, doppler_index: int = 0, component: int = 0) -> np.ndarray:
         """Z[k, lag] for one Doppler bin and one component."""
@@ -108,6 +119,7 @@ def run_open_loop(
     phi = model.carrier_cycles(actual_start[:-1])
     f_mid = model.doppler_hz(mid)
     excess = model.excess_m(actual_start[:-1])
+    excess_phase = model.excess_phase_m(actual_start[:-1])
     bins = -lags  # excess delay -> replica code-phase offset
 
     out = np.zeros((len(lags), n_comp), dtype=np.complex64)
@@ -131,6 +143,7 @@ def run_open_loop(
         model_excess_m=excess, component_names=tuple(signal.component_names),
         carrier_freq_hz=fc, code_rate_chips_per_sec=nominal,
         extras={"samp_rate": samp_rate, "start_uptime_ms": start_uptime_ms},
+        model_excess_phase_m=excess_phase,
     )
 
 
@@ -140,6 +153,7 @@ def concatenate(outputs: list[OpenLoopOutput]) -> OpenLoopOutput:
     cat = {name: np.concatenate([getattr(o, name) for o in outputs]) for name in (
         "periods", "uptime_ms", "duration_ms", "waveforms", "model_code_phase_ms",
         "model_carrier_cycles", "model_doppler_hz", "model_excess_m")}
+    cat["model_excess_phase_m"] = np.concatenate([o.model_excess_phase for o in outputs])
     return OpenLoopOutput(lags_chips=first.lags_chips,
                           doppler_offsets_hz=first.doppler_offsets_hz,
                           component_names=first.component_names,

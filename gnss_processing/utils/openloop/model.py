@@ -3,18 +3,25 @@ The open-loop model of the reflection (plan section 8).
 
 Mode A, direct-referenced (default, D-097, D-100):
 
-    chi_R(u) = chi_D(u) - 1e3 (D(u) / c + tau_hw)          code phase, ms
-    phi_R(u) = phi_D(u) - D(u) / lambda + phi_hw            carrier phase, cycles
-    f_R(u)   = f_D(u)   - D'(u) / lambda                     Doppler, Hz
+    chi_R(u) = chi_D(u) - 1e3 (D_g(u) / c + tau_hw)        code phase, ms
+    phi_R(u) = phi_D(u) - D_p(u) / lambda + phi_hw          carrier phase, cycles
+    f_R(u)   = f_D(u)   - D_p'(u) / lambda                   Doppler, Hz
 
-with D = (rho_R - rho_D) + d_rho_trop the excess path (the excess ionosphere is
-zero, plan 7.1). chi_D, phi_D, f_D come from the direct channel
-(`direct_ref.DirectReference`). A longer path gives a smaller code phase and a
-smaller carrier phase (the sign conventions of the tracking code).
+with the excess path split as in D-105 (the ionosphere delays the code and
+advances the carrier by the same amount):
 
-The geometry is evaluated at anchor times (`model_rate_hz`, plan 8.5). The excess
-path D is then a cubic spline in uptime; its derivative gives the Doppler, so
-phase and Doppler stay consistent.
+    D_g = (rho_R - rho_D) + d_rho_trop + d_rho_iono          group (code) excess
+    D_p = (rho_R - rho_D) + d_rho_trop - d_rho_iono          phase (carrier) excess
+
+The excess ionosphere is zero today (plan 7.1), so D_g = D_p in practice; the
+split keeps the signs right if a model ever gives it a value. chi_D, phi_D, f_D
+come from the direct channel (`direct_ref.DirectReference`). A longer path gives
+a smaller code phase and a smaller carrier phase (the sign conventions of the
+tracking code).
+
+The geometry is evaluated at anchor times (`model_rate_hz`, plan 8.5). Each
+excess is then a cubic spline in uptime; the derivative of D_p gives the Doppler,
+so phase and Doppler stay consistent.
 
 Mode B, absolute (plan 8.2), is in `absolute_code_phase_ms`: a cross-check
 only. Only the code phase is built; the Mode B carrier phase is not (concern
@@ -60,8 +67,19 @@ class GeometrySeries:
     extras: dict = field(default_factory=dict)
 
     @property
-    def excess_total_m(self) -> np.ndarray:
+    def excess_group_m(self) -> np.ndarray:
+        """Group (code) excess path: geometry + troposphere + ionosphere (D-105)."""
         return self.excess_geometric_m + self.excess_tropo_m + self.excess_iono_m
+
+    @property
+    def excess_phase_m(self) -> np.ndarray:
+        """Phase (carrier) excess path: the ionosphere enters with the opposite sign (D-105)."""
+        return self.excess_geometric_m + self.excess_tropo_m - self.excess_iono_m
+
+    @property
+    def excess_total_m(self) -> np.ndarray:
+        """The group (code) excess; kept for the callers that read this name."""
+        return self.excess_group_m
 
     @property
     def elevation_deg(self) -> np.ndarray:
@@ -122,7 +140,7 @@ class ReflectionModel:
 
     `tau_hw_s` and `phi_hw_cycles` are the inter-channel hardware delay and phase
     (plan 9.4). `excess_bias_m` is an optional slow correction from a first pass
-    (plan 10.5): it is added to D.
+    (plan 10.5): it is non-dispersive, so it is added to both D_g and D_p.
     """
 
     direct: DirectReference
@@ -134,21 +152,28 @@ class ReflectionModel:
 
     def __post_init__(self) -> None:
         u = self.geometry.uptime_ms * 1e-3
-        self._excess = CubicSpline(u, self.geometry.excess_total_m)
+        self._excess_group = CubicSpline(u, self.geometry.excess_group_m)
+        self._excess_phase = CubicSpline(u, self.geometry.excess_phase_m)
         self.wavelength_m = C / self.carrier_freq_hz
 
     def excess_m(self, uptime_ms) -> np.ndarray:
-        return self._excess(np.asarray(uptime_ms, dtype=float) * 1e-3) + self.excess_bias_m
+        """Group (code) excess D_g (m)."""
+        return self._excess_group(np.asarray(uptime_ms, dtype=float) * 1e-3) + self.excess_bias_m
+
+    def excess_phase_m(self, uptime_ms) -> np.ndarray:
+        """Phase (carrier) excess D_p (m)."""
+        return self._excess_phase(np.asarray(uptime_ms, dtype=float) * 1e-3) + self.excess_bias_m
 
     def excess_rate_mps(self, uptime_ms) -> np.ndarray:
-        return self._excess(np.asarray(uptime_ms, dtype=float) * 1e-3, 1)
+        """Rate of the phase excess D_p' (m/s): the carrier rate, which gives the Doppler."""
+        return self._excess_phase(np.asarray(uptime_ms, dtype=float) * 1e-3, 1)
 
     def code_phase_ms(self, uptime_ms) -> np.ndarray:
         return (self.direct.code_phase_at(uptime_ms)
                 - 1e3 * (self.excess_m(uptime_ms) / C + self.tau_hw_s))
 
     def carrier_cycles(self, uptime_ms) -> np.ndarray:
-        return (self.direct.carrier_at(uptime_ms) - self.excess_m(uptime_ms) / self.wavelength_m
+        return (self.direct.carrier_at(uptime_ms) - self.excess_phase_m(uptime_ms) / self.wavelength_m
                 + self.phi_hw_cycles)
 
     def doppler_hz(self, uptime_ms) -> np.ndarray:

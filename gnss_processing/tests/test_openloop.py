@@ -394,7 +394,7 @@ def test_leakage_beta_recovered_when_interferometric_phase_turns():
                                     model=m, lags_chips=lags)
     zn = phase.wipe(ol_n, sig, ref, 0)[:, 0, 0]
     zz = phase.wipe(ol_z, sig, ref, 0)[:, 0, 0]
-    est = leakage.estimate_beta(zn, zz, ol_n.uptime_ms, ol_n.model_excess_m,
+    est = leakage.estimate_beta(zn, zz, ol_n.uptime_ms, ol_n.model_excess_phase,
                                 frames.SPEED_OF_LIGHT / sig.carrier_freq_hz, window=780)
     assert np.all(est.separable)
     # The reflection leaks into the estimate by about (A_r / A_z) * diversity (concern C-9).
@@ -683,6 +683,24 @@ def test_mode_b_rejects_a_timebase_that_does_not_match_the_geometry():
         model.absolute_code_phase_ms(m.geometry, wrong, prov, "G05")
 
 
+def test_excess_ionosphere_delays_the_code_and_advances_the_carrier():
+    """D-105: an excess ionosphere I gives -I/c on the code and +I/lambda on the carrier."""
+    from dataclasses import replace
+
+    sig = GpsL1CA(5)
+    world = synthetic.SyntheticWorld()
+    _, _, _, _, m = _setup(sig, world, fs=FS_L1, duration=0.1)
+    iono_m = 0.7
+    geo_i = replace(m.geometry, excess_iono_m=np.full_like(m.geometry.excess_iono_m, iono_m))
+    m_i = model.ReflectionModel(m.direct, geo_i, sig.carrier_freq_hz)
+    u = m.geometry.uptime_ms[2:-2]
+    np.testing.assert_allclose(m_i.code_phase_ms(u) - m.code_phase_ms(u), -1e3 * iono_m / C, atol=1e-12)
+    lam = C / sig.carrier_freq_hz
+    np.testing.assert_allclose(m_i.carrier_cycles(u) - m.carrier_cycles(u), +iono_m / lam, atol=1e-9)
+    np.testing.assert_allclose(m_i.doppler_hz(u), m.doppler_hz(u), atol=1e-9)
+    np.testing.assert_allclose(geo_i.excess_group_m - geo_i.excess_phase_m, 2 * iono_m)
+
+
 def test_precise_provider_lagrange_reproduces_a_smooth_orbit():
     from types import SimpleNamespace
 
@@ -740,8 +758,17 @@ def test_openloop_io_roundtrip(tmp_path):
                      products={"G05": {"cn0_dbhz": np.array([45.0])}})
     runs, products, prov = olio.load(path)
     np.testing.assert_array_equal(runs["G05"]["waveforms"], ol.waveforms)
+    np.testing.assert_array_equal(runs["G05"]["model_excess_phase_m"], ol.model_excess_phase_m)
     assert products["G05"]["cn0_dbhz"][0] == 45.0
     assert prov["models"] == "synthetic"
+
+    # A file written before D-105 has no phase excess: load falls back to the group excess.
+    import h5py
+
+    with h5py.File(path, "a") as f:
+        del f["G05"]["model_excess_phase_m"]
+    old, _, _ = olio.load(path)
+    np.testing.assert_array_equal(old["G05"]["model_excess_phase_m"], old["G05"]["model_excess_m"])
 
 
 # ---------------------------------------------------------------- chunked file run

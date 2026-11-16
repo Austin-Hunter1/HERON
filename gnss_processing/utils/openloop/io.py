@@ -20,6 +20,9 @@ FORMAT_VERSION = 1
 _ARRAYS = ("periods", "uptime_ms", "duration_ms", "lags_chips", "doppler_offsets_hz",
            "waveforms", "model_code_phase_ms", "model_carrier_cycles", "model_doppler_hz",
            "model_excess_m")
+# Written since D-105. A file without it was made when the excess ionosphere was
+# zero, so the phase excess equals the group excess and `load` fills it from that.
+_OPTIONAL = ("model_excess_phase_m",)
 
 
 def save(path: str | Path, runs: dict, *, provenance: dict, products: dict | None = None) -> Path:
@@ -40,6 +43,10 @@ def save(path: str | Path, runs: dict, *, provenance: dict, products: dict | Non
             for name in _ARRAYS:
                 g.create_dataset(name, data=np.asarray(getattr(ol, name)),
                                  compression="gzip" if name == "waveforms" else None)
+            for name in _OPTIONAL:
+                value = getattr(ol, name, None)
+                if value is not None:
+                    g.create_dataset(name, data=np.asarray(value))
             g.attrs["component_names"] = json.dumps(list(ol.component_names))
             g.attrs["carrier_freq_hz"] = ol.carrier_freq_hz
             g.attrs["code_rate_chips_per_sec"] = ol.code_rate_chips_per_sec
@@ -59,6 +66,9 @@ def load(path: str | Path) -> tuple[dict, dict, dict]:
         provenance = json.loads(f.attrs["provenance"])
         for sat_id, g in f.items():
             runs[sat_id] = {name: g[name][()] for name in _ARRAYS}
+            runs[sat_id]["model_excess_phase_m"] = (
+                g["model_excess_phase_m"][()] if "model_excess_phase_m" in g
+                else runs[sat_id]["model_excess_m"])
             runs[sat_id]["component_names"] = json.loads(g.attrs["component_names"])
             runs[sat_id]["carrier_freq_hz"] = float(g.attrs["carrier_freq_hz"])
             if "products" in g:
