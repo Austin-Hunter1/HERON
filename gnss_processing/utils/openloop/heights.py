@@ -69,7 +69,10 @@ def fit_height(arcs: list[dict], *, fit_rate: bool = False) -> HeightFit:
 
 def code_excess_m(model_excess_m, peak_lag_chips, tau_hw_s: float,
                   code_rate_chips_per_sec: float) -> np.ndarray:
-    """Absolute excess path from the retracked code lag (plan 11.1 item 1)."""
+    """Absolute excess path from the retracked code lag (plan 11.1 item 1).
+
+    `model_excess_m` is the GROUP (code) excess D_g (`OpenLoopOutput.model_excess_m`), D-105.
+    """
     chip_m = 299792458.0 / code_rate_chips_per_sec
     return np.asarray(model_excess_m) + (
         np.asarray(peak_lag_chips) - tau_hw_s * code_rate_chips_per_sec) * chip_m

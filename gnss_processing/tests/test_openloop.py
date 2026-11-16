@@ -35,6 +35,8 @@ from utils.openloop import (
 )
 from utils.signal_interfaces import GpsL1CA, GpsL5
 
+C = frames.SPEED_OF_LIGHT
+
 FS_L1 = 4e6
 
 
@@ -50,7 +52,7 @@ def _setup(signal, world, *, fs, duration, solver="image_plane", **kwargs):
 
     surf = surface.Surface(surface.NoGeoid(), world.surface_h_ell_m)
     geo = model.compute_geometry(sat_id="G05", provider=prov, rx_tracks=rx, surface=surf,
-                                 timebase=timebase.TimeBase(0.0, 0.0),
+                                 timebase=world.timebase(),
                                  uptime_ms=np.arange(0.0, duration * 1e3 + 1, 20.0),
                                  solver=solver)
     m = model.ReflectionModel(ref, geo, signal.carrier_freq_hz)
@@ -173,13 +175,44 @@ def test_receiver_clock_cancels_in_mode_a():
     sig = GpsL1CA(7)
     results = []
     for drift in (0.0, 0.45):
-        world = synthetic.SyntheticWorld(clock_drift_ppm=drift)
+        world = synthetic.SyntheticWorld(receiver_clock_drift_ppm=drift)
         _, nad, truth, ref, m = _setup(sig, world, fs=FS_L1, duration=0.3)
         ol = correlator.run_open_loop(nad, samp_rate=FS_L1, start_uptime_ms=0.0, signal=sig,
                                       model=m, lags_chips=np.array([0.0]))
         z = phase.wipe(ol, sig, ref, 0)[:, 0, 0]
         results.append(np.angle(np.mean(z)))
     assert results[0] == pytest.approx(results[1], abs=0.02)
+
+
+def _pseudorange_m(truth):
+    """c (T - eta): receive stamp minus the code's transmit time (D-105)."""
+    eta_s = (truth.direct_code_phase_ms - 0.4) * 1e-3   # 0.4 ms = generate_pair start value
+    return C * (truth.t_s - eta_s)
+
+
+def test_synthetic_receiver_clock_lengthens_the_pseudorange():
+    """D-105: dt_rx = T - t > 0 makes the code LATER; pseudorange = range + c dt_rx."""
+    world = synthetic.SyntheticWorld(receiver_clock_offset_s=3.0e-4, receiver_clock_drift_ppm=0.0)
+    sig = GpsL1CA(5)
+    _, _, truth = synthetic.generate_pair(sig, world, samp_rate=FS_L1, duration_s=0.02)
+    np.testing.assert_allclose(_pseudorange_m(truth), truth.direct_path_m + C * 3.0e-4, atol=1e-5)
+    lam = C / sig.carrier_freq_hz
+    np.testing.assert_allclose(truth.direct_carrier_cycles,
+                               -truth.direct_path_m / lam - sig.carrier_freq_hz * 3.0e-4, atol=1e-6)
+
+
+def test_synthetic_satellite_clock_is_not_in_the_range():
+    """D-105: dt_tx > 0 makes the code EARLIER; + c dt_sv gives the geometric range back."""
+    world = synthetic.SyntheticWorld(receiver_clock_offset_s=0.0, receiver_clock_drift_ppm=0.0,
+                                     sat_clock_offset_s=-1.5e-4, sat_clock_drift_ppm=0.01)
+    sig = GpsL1CA(5)
+    _, _, truth = synthetic.generate_pair(sig, world, samp_rate=FS_L1, duration_s=0.02)
+    corrected = _pseudorange_m(truth) + C * truth.sat_clock_s
+    np.testing.assert_allclose(corrected, truth.direct_path_m, atol=1e-5)
+    lam = C / sig.carrier_freq_hz
+    np.testing.assert_allclose(truth.direct_carrier_cycles,
+                               -truth.direct_path_m / lam + sig.carrier_freq_hz * truth.sat_clock_s,
+                               atol=1e-6)
 
 
 # ---------------------------------------------------------------- T-1 for L5 and overlay
@@ -241,6 +274,41 @@ def test_early_late_peak_lag_is_exact_between_lags(shape):
         j = int(np.argmax(amp))
         est = acquisition.early_late_peak_lag(lags, amp, j, 0.5)
         assert est == pytest.approx(true, abs=2e-3), (shape, true, est)
+
+
+def test_peak_fit_uses_the_local_step_with_noise_lags_in_front():
+    """
+    The ARGO case (2026-11-10): noise lags at 1 chip in front of search lags at
+    0.1 chip. The fit took the step from the first two lags (1.0) and gave lags
+    ten times too large. Both fits must equal the fit on the search lags alone.
+    """
+    search = np.round(np.arange(-3.0, 3.0001, 0.1), 3)
+    both = np.concatenate([[-12.0, -11.0, -10.0, -9.0, -8.0], search])
+    fine = np.arange(-15.0, 5.0, 0.001)
+    true = -0.037
+    tri = np.maximum(1.0 - np.abs(fine - true), 0.0) + 0.02
+    amp_s, amp_b = np.interp(search, fine, tri), np.interp(both, fine, tri)
+    j_s, j_b = int(np.argmax(amp_s)), int(np.argmax(amp_b))
+    assert acquisition.parabola_peak_lag(both, amp_b ** 2, j_b) == pytest.approx(
+        acquisition.parabola_peak_lag(search, amp_s ** 2, j_s), abs=1e-12)
+    assert acquisition.early_late_peak_lag(both, amp_b, j_b, 0.5) == pytest.approx(
+        acquisition.early_late_peak_lag(search, amp_s, j_s, 0.5), abs=1e-12)
+    assert abs(acquisition.parabola_peak_lag(both, amp_b ** 2, j_b) - true) < 0.01
+
+
+def test_peak_fit_at_a_grid_junction_returns_the_grid_lag():
+    lags = np.array([-9.0, -8.0, -3.0, -2.9, -2.8])
+    power = np.array([0.1, 0.2, 1.0, 0.9, 0.5])  # the peak sits where the two grids meet
+    assert acquisition.parabola_peak_lag(lags, power, 2) == -3.0
+    assert acquisition.early_late_peak_lag(lags, np.sqrt(power), 2, 0.05) == -3.0
+
+
+def test_peak_fit_rejects_unsorted_lags():
+    lags = np.array([0.0, -0.1, 0.1])
+    with pytest.raises(ValueError, match="increase strictly"):
+        acquisition.parabola_peak_lag(lags, np.array([0.5, 1.0, 0.5]), 1)
+    with pytest.raises(ValueError, match="increase strictly"):
+        acquisition.early_late_peak_lag(lags, np.array([0.5, 1.0, 0.5]), 1, 0.05)
 
 
 def test_ddm_no_false_detection_on_noise():
@@ -361,7 +429,7 @@ def test_leakage_beta_recovered_when_interferometric_phase_turns():
                                     model=m, lags_chips=lags)
     zn = phase.wipe(ol_n, sig, ref, 0)[:, 0, 0]
     zz = phase.wipe(ol_z, sig, ref, 0)[:, 0, 0]
-    est = leakage.estimate_beta(zn, zz, ol_n.uptime_ms, ol_n.model_excess_m,
+    est = leakage.estimate_beta(zn, zz, ol_n.uptime_ms, ol_n.model_excess_phase,
                                 frames.SPEED_OF_LIGHT / sig.carrier_freq_hz, window=780)
     assert np.all(est.separable)
     # The reflection leaks into the estimate by about (A_r / A_z) * diversity (concern C-9).
@@ -620,17 +688,52 @@ def test_ionex_constant_map_gives_single_layer_delay():
 # ---------------------------------------------------------------- Phase 6: Mode B, precise
 
 def test_mode_b_absolute_code_phase_agrees_with_mode_a():
+    """
+    D-105: with both clocks drifting, Mode A minus Mode B is a constant.
+
+    Mode B takes the receiver clock only through TimeBase.gpst. The older form added
+    dt_rx a second time, which leaves a slope of the drift: 0.45 ppm x 0.3 s =
+    1.35e-4 ms here, far above the 1e-6 ms limit.
+    """
+    sig = GpsL1CA(5)
+    world = synthetic.SyntheticWorld(receiver_clock_drift_ppm=0.45, sat_clock_offset_s=-2.0e-4,
+                                     sat_clock_drift_ppm=0.02)
+    _, _, truth, _, m = _setup(sig, world, fs=FS_L1, duration=0.3)
+    prov = sat_states.TrackProvider(world.sat_ecef, clock=world.sat_clock_s)
+    mode_b = model.absolute_code_phase_ms(m.geometry, world.timebase(), prov, "G05")
+    mode_a = m.code_phase_ms(m.geometry.uptime_ms)
+    assert np.ptp(mode_a - mode_b) < 1e-6
+    # And against the generator's own truth (reflected code phase on the stamp grid).
+    truth_b = np.interp(m.geometry.uptime_ms, truth.t_s * 1e3, truth.reflected_code_phase_ms)
+    assert np.ptp(truth_b - mode_b) < 1e-6
+
+
+def test_mode_b_rejects_a_timebase_that_does_not_match_the_geometry():
     sig = GpsL1CA(5)
     world = synthetic.SyntheticWorld()
-    _, _, truth, ref, m = _setup(sig, world, fs=FS_L1, duration=0.3)
-    tbase = timebase.TimeBase(0.0, 0.0, world.clock_drift_ppm * 1e-6, world.clock_offset_s)
+    _, _, _, _, m = _setup(sig, world, fs=FS_L1, duration=0.1)
     prov = sat_states.TrackProvider(world.sat_ecef)
-    mode_b = model.absolute_code_phase_ms(m.geometry, tbase, prov, "G05")
-    mode_a = m.code_phase_ms(m.geometry.uptime_ms)
-    diff = mode_a - mode_b
-    # The receiver clock drift (0.3 ppm) changes Mode B's time base by 0.3 ppm of
-    # 0.3 s; the remaining difference is the constant start value.
-    assert np.ptp(diff) < 1e-6
+    wrong = timebase.TimeBase(0.0, 1.0)
+    with pytest.raises(ValueError, match="does not match"):
+        model.absolute_code_phase_ms(m.geometry, wrong, prov, "G05")
+
+
+def test_excess_ionosphere_delays_the_code_and_advances_the_carrier():
+    """D-105: an excess ionosphere I gives -I/c on the code and +I/lambda on the carrier."""
+    from dataclasses import replace
+
+    sig = GpsL1CA(5)
+    world = synthetic.SyntheticWorld()
+    _, _, _, _, m = _setup(sig, world, fs=FS_L1, duration=0.1)
+    iono_m = 0.7
+    geo_i = replace(m.geometry, excess_iono_m=np.full_like(m.geometry.excess_iono_m, iono_m))
+    m_i = model.ReflectionModel(m.direct, geo_i, sig.carrier_freq_hz)
+    u = m.geometry.uptime_ms[2:-2]
+    np.testing.assert_allclose(m_i.code_phase_ms(u) - m.code_phase_ms(u), -1e3 * iono_m / C, atol=1e-12)
+    lam = C / sig.carrier_freq_hz
+    np.testing.assert_allclose(m_i.carrier_cycles(u) - m.carrier_cycles(u), +iono_m / lam, atol=1e-9)
+    np.testing.assert_allclose(m_i.doppler_hz(u), m.doppler_hz(u), atol=1e-9)
+    np.testing.assert_allclose(geo_i.excess_group_m - geo_i.excess_phase_m, 2 * iono_m)
 
 
 def test_precise_provider_lagrange_reproduces_a_smooth_orbit():
@@ -690,8 +793,17 @@ def test_openloop_io_roundtrip(tmp_path):
                      products={"G05": {"cn0_dbhz": np.array([45.0])}})
     runs, products, prov = olio.load(path)
     np.testing.assert_array_equal(runs["G05"]["waveforms"], ol.waveforms)
+    np.testing.assert_array_equal(runs["G05"]["model_excess_phase_m"], ol.model_excess_phase_m)
     assert products["G05"]["cn0_dbhz"][0] == 45.0
     assert prov["models"] == "synthetic"
+
+    # A file written before D-105 has no phase excess: load falls back to the group excess.
+    import h5py
+
+    with h5py.File(path, "a") as f:
+        del f["G05"]["model_excess_phase_m"]
+    old, _, _ = olio.load(path)
+    np.testing.assert_array_equal(old["G05"]["model_excess_phase_m"], old["G05"]["model_excess_m"])
 
 
 # ---------------------------------------------------------------- chunked file run

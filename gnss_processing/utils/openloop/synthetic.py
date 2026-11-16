@@ -20,7 +20,21 @@ What the generator does, and why:
 - The receiver clock adds a common phase and code drift to both channels. In the
   direct-referenced model (plan section 8.1) that drift must cancel.
 
-Sign conventions are those of `tests/synthetic.py` and the tracking code:
+Signal model (D-105, B. Breitsch, "GNSS Signal Modeling", 2025). Clocks are
+clock time minus system time: dt_rx = T - t (T = sample stamp, t = system
+time) and dt_tx = t_sv - t. At the sample with stamp T, the true time is
+t = T - dt_rx, and for a path of geometric delay tau = rho / c:
+
+    code phase   eta = t_tx(t - tau) = t - tau + dt_tx(t - tau)        (s)
+    carrier      phi = f_c [t_tx(t - tau) - t_rx(t)]
+                     = -rho / lambda + f_c (dt_tx(t - tau) - dt_rx(t))  (cycles)
+
+So a receiver clock that runs fast (dt_rx > 0) makes the code look LATER and the
+pseudorange c (T - eta) longer by c dt_rx; a satellite clock that runs fast
+makes the code look EARLIER. The two clocks are separate inputs and never go
+into the range. The geometry is evaluated at the true time t.
+
+Other conventions are those of `tests/synthetic.py` and the tracking code:
 code phase in ms of code grows with time; the carrier is exp(+j 2 pi phi) with
 phi in cycles; a longer path gives a smaller code phase and a smaller phase.
 """
@@ -46,6 +60,11 @@ class SyntheticWorld:
     `drone_height_m` is the height of the nadir antenna phase centre above the
     surface; `vertical_amplitude_m` and `vertical_period_s` make it move up and
     down, so the excess Doppler is not zero.
+
+    Times in the geometry methods are SYSTEM time, in seconds from the start.
+    The clocks (D-105 signs, see the module docstring) are linear:
+    dt_rx(t) = receiver_clock_offset_s + receiver_clock_drift_ppm 1e-6 t and
+    dt_tx(t) = sat_clock_offset_s + sat_clock_drift_ppm 1e-6 t.
     """
 
     site_lat_deg: float = 40.0
@@ -60,8 +79,42 @@ class SyntheticWorld:
     sat_azimuth_deg: float = 120.0
     sat_range_m: float = 21_000_000.0
     sat_velocity_ned_mps: tuple[float, float, float] = (1200.0, -2500.0, 300.0)
-    clock_drift_ppm: float = 0.3
-    clock_offset_s: float = 2.0e-4
+    receiver_clock_drift_ppm: float = 0.3
+    receiver_clock_offset_s: float = 2.0e-4
+    sat_clock_drift_ppm: float = 0.0
+    sat_clock_offset_s: float = 0.0
+
+    def receiver_clock_s(self, t_s) -> np.ndarray:
+        """dt_rx = T - t (s) at system time `t_s`."""
+        t = np.asarray(t_s, dtype=float)
+        return self.receiver_clock_offset_s + self.receiver_clock_drift_ppm * 1e-6 * t
+
+    def sat_clock_s(self, t_s) -> np.ndarray:
+        """dt_tx = t_sv - t (s) at system (transmit) time `t_s`."""
+        t = np.asarray(t_s, dtype=float)
+        return self.sat_clock_offset_s + self.sat_clock_drift_ppm * 1e-6 * t
+
+    def true_time_s(self, stamp_s) -> np.ndarray:
+        """
+        System time t of the sample with receiver stamp T.
+
+        Solves T = t + dt_rx(t) exactly; the clock is linear, so no iteration.
+        """
+        stamp = np.asarray(stamp_s, dtype=float)
+        return (stamp - self.receiver_clock_offset_s) / (1.0 + self.receiver_clock_drift_ppm * 1e-6)
+
+    def timebase(self):
+        """
+        The `TimeBase` that maps this world's sample stamps (uptime) to its system time.
+
+        Uptime 0 is stamp 0. TimeBase uses gpst = anchor + du (1 - drift), the first-order
+        form of du / (1 + drift); the difference is drift^2 du (1e-13 s per s here).
+        """
+        from .timebase import TimeBase
+
+        t0 = float(self.true_time_s(0.0))
+        return TimeBase(0.0, t0, self.receiver_clock_drift_ppm * 1e-6,
+                        float(self.receiver_clock_s(t0)), "synthetic world")
 
     def site_ecef(self) -> np.ndarray:
         """Surface point under the drone at t = 0."""
@@ -140,10 +193,14 @@ class SyntheticTruth:
     """Truth for one synthetic pair, on a coarse time grid (`t_s`)."""
 
     t_s: np.ndarray
+    """Receiver sample stamps T (s from the first sample): the uptime axis."""
     direct_path_m: np.ndarray
     reflected_path_m: np.ndarray
     specular_ecef: np.ndarray
     receiver_clock_s: np.ndarray
+    """dt_rx = T - t (s) at each stamp (D-105 sign)."""
+    sat_clock_s: np.ndarray
+    """dt_tx (s) at the direct-path transmit time of each stamp (D-105 sign)."""
     direct_code_phase_ms: np.ndarray
     direct_carrier_cycles: np.ndarray
     direct_doppler_hz: np.ndarray
@@ -213,18 +270,26 @@ def generate_pair(
     against the zenith channel, to test the calibration of section 9.4.
     """
     rng = rng if rng is not None else np.random.default_rng(seed)
-    wavelength = C / signal.carrier_freq_hz
 
-    # Truth on a coarse grid, then a cubic interpolation to every sample.
-    t_truth = np.arange(0.0, duration_s + 1.0 / truth_rate_hz, 1.0 / truth_rate_hz)
+    # Truth on a coarse grid of receiver stamps T, then a cubic interpolation to
+    # every sample. The geometry is a function of the TRUE time of each stamp.
+    stamp_truth = np.arange(0.0, duration_s + 1.0 / truth_rate_hz, 1.0 / truth_rate_hz)
+    t_truth = world.true_time_s(stamp_truth)
     direct = np.linalg.norm(world.sat_ecef(t_truth) - world.zenith_ecef(t_truth), axis=1)
     reflected, specular = truth_reflected_path_m(world, t_truth)
-    clock = world.clock_offset_s + world.clock_drift_ppm * 1e-6 * t_truth
 
     from scipy.interpolate import CubicSpline
 
     direct_spline = CubicSpline(t_truth, direct)
     excess_spline = CubicSpline(t_truth, reflected - direct)
+
+    def received(t: np.ndarray, path_m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Code phase (ms, plus the start value) and carrier (cycles) of one path (D-105)."""
+        t_tx = t - path_m / C                                 # system transmit time
+        dt_tx = world.sat_clock_s(t_tx)
+        code_ms = initial_code_phase_ms + 1e3 * (t_tx + dt_tx)
+        carrier = signal.carrier_freq_hz * (t_tx + dt_tx - (t + world.receiver_clock_s(t)))
+        return code_ms, carrier
     nominal = signal.tracking_code_rate_chips_per_sec
     num_symbols = int(duration_s * 1000) + 100
     symbols = 1.0 - 2.0 * (rng.random(num_symbols) < 0.5)
@@ -237,16 +302,12 @@ def generate_pair(
     chunk = 1 << 21
     for a in range(0, num, chunk):
         b = min(a + chunk, num)
-        t = np.arange(a, b) / samp_rate
+        t = world.true_time_s(np.arange(a, b) / samp_rate)   # true time of each sample
         direct_s = direct_spline(t)
-        excess_s = excess_spline(t)
-        clock_s = world.clock_offset_s + world.clock_drift_ppm * 1e-6 * t
-        # Received code phase (ms): the transmit time in ms of code, plus a start
-        # value. The receiver clock runs fast by `clock_s`, so the code looks advanced.
-        code_ms_direct = initial_code_phase_ms + 1e3 * (t - direct_s / C + clock_s)
-        code_ms_reflected = code_ms_direct - 1e3 * (excess_s / C + hardware_delay_s)
-        carrier_direct = -direct_s / wavelength + signal.carrier_freq_hz * clock_s
-        carrier_reflected = carrier_direct - excess_s / wavelength + reflection_phase_offset_cycles
+        code_ms_direct, carrier_direct = received(t, direct_s)
+        code_ms_reflected, carrier_reflected = received(t, direct_s + excess_spline(t))
+        code_ms_reflected = code_ms_reflected - 1e3 * hardware_delay_s
+        carrier_reflected = carrier_reflected + reflection_phase_offset_cycles
 
         zenith_code = _component_waveform(signal, code_ms_direct * 1e-3 * nominal, symbols)
         z = zenith_code * np.exp(2j * np.pi * carrier_direct)
@@ -265,20 +326,21 @@ def generate_pair(
         zenith[a:b] = z
         nadir[a:b] = n
 
-    carrier_direct_truth = -direct / wavelength + signal.carrier_freq_hz * clock
+    code_direct_truth, carrier_direct_truth = received(t_truth, direct)
+    code_reflected_truth, carrier_reflected_truth = received(t_truth, reflected)
     truth = SyntheticTruth(
-        t_s=t_truth,
+        t_s=stamp_truth,
         direct_path_m=direct,
         reflected_path_m=reflected,
         specular_ecef=specular,
-        receiver_clock_s=clock,
-        direct_code_phase_ms=initial_code_phase_ms + 1e3 * (t_truth - direct / C + clock),
+        receiver_clock_s=world.receiver_clock_s(t_truth),
+        sat_clock_s=world.sat_clock_s(t_truth - direct / C),
+        direct_code_phase_ms=code_direct_truth,
         direct_carrier_cycles=carrier_direct_truth,
-        direct_doppler_hz=CubicSpline(t_truth, carrier_direct_truth)(t_truth, 1),
-        reflected_code_phase_ms=initial_code_phase_ms
-        + 1e3 * (t_truth - reflected / C + clock - hardware_delay_s),
-        reflected_carrier_cycles=-reflected / wavelength + signal.carrier_freq_hz * clock
-        + reflection_phase_offset_cycles,
+        # Doppler against RECEIVER time (what a tracking loop measures).
+        direct_doppler_hz=CubicSpline(stamp_truth, carrier_direct_truth)(stamp_truth, 1),
+        reflected_code_phase_ms=code_reflected_truth - 1e3 * hardware_delay_s,
+        reflected_carrier_cycles=carrier_reflected_truth + reflection_phase_offset_cycles,
         symbols=symbols,
         reflection_phase_offset_cycles=reflection_phase_offset_cycles,
         extras={"hardware_delay_s": hardware_delay_s,

@@ -93,7 +93,7 @@ class PhaseSeries:
     prompt: np.ndarray            # coherent sums at the reflection lag
     wrapped_rad: np.ndarray
     cn0_dbhz: np.ndarray
-    model_excess_m: np.ndarray
+    model_excess_m: np.ndarray    # the PHASE (carrier) excess D_p of the model (D-105)
     wavelength_m: float
     coherent_ms: float
 
@@ -123,7 +123,8 @@ def coherent_series(ol: OpenLoopOutput, wiped: np.ndarray, lag_index: int,
     # 1.2 m/s (seen in the first synthetic run).
     u = (ol.uptime_ms[:k].reshape(-1, coherent_blocks).mean(axis=1)
          + 0.5 * float(np.median(ol.duration_ms)))
-    excess = ol.model_excess_m[:k].reshape(-1, coherent_blocks).mean(axis=1)
+    # The carrier phase follows the PHASE excess D_p (D-105), not the code excess.
+    excess = ol.model_excess_phase[:k].reshape(-1, coherent_blocks).mean(axis=1)
     from . import frames
 
     return PhaseSeries(u, p, np.angle(p), 10 * np.log10(cn0), excess,

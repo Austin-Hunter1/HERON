@@ -58,6 +58,22 @@ def noise_lag_mask(lags: np.ndarray, noise_chips: tuple[float, float]) -> np.nda
 
 PEAK_METHODS = {"parabola", "early_late"}
 
+# Two lag steps are "equal" when they differ by less than this fraction.
+_STEP_RTOL = 1e-6
+
+
+def _check_increasing(lags: np.ndarray) -> np.ndarray:
+    """The lags as floats; raise when they do not increase strictly (np.interp needs that)."""
+    lags = np.asarray(lags, dtype=float)
+    if len(lags) > 1 and not np.all(np.diff(lags) > 0):
+        raise ValueError("the lags must increase strictly; sort them before the peak fit")
+    return lags
+
+
+def _uniform(steps: np.ndarray) -> bool:
+    """True when all the steps are equal (within _STEP_RTOL)."""
+    return bool(np.all(np.abs(steps - steps[0]) <= _STEP_RTOL * abs(steps[0])))
+
 
 def parabola_peak_lag(lags: np.ndarray, power: np.ndarray, peak_index: int) -> float:
     """
@@ -69,13 +85,24 @@ def parabola_peak_lag(lags: np.ndarray, power: np.ndarray, peak_index: int) -> f
     0.1 of the lag step (0.026 chip at 0.25, 0.004 chip at 0.05). Keep the lag
     step fine when this method is used. At the edge of the lags, or when the
     three values do not curve down, the grid lag is returned unchanged.
+
+    The step is the LOCAL step around the peak. The lags may hold more than one
+    grid (for example the noise lags at 1 chip and the search lags at 0.1 chip in
+    one array); a step taken from the first two lags was then wrong by the ratio
+    of the two grids (seen on the 2026-11-10 ARGO data). When the two steps beside
+    the peak differ, the peak sits where two grids meet, and the grid lag is
+    returned unchanged, as at an edge.
     """
+    lags = _check_increasing(lags)
     lag = float(lags[peak_index])
     if 0 < peak_index < len(lags) - 1:
+        steps = np.diff(lags[peak_index - 1:peak_index + 2])
+        if not _uniform(steps):
+            return lag
         y0, y1, y2 = power[peak_index - 1], power[peak_index], power[peak_index + 1]
         den = y0 - 2 * y1 + y2
         if den < 0:
-            lag += 0.5 * (y0 - y2) / den * (lags[1] - lags[0])
+            lag += 0.5 * (y0 - y2) / den * float(steps[0])
     return lag
 
 
@@ -101,12 +128,24 @@ def early_late_peak_lag(lags: np.ndarray, amplitude: np.ndarray, peak_index: int
     The search is within one grid step of `peak_index`. When x - d or x + d is
     outside the lags, or there is no sign change (noise), the grid lag is
     returned unchanged.
+
+    The step is the LOCAL step around the peak (see `parabola_peak_lag`). The
+    lags that the interpolation uses, from lo - d to hi + d, must lie on one
+    uniform grid; when they do not, the grid lag is returned unchanged.
     """
-    lags = np.asarray(lags, dtype=float)
+    lags = _check_increasing(lags)
     a = np.asarray(amplitude, dtype=float)
-    step = lags[1] - lags[0]
+    if not 0 < peak_index < len(lags) - 1:
+        return float(lags[peak_index])
+    step = float(lags[peak_index + 1] - lags[peak_index])
     lo, hi = lags[peak_index] - step, lags[peak_index] + step
     if lo - half_spacing_chips < lags[0] or hi + half_spacing_chips > lags[-1]:
+        return float(lags[peak_index])
+    # The interpolation brackets lo - d and hi + d by their neighbour lags, so
+    # those neighbours must be on the same uniform grid as well.
+    first = max(int(np.searchsorted(lags, lo - half_spacing_chips, side="right")) - 1, 0)
+    last = min(int(np.searchsorted(lags, hi + half_spacing_chips, side="left")), len(lags) - 1)
+    if not _uniform(np.diff(lags[first:last + 1])):
         return float(lags[peak_index])
 
     def g(x):
