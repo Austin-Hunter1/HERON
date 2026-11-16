@@ -206,7 +206,10 @@ t_{GPST}(n) = t_{anchor} + \frac{n - n_{anchor}}{f_s} - \delta t_{rx}(n)
 $$
 
 $t_{anchor}$ and $n_{anchor}$ come from notebook 02's decoded time anchor.
-$\delta t_{rx}$ comes from `solve_clock_series`. Notebook 03 requires this
+$\delta t_{rx}$ comes from `solve_clock_series`. Its sign follows D-105:
+$\delta t_{rx} = T - t$, positive when the receiver clock is ahead of GPS time.
+This map is the only place where the receiver clock enters the models; no model
+adds $\delta t_{rx}$ to a time that came from it. Notebook 03 requires this
 notebook 02 output (D-100). The PPS edge (D-025) is a cross-check only. The trajectory and the attitude are interpolated at
 $t_{GPST}(n)$.
 
@@ -525,6 +528,15 @@ $$
 \tilde\phi_R(t) = \phi_D(t) - \frac{\Delta\rho(t) + \Delta\rho_{trop}(t)}{\lambda} + \phi_{hw}
 $$
 
+The ionosphere delays the code and advances the carrier by the same amount
+(D-105). An excess ionosphere $\Delta\rho_{iono}$ therefore enters as
+$+\Delta\rho_{iono}/c$ in the code delay and as $+\Delta\rho_{iono}/\lambda$ in the
+carrier phase (it is subtracted from the phase excess). The model keeps a group
+excess $D_g = \Delta\rho + \Delta\rho_{trop} + \Delta\rho_{iono}$ for the code and a
+phase excess $D_p = \Delta\rho + \Delta\rho_{trop} - \Delta\rho_{iono}$ for the
+carrier and the Doppler. The excess ionosphere is zero here (section 7.1), so
+$D_g = D_p$ in practice.
+
 $\tau_D$, $f_D$, $\phi_D$ come from the notebook 01 file of the zenith channel.
 $\tau_{hw}$ and $\phi_{hw}$ are the inter-channel hardware delay and phase
 (cables, filters, different SDRs). They are calibrated (section 9.4).
@@ -563,12 +575,23 @@ channel. Each band uses the zenith channel of its own band as the reference.
 
 ### 8.2 Mode B (cross-check): absolute model
 
-As [W21] eq. 6-7: compute $\rho_R$ from the orbits and the trajectory, and add
-the satellite clock, the receiver clock series from notebook 02, the ionosphere
-and the troposphere. This mode needs the high-accuracy models. It does not need
-the direct channel during the reflection (useful when the zenith signal is
-blocked). The notebook runs it once to show Mode A minus Mode B. The TCXO jitter
-appears in that difference; this is why Mode A is the default.
+As [W21] eq. 6-7, in the signal model of D-105: compute $\rho_R$ from the orbits
+and the trajectory, and predict the code phase as the transmit time,
+
+$$
+\chi_B = 10^3\left(t - \frac{\rho_R + I_R + T_R}{c} - \tau_{grp}
+       + \delta t_{tx}\!\left(t - \frac{\rho_R}{c}\right)\right),
+$$
+
+with $t$ the GPS time of the samples (section 3.3), $I_R$ and $T_R$ the FULL
+ionosphere and troposphere of the reflected path (not the excess), $\tau_{grp}$
+the satellite group delay and $\delta t_{tx}$ the satellite clock at the transmit
+time. The receiver clock is inside $t$; it is not added again. This mode needs
+the high-accuracy models. It does not need the direct channel during the
+reflection (useful when the zenith signal is blocked). The notebook runs it once
+to show Mode A minus Mode B, which must be a constant. The receiver-clock noise
+of the notebook 02 series and the TCXO jitter appear in that difference; this is
+why Mode A is the default. Only the Mode B code phase is built (C-15).
 
 ### 8.3 Risk: different SDRs have different local oscillators
 

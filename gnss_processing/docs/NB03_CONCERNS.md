@@ -402,3 +402,40 @@ Fixed during the draft (for the record): each coherent sum was first labelled wi
 the start time of its first block, while its model value was the mean over the
 sum. For a climbing drone that put about 9 mm of error into the excess path.
 `phase.coherent_series` now labels each sum with its centre time.
+
+## C-18. Closed: clock signs, Mode B and the ionosphere sign (D-105)
+
+Symptom: a check of the models against the reference signal model (B. Breitsch,
+"GNSS Signal Modeling", 2025; `docs/references/gnss_signal_modeling/`) found
+three faults. All three were outside Mode A's direct-referenced path, so no
+Mode A result changed.
+
+1. The synthetic generator added the receiver clock with the sign of a
+   transmitter clock (code = T + dt - tau). In the reference, a receiver clock
+   that is ahead of GPS time makes the code look later: eta = T - dt_rx - tau.
+   The geometry was also computed at the sample stamp, not at the true time.
+2. Mode B added dt_rx after `TimeBase.gpst` had already removed it. Faults 1
+   and 2 cancelled in the synthetic Mode B test. On real data, Mode A minus
+   Mode B would keep a slope equal to the clock drift (up to 0.5 us/s, or
+   150 m/s, for the free-running TCXO). The notebook also passed the EXCESS
+   troposphere to Mode B, which needs the full delay of the path.
+3. Mode A used one excess path for the code and the carrier. The ionosphere
+   delays the code and advances the carrier.
+
+Fix: the synthetic world has separate receiver and satellite clocks with the
+D-105 signs, and gives its own `TimeBase`. Mode B has no dt_rx term, takes the
+full path delays and a satellite group delay, and raises when the TimeBase does
+not match the geometry. The model keeps a group excess (code) and a phase
+excess (carrier, Doppler); `OpenLoopOutput.model_excess_phase_m` carries the
+phase excess to the phase and leakage processing. New tests: the two clock
+signs, Mode B with drifting receiver and satellite clocks, and the ionosphere
+signs.
+
+With the same change: the DDM peak fits took the lag step from the first two
+lags. With the noise lags first in the array, the step was wrong by the ratio
+of the grids (ten times on the ARGO open-loop run of 2026-11-14). They now use
+the step beside the peak.
+
+Still open: the full ionosphere of the reflected path is not modelled in the
+notebook's Mode B cell, so its slow change stays in Mode A minus Mode B on
+real data. The Mode B carrier phase is not built (C-15).
