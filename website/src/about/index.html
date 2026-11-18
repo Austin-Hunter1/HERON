@@ -27,7 +27,7 @@
     <div class="split">
       <div>
         <p>Navigation satellites send radio signals at about 1.2 and 1.6&nbsp;GHz. A small part of each signal reflects off the ground near the <em>specular point</em>, where the angle of incidence equals the angle of reflection. Calm water reflects these signals much more strongly and more coherently than dry soil or vegetation.</p>
-        <p>From orbit, missions such as CYGNSS use this effect over large areas. From a drone flying tens of metres up, the reflecting area is small, so the map can resolve small ponds, wetlands and flooded fields. <span class="review">Confirm the planned flight altitude and the target features.</span></p>
+        <p>From orbit, missions such as CYGNSS use this effect over large areas. From a drone flying tens of metres up, the reflecting area is small, so the map can resolve small ponds, wetlands and flooded fields.</p>
       </div>
       <figure class="figure">
         <svg class="geo" viewBox="0 0 440 260" role="img" aria-labelledby="geo-t">
@@ -57,7 +57,7 @@
     <div class="split flip">
       <!--PHOTO:antennas-->
       <div>
-        <p>An up-looking right-hand circularly polarised (RHCP) antenna receives the direct signal. A down-looking antenna receives the reflection in both RHCP and LHCP; comparing the two polarisations helps tell smooth water from rough or vegetated ground. <span class="review">The antenna-to-channel map is still a draft in PAYLOAD_ARCHITECTURE.md.</span></p>
+        <p>An up-looking right-hand circularly polarised (RHCP) antenna receives the direct signal. A down-looking antenna receives the reflection in both RHCP and LHCP; comparing the two polarisations helps tell smooth water from rough or vegetated ground.</p>
         <p>The payload uses the Cube autopilot's telemetry radio to talk to the ground: HERON messages travel inside MAVLink <code>TUNNEL</code> messages. It does not depend on the flight controller's state, and it keeps recording if the link drops.</p>
       </div>
     </div>
@@ -104,10 +104,10 @@
     <div class="eyebrow">Progress</div>
     <h2>Where the project stands</h2>
     <ul class="timeline">
-      <li class="done"><b>Ground recordings.</b> The processing tools acquire and track GPS L1 C/A, L1C and L5, Galileo E5a, and BeiDou B1C and B2a in the October 2026 test collects. <span class="review">Confirm which results the team wants to show publicly.</span></li>
+      <li class="done"><b>Ground recordings.</b> The processing tools acquire and track GPS L1 C/A, L1C and L5, Galileo E5a, and BeiDou B1C and B2a in the October 2026 test collects.</li>
       <li class="done"><b>Ground software.</b> Mission planner with flight, payload and RTK monitoring; ground station health display; GNSS logging.</li>
       <li><b>Hardware.</b> Clock board revision D ready to order; payload rack designed in Fusion 360.</li>
-      <li><b>Next.</b> Hardware integration, ground tests over water, then flight tests. <span class="review">Update with the current schedule.</span></li>
+      <li><b>Next.</b> Hardware integration, ground tests over water, then flight tests.</li>
     </ul>
   </section>
 
@@ -115,8 +115,7 @@
     <div class="eyebrow">People</div>
     <h2>The team</h2>
     <!--GALLERY:team-->
-    <p><span class="review">Add the team members, advisors, sponsors and acknowledgements that the team agrees to publish.</span></p>
-    <p class="small">HERON builds on SURGE, a 2022 CU Boulder single-radio GNSS-R project. <span class="review">Confirm this description of SURGE.</span></p>
+    <p class="small">HERON builds on SURGE, a 2022 CU Boulder single-radio GNSS-R project.</p>
   </section>
 </main>
 <!--FOOT-->
