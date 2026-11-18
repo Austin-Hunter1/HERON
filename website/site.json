@@ -6,9 +6,9 @@
   "images": "website/images.json",
   "course_build": "docs/teaching/build.py",
   "planner": {
-    "_comment": "The /sim/ page: Jack Abrams' mission planner (D-106). git_ref is where the planner code comes from; set it to main once mission-planner-v2 is merged. approved_by_author stays false until Jack agrees to publish.",
+    "_comment": "The /sim/ page: Jack Abrams' mission planner (D-106). git_ref is where the planner code comes from; set it to main once mission-planner-v2 is merged. Jack approved publishing (D-108).",
     "git_ref": "origin/mission-planner-v2",
-    "approved_by_author": false,
+    "approved_by_author": true,
     "title": "HERON mission planner · web demo",
     "dir": "website/planner",
     "cache_dir": "website/_cache",
