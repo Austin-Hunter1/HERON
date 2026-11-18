@@ -1,6 +1,6 @@
 """Build herongnss.org into one folder of static files.
 
-The site has three parts (decisions D-102 to D-106):
+The site has three parts (decisions D-116 to D-122):
 
 - ``/``, ``/about/``: hand-written pages in ``website/src``. Each page
   takes the shared head, top bar and footer from ``src/_partials``.

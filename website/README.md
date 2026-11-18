@@ -1,6 +1,6 @@
 # herongnss.org
 
-The public HERON website (decisions D-102 to D-107 in `docs/DECISIONS.md`).
+The public HERON website (decisions D-116 to D-122 in `docs/DECISIONS.md`).
 
 | Path | What | Source |
 |---|---|---|

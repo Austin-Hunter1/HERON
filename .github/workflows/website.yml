@@ -1,4 +1,4 @@
-# Build and publish herongnss.org on GitHub Pages (D-104, D-106).
+# Build and publish herongnss.org on GitHub Pages (D-118, D-120).
 #
 # The build runs website/build_site.py. It counts the "review" markers
 # in the draft pages. The deploy job runs only when the count is zero,

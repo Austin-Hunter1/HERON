@@ -1,7 +1,7 @@
 """Run Jack's mission planner (Specular_Planner/app.py) inside a browser.
 
 herongnss.org/sim/ runs the REAL planner code with Pyodide, in a Web
-Worker (decision D-106). This module boots it and adapts the parts that
+Worker (decision D-120). This module boots it and adapts the parts that
 a browser cannot run. It does not edit any planner file; it patches the
 runtime before ``app`` is imported.
 
