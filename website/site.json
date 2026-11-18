@@ -47,6 +47,11 @@
         "path": "about/"
       },
       {
+        "key": "publications",
+        "label": "Publications + results",
+        "path": "publications/"
+      },
+      {
         "key": "course",
         "label": "GNSS signal course",
         "path": "course/"
@@ -57,5 +62,6 @@
         "path": "sim/"
       }
     ]
-  }
+  },
+  "katex_dir": "docs/teaching/src/vendor/katex"
 }

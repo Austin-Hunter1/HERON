@@ -8,7 +8,8 @@ names its original in ``source``. This tool writes a web copy to
 - turned upright (EXIF orientation),
 - at most ``max_px`` on the long side (images.json ``web.max_px``, or
   the slot's own ``max_px``),
-- JPEG at ``web.quality``,
+- JPEG at ``web.quality``, or WebP (``web.figure_quality``) when the
+  slot's ``file`` ends in .webp (used for plots, where JPEG blurs text),
 - with NO metadata: phone photos carry GPS position and the camera
   serial, which must not go on a public site.
 
@@ -79,7 +80,9 @@ def main() -> None:
     for name, slot in data["slots"].items():
         if not slot.get("source"):
             continue
-        src = REPO / slot["source"]
+        # A source is repo-relative, or absolute for files outside the
+        # repository (for example processing reports under D:/01_Data).
+        src = Path(slot["source"]) if Path(slot["source"]).is_absolute() else REPO / slot["source"]
         if not src.is_file():
             sys.exit(f"slot {name}: source {slot['source']} is missing")
         im = ImageOps.exif_transpose(open_photo(src)).convert("RGB")
@@ -89,7 +92,11 @@ def main() -> None:
         # A new Image with only the pixels: no EXIF, no GPS, no ICC extras.
         clean = Image.new("RGB", im.size)
         clean.paste(im)
-        clean.save(out, "JPEG", quality=web["quality"], optimize=True, progressive=True)
+        if out.suffix.lower() == ".webp":
+            # Figures: WebP keeps thin lines and text sharp at a small size.
+            clean.save(out, "WEBP", quality=web.get("figure_quality", 90), method=6)
+        else:
+            clean.save(out, "JPEG", quality=web["quality"], optimize=True, progressive=True)
         print(f"{name:16s} {src.name} -> web/{out.name} {im.size[0]}x{im.size[1]}")
 
 

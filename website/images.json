@@ -2,7 +2,8 @@
   "_comment": "Photos of herongnss.org. A page asks for one slot with <!--PHOTO:name--> or for a list with <!--GALLERY:name-->. 'source' is the original (repo-relative); website/tools/prepare_photos.py writes a clean web copy to website/src/img/photos/web/<file> (upright, resized, no GPS or other metadata). A slot with no 'file' shows a labelled placeholder with a review marker, so the site does not deploy without it. 'caption' shows under a gallery photo; 'credit' shows on the photo.",
   "web": {
     "max_px": 2400,
-    "quality": 82
+    "quality": 82,
+    "figure_quality": 90
   },
   "slots": {
     "hero": {
@@ -52,7 +53,8 @@
       "file": "clock-board-revd.jpg",
       "alt": "Render of the HERON clock board revision D, which feeds 10 MHz and PPS to the four radios",
       "credit": "Render",
-      "want": "The payload hardware."
+      "want": "The payload hardware.",
+      "caption": "The HERON clock board, revision D (render): one 10 MHz TCXO and the PPS feed all four SDRs."
     },
     "ground-station": {
       "source": "website/src/img/photos/Jack&Frances.heic",
@@ -121,6 +123,146 @@
       "alt": "The payload rack, with SDR mock-up boards in its rails, mounted under the Aurelia X6",
       "credit": "",
       "want": "The payload hardware on the aircraft."
+    },
+    "fig-fresnel-scale": {
+      "source": "docs/images/trr/fig2c_fresnel_footprint_vs_altitude_wide.png",
+      "file": "fresnel-scale.webp",
+      "alt": "First Fresnel zone ellipses for altitudes from 20 m to 200 m and for elevations from 20 to 90 degrees, with a 10 m scale bar",
+      "caption": "First Fresnel zone at L5 (λ = 25.5 cm) to scale. Left: at 30° elevation, from 20 m to 200 m altitude. Right: at 150 ft altitude, from 90° to 20° elevation.",
+      "credit": "",
+      "want": "",
+      "max_px": 1800
+    },
+    "fig-bistatic": {
+      "source": "docs/images/trr/fig2b_heron_bistatic_geometry_wide.png",
+      "file": "bistatic-geometry.webp",
+      "alt": "HERON bistatic geometry: direct and reflected paths from a satellite to the drone over water",
+      "caption": "HERON's bistatic geometry: the reflected path is longer than the direct path by about 2h sin e.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "fig-conops": {
+      "source": "docs/images/trr/conops_mission.png",
+      "file": "conops-mission.webp",
+      "alt": "Concept of operations in six steps: plan, set up, launch, survey and record, land and offload, process and verify",
+      "caption": "Concept of operations: plan → set up → launch → survey & record → land & offload → process & verify.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "fig-fish": {
+      "source": "docs/images/trr/system_block_diagram_3_fish_payload.png",
+      "file": "fish-block-diagram.webp",
+      "alt": "Block diagram of the FISH payload on the Aurelia X6 and the ground station",
+      "caption": "The FISH payload: zenith RHCP and nadir RHCP+LHCP antennas, two B200 and two B210 SDRs on one clock board, an Intel NUC and a SATA SSD.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "fig-system": {
+      "source": "docs/images/trr/system_block_diagram.png",
+      "file": "system-block-diagram.webp",
+      "alt": "HERON system block diagram: aircraft, payload, ground station and post-processing",
+      "caption": "The whole HERON system: aircraft, FISH payload, ground station and post-processing.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-overview": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_171756_presentation/01_overview.png",
+      "file": "res-171756-overview.webp",
+      "alt": "Collect 171756: specular-point tracks, reflected-phase height against RTK, and reflected power by delay for G09, E05 and C12",
+      "caption": "Collect 171756 (hover at 118.6 m): specular-point tracks for GPS G09, Galileo E05 and BeiDou C12; reflected carrier-phase height against RTK; and reflected power by delay, with the reflection at lag 0 and direct-signal leakage below it.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-altimetry": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_171756_presentation/07_altimetry.png",
+      "file": "res-171756-altimetry.webp",
+      "alt": "Reflected-phase altimetry against RTK with RMS differences of 5.0 to 5.1 cm",
+      "caption": "Reflected-phase altimetry against RTK: the three satellites agree with each other and follow the RTK height with 5.0–5.1 cm RMS difference.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-fresnel": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_171756_presentation/10_G09_fresnel_map.png",
+      "file": "res-171756-fresnel-g09.webp",
+      "alt": "First Fresnel zone of G09 every 2 s, coloured by phase height minus RTK",
+      "caption": "The measurement footprint: G09's first Fresnel zone (27 m × 15 m) every 2 s during the hover.",
+      "credit": "",
+      "want": "",
+      "max_px": 1800
+    },
+    "res-coherence": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_171756_presentation/05_map_coherence.png",
+      "file": "res-171756-coherence.webp",
+      "alt": "Phase coherence kappa and circular length R on the specular track for three satellites",
+      "caption": "Water shows as coherence: median κ 0.82–0.89 and circular length R 0.93–0.96 over open water.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-water": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/map_172251_power_vs_water.png",
+      "file": "res-172251-power-vs-water.webp",
+      "alt": "Reflected C/N0 along the survey legs against the water fraction of the first Fresnel zone",
+      "caption": "Water detection on the survey flight (172251): reflected C/N0 against the water fraction of each first Fresnel zone.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-shoreline": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/shoreline_compare_172251.png",
+      "file": "res-172251-shoreline.webp",
+      "alt": "Survey legs over the shoreline on the drone ortho-photo, with C/N0 against FFZ water fraction for three outlines",
+      "caption": "Which shoreline explains the reflected power? With the team's own survey outline, the correlation rises to 0.56–0.65.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-bank": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/presentation_lidar/14_map_ground_height_truth.png",
+      "file": "res-172251-ground-height.webp",
+      "alt": "Ground height on the specular tracks from lidar, from the reflected phase, and their difference",
+      "caption": "Bank topography from the reflected phase against lidar: for GPS G09, 2.4 cm RMS and correlation 0.998 over 822 epochs.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-nav": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/nav_compare/nav_compare_20261116_171756.png",
+      "file": "res-171756-nav.webp",
+      "alt": "Positions from GPS L5, BeiDou B2a and Galileo E5a against the autopilot RTK, C/N0 and sky plot",
+      "caption": "Positioning from the recorded direct signal: GPS L5, BeiDou B2a and Galileo E5a fixes within about 2 m of the autopilot RTK.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "surge-team": {
+      "source": "",
+      "file": "",
+      "alt": "",
+      "credit": "",
+      "want": "The SURGE team (2022–23), group photo, landscape."
+    },
+    "team-group": {
+      "source": "",
+      "file": "",
+      "alt": "",
+      "credit": "",
+      "want": "The HERON team, group photo, landscape, at least 2000 px wide."
+    },
+    "fig-rack": {
+      "source": "Hardware/payload_rack/out/preview_open.png",
+      "file": "rack-open.webp",
+      "alt": "Render of the FISH payload rack with the right wall removed, showing the SDR boards in their rail strips",
+      "caption": "The FISH rack (Fusion 360 render, one wall removed): the SDRs slide into rail strips.",
+      "credit": "",
+      "want": "",
+      "max_px": 1400
     }
   },
   "galleries": {
@@ -131,5 +273,14 @@
       "team-jack-frances",
       "team-nathan"
     ]
+  },
+  "videos": {
+    "mission": {
+      "title": "HERON mission and data collect, start to finish",
+      "file": "",
+      "embed": "",
+      "poster": "drone-ground",
+      "want": "Mission video, start to finish. Either an MP4 (H.264, 1080p, under about 90 MB) for website/src/video/, or a YouTube/Vimeo link."
+    }
   }
 }

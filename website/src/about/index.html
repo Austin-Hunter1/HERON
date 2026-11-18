@@ -3,14 +3,10 @@
 <head>
 <!--HEAD-->
 <title>About HERON · herongnss.org</title>
-<meta name="description" content="What HERON measures, how the drone payload records direct and reflected GNSS signals, and where the project stands.">
+<meta name="description" content="The HERON team, the concept of operations, the SURGE heritage and our sponsors.">
 </head>
 <body>
 <!--TOP-->
-<!-- Draft written from docs/ (GETTING_STARTED, REQUIREMENTS, PAYLOAD_ARCHITECTURE,
-     HARDWARE, DECISIONS). Each review span is a claim the team must
-     check, and each empty photo slot needs a photo. build_site.py does not
-     deploy while one is left. -->
 <section class="banner">
   <!--PHOTO:about-banner-->
   <div class="in">
@@ -21,101 +17,68 @@
 </section>
 
 <main>
-  <section class="band">
-    <div class="eyebrow">The idea</div>
-    <h2>Satellite signals bounce, and water is a mirror</h2>
-    <div class="split">
-      <div>
-        <p>Navigation satellites send radio signals at about 1.2 and 1.6&nbsp;GHz. A small part of each signal reflects off the ground near the <em>specular point</em>, where the angle of incidence equals the angle of reflection. Calm water reflects these signals much more strongly and more coherently than dry soil or vegetation.</p>
-        <p>From orbit, missions such as CYGNSS use this effect over large areas. From a drone flying tens of metres up, the reflecting area is small, so the map can resolve small ponds, wetlands and flooded fields.</p>
-      </div>
-      <figure class="figure">
-        <svg class="geo" viewBox="0 0 440 260" role="img" aria-labelledby="geo-t">
-        <title id="geo-t">A satellite signal reaches the drone directly, and also by reflection from water below.</title>
-        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>
-        <rect class="ground" x="0" y="212" width="440" height="48"/>
-        <rect class="water" x="150" y="212" width="190" height="10" rx="5"/>
-        <line class="ray direct" x1="52" y1="34" x2="292" y2="92" marker-end="url(#ah)"/>
-        <polyline class="ray refl" points="52,34 252,212 300,118" marker-end="url(#ah)"/>
-        <g class="body"><rect x="18" y="16" width="34" height="16" rx="3"/><rect class="panel" x="2" y="20" width="14" height="8"/><rect class="panel" x="54" y="20" width="14" height="8"/></g>
-        <g class="body"><rect x="282" y="96" width="40" height="14" rx="4"/><rect x="264" y="90" width="22" height="4" rx="2"/><rect x="318" y="90" width="22" height="4" rx="2"/></g>
-        <rect class="ant-up" x="298" y="86" width="8" height="10"/><rect class="ant-down" x="298" y="110" width="8" height="10"/>
-        <text class="lbl" x="28" y="50" text-anchor="middle">satellite</text>
-        <text class="lbl direct" x="332" y="80">up: direct</text>
-        <text class="lbl refl" x="332" y="132">down: reflected</text>
-        <text class="lbl" x="252" y="204" text-anchor="middle">specular point</text>
-        <text class="lbl" x="245" y="244" text-anchor="middle">water</text>
-      </svg>
-        <figcaption>The up-looking antenna receives the direct signal; the down-looking antenna receives the reflection. The reflected path is longer by about 2&nbsp;h&nbsp;sin(elevation).</figcaption>
-      </figure>
-    </div>
-  </section>
+  <nav class="anchor-nav band" aria-label="On this page" style="padding-top:28px">
+    <a href="#team">Meet the team</a><a href="#conops">ConOps</a><a href="#heritage">Heritage: SURGE</a><a href="#sponsors">Sponsors</a>
+  </nav>
 
-  <section class="band">
-    <div class="eyebrow">The aircraft</div>
-    <h2>A drone that listens up and down</h2>
-    <div class="split flip">
-      <!--PHOTO:antennas-->
-      <div>
-        <p>An up-looking right-hand circularly polarised (RHCP) antenna receives the direct signal. A down-looking antenna receives the reflection in both RHCP and LHCP; comparing the two polarisations helps tell smooth water from rough or vegetated ground.</p>
-        <p>The payload uses the Cube autopilot's telemetry radio to talk to the ground: HERON messages travel inside MAVLink <code>TUNNEL</code> messages. It does not depend on the flight controller's state, and it keeps recording if the link drops.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">The payload</div>
-    <h2>Six coherent channels on one clock</h2>
-    <div class="split">
-      <!--PHOTO:payload-photo-->
-      <div>
-        <p>Two Ettus B210 and two Ettus B200 software-defined radios record six channels of raw radio samples. A HERON-designed clock board gives all four radios the same 10&nbsp;MHz reference (from a ±0.5&nbsp;ppm temperature-compensated oscillator) and the same pulse-per-second, so every channel starts on the same edge and stays coherent.</p>
-        <p>An Intel NUC runs the recorders and writes 8-bit complex samples to a dedicated SSD. Nothing is processed in the air: all the science happens on the ground, after the flight.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">The signals</div>
-    <h2>Seven signals, three constellations, two bands</h2>
-    <p>One recorded channel per band holds every signal in that band; the processing separates them by their codes. The faster L5-band codes resolve shorter path differences, which suits the short reflected paths of a low-flying drone. The <a href="../course/#s08">signal plan part of the course</a> explains why.</p>
-    <div class="tablewrap"><table>
-    <thead><tr><th>Band</th><th>Carrier</th><th>Signals</th><th>Chip rate</th></tr></thead>
-    <tbody>
-      <tr><td>L1 / E1 / B1C</td><td>1575.42 MHz</td><td><span class="sys" style="background:var(--gps)"></span>GPS L1 C/A, GPS L1C · <span class="sys" style="background:var(--gal)"></span>Galileo E1 · <span class="sys" style="background:var(--bds)"></span>BeiDou B1C</td><td>1.023 Mchip/s</td></tr>
-      <tr><td>L5 / E5a / B2a</td><td>1176.45 MHz</td><td><span class="sys" style="background:var(--gps)"></span>GPS L5 · <span class="sys" style="background:var(--gal)"></span>Galileo E5a · <span class="sys" style="background:var(--bds)"></span>BeiDou B2a</td><td>10.23 Mchip/s</td></tr>
-    </tbody>
-  </table></div>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">On the ground</div>
-    <h2>Plan, fly, monitor, process</h2>
-    <div class="split flip">
-      <!--PHOTO:ground-station-->
-      <div>
-        <p>The mission planner places the drone so that the reflections land on the water, exports the flight plan, and monitors the aircraft, the payload and the RTK base station during the flight. <a href="../sim/">Try it in your browser.</a></p>
-        <p>A GNSS base station gives correction data, so the drone position is known to centimetre level (RTK and PPK). After the flight, the processing software acquires and tracks each satellite, measures the reflected power, and maps each reflection to its point on the ground.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">Progress</div>
-    <h2>Where the project stands</h2>
-    <ul class="timeline">
-      <li class="done"><b>Ground recordings.</b> The processing tools acquire and track GPS L1 C/A, L1C and L5, Galileo E5a, and BeiDou B1C and B2a in the October 2026 test collects.</li>
-      <li class="done"><b>Ground software.</b> Mission planner with flight, payload and RTK monitoring; ground station health display; GNSS logging.</li>
-      <li><b>Hardware.</b> Clock board revision D ready to order; payload rack designed in Fusion 360.</li>
-      <li><b>Next.</b> Hardware integration, ground tests over water, then flight tests.</li>
-    </ul>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">People</div>
-    <h2>The team</h2>
+  <!-- ================================================= team -->
+  <section class="band" id="team">
+    <div class="eyebrow">Meet the team</div>
+    <h2>The people behind HERON</h2>
+    <p>HERON is a graduate project at the University of Colorado Boulder.</p>
+    <div class="wide-photo"><!--PHOTO:team-group--></div>
+    <!--TEAM-->
+    <h3 class="group">In the field</h3>
     <!--GALLERY:team-->
-    <p class="small">HERON builds on SURGE, a 2022 CU Boulder single-radio GNSS-R project.</p>
+  </section>
+
+  <!-- ================================================= conops -->
+  <section class="band" id="conops">
+    <div class="eyebrow">Concept of operations</div>
+    <h2>Plan, fly, record, verify</h2>
+    <!--FIGURE:fig-conops-->
+    <ol class="facts" style="margin-top:16px">
+      <li><b>Plan.</b> The mission planner places the specular points on the target water and writes ArduPilot waypoints.</li>
+      <li><b>Set up.</b> The GNSS base station starts logging and sends RTK corrections; the payload boots and its radios lock to the clock board.</li>
+      <li><b>Launch.</b> The ground station starts the recording over the autopilot's telemetry link. If no command arrives, the payload starts recording on its own after 120 s.</li>
+      <li><b>Survey and record.</b> The drone flies the specular track; four SDRs record six channels of raw samples. If the link drops, the payload keeps recording.</li>
+      <li><b>Land and offload.</b> The team stops the recording and copies the SSD and the rover and base GNSS logs.</li>
+      <li><b>Process and verify.</b> The processing software tracks the signals, computes the precise trajectory, rebuilds the specular tracks and compares them with the plan.</li>
+    </ol>
+    <!--FIGURE:fig-system-->
+  </section>
+
+  <!-- ================================================= heritage -->
+  <section class="band" id="heritage">
+    <div class="eyebrow">Heritage · 2022–2023</div>
+    <h2>SURGE: where HERON began</h2>
+    <div class="split">
+      <div>
+        <p><b>SURGE</b> (Surface-water UAV Reflectometry GNSS Experiment) was the CU Boulder graduate project that put a GNSS-R receiver on the Aurelia X6 before HERON. Its goal was a proof-of-concept UAV system to determine the surface slopes, heights and extents of lakes and rivers, inspired by spaceborne river-slope measurements such as Wang and Morton's (2022) work on the Orinoco River.</p>
+        <p>The SURGE team designed and built the first payload: a single B210 software-defined radio recording direct and reflected GPS L5 signals to an Intel NUC, a PPK receiver (ArduSimple simpleRTK2B) for 10 cm positions, a gimbal camera, and a ground station in Mission Planner. They wrote the flight checklists, the crew roles and the first acquisition and specular-point scripts, and obtained an FAA waiver for flights above 400 ft.</p>
+        <p>HERON inherits SURGE's airframe, its operating procedures and its lessons: model RF behaviour, but test early; design for flights over water; and plan for the time that signal-processing software takes.</p>
+      </div>
+      <div class="wide-photo" style="height:auto;aspect-ratio:4/3;margin:0"><!--PHOTO:surge-team--></div>
+    </div>
+    <h3>The SURGE team</h3>
+    <p>Cody Watson, Daniel Mathews, Andreas Brecl, Jamie Stankiewiz, Sean Newman, Aaron Buller and Nicolas Garzione.</p>
+    <h3>What SURGE set out to do</h3>
+    <ul class="surge-req">
+      <li>Record direct and reflected GPS L5 at 22 MHz or more, and L1 at 10 MHz or more.</li>
+      <li>Store correlated time and position data for PPK at 1 Hz, to 10 cm.</li>
+      <li>Fly autonomously along a flight path based on GPS ephemeris and the water body's shape, within 5 m.</li>
+      <li>Report payload and aircraft status to a ground station.</li>
+      <li>Record video of the water body for validation.</li>
+      <li>Process the data for relative surface height, water slope and water-body boundaries.</li>
+    </ul>
+    <p class="small">Source: Watson, C., Mathews, D., Brecl, A., Stankiewiz, J., Newman, S., Buller, A., &amp; Garzione, N. (2023). <i>SURGE: Surface-water Reflectometry GNSS Experiment</i> [Final report]. University of Colorado Boulder. <a href="https://github.com/Austin-Hunter1/HERON/blob/main/SURGE/SURGE_Document.pdf">Read the SURGE final report (PDF)</a> · <a href="https://github.com/jamiestankiewiz/SURGE">SURGE code on GitHub</a></p>
+  </section>
+
+  <!-- ================================================= sponsors -->
+  <section class="band" id="sponsors">
+    <div class="eyebrow">Sponsors</div>
+    <h2>With thanks</h2>
+    <p><span class="review">Add the sponsors, their logos and the acknowledgement text the team agrees to publish.</span></p>
   </section>
 </main>
 <!--FOOT-->

@@ -53,7 +53,16 @@ SKIP = re.compile(r"(__pycache__|\.pyc$|\.pyd$|\.so$|\.dll$|\.exe$|\.dist-info|\
 def load_settings() -> dict:
     """Read site.json and check the keys the build needs."""
     data = json.loads(SETTINGS.read_text(encoding="utf-8"))
-    need = ["domain", "out_dir", "pages_src", "images", "course_build", "planner", "nav"]
+    need = [
+        "domain",
+        "out_dir",
+        "pages_src",
+        "images",
+        "course_build",
+        "planner",
+        "nav",
+        "katex_dir",
+    ]
     missing = [k for k in need if k not in data]
     if missing:
         raise SystemExit(f"{SETTINGS}: missing keys {missing}")
@@ -62,6 +71,10 @@ def load_settings() -> dict:
 
 PHOTO = re.compile(r"<!--PHOTO:([a-z0-9-]+)-->")
 GALLERY = re.compile(r"<!--GALLERY:([a-z0-9-]+)-->")
+FIGURE = re.compile(r"<!--FIGURE:([a-z0-9-]+)-->")
+VIDEO = re.compile(r"<!--VIDEO:([a-z0-9-]+)-->")
+MATH = "<!--MATH-->"
+TEAM = "<!--TEAM-->"
 # Photo originals (HEIC, full-size JPEG) stay out of the site; only the
 # clean web copies in img/photos/web/ are published (tools/prepare_photos.py).
 ORIGINALS = re.compile(r"^img/photos/(?!web/)")
@@ -94,6 +107,121 @@ def photo_html(name: str, slots: dict, root: str) -> str:
     )
 
 
+def figure_html(name: str, slots: dict, root: str) -> str:
+    """Return a captioned figure (a plot or diagram, shown whole, not cropped).
+
+    A click opens the full-size image. An empty slot shows a placeholder
+    with a review marker, like a photo slot.
+    """
+    if name not in slots:
+        raise SystemExit(f"images.json has no figure slot '{name}'")
+    slot = slots[name]
+    cap = slot.get("caption", "")
+    if not slot.get("file"):
+        want = html.escape(slot.get("want", ""))
+        return (
+            f'<figure class="fig-card empty" data-slot="{name}"><div '
+            f'class="ph"><b>FIGURE · {name}</b>'
+            f'<span class="review">Figure needed: {want}</span></div></figure>'
+        )
+    src = f"{root}img/photos/web/{slot['file']}"
+    alt = html.escape(slot.get("alt", ""))
+    return (
+        f'<figure class="fig-card" data-slot="{name}"><a '
+        f'href="{src}" target="_blank" rel="noopener">'
+        f'<img src="{src}" alt="{alt}" loading="lazy" decoding="async"></a>'
+        f"<figcaption>{cap}</figcaption></figure>"
+    )
+
+
+def video_html(name: str, data: dict, root: str) -> str:
+    """Return a video player (images.json ``videos``).
+
+    A video is a file in src/video/ (``file``, MP4 H.264, with a
+    ``poster`` photo slot) or a hosted video (``embed``: a full
+    https://www.youtube-nocookie.com/embed/... or player.vimeo.com URL).
+    With neither, a placeholder with a review marker.
+    """
+    videos = data.get("videos", {})
+    if name not in videos:
+        raise SystemExit(f"images.json has no video '{name}'")
+    v = videos[name]
+    title = html.escape(v.get("title", name))
+    if v.get("embed"):
+        return (
+            f'<div class="video"><iframe src="{html.escape(v["embed"])}" '
+            f'title="{title}" loading="lazy" '
+            'allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" '
+            'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>'
+        )
+    if v.get("file"):
+        poster = ""
+        if v.get("poster") and data["slots"].get(v["poster"], {}).get("file"):
+            poster = f' poster="{root}img/photos/web/{data["slots"][v["poster"]]["file"]}"'
+        return (
+            '<div class="video"><video controls preload="metadata" '
+            f'playsinline{poster} title="{title}">'
+            f'<source src="{root}video/{html.escape(v["file"])}" type="video/mp4"></video></div>'
+        )
+    want = html.escape(v.get("want", ""))
+    return (
+        f'<div class="video empty"><div class="ph"><b>VIDEO · {name}</b>'
+        f'<span class="review">Video needed: {want}</span></div></div>'
+    )
+
+
+def team_html(team: dict, slots: dict, root: str) -> str:
+    """Return the people cards of the About page (website/team.json).
+
+    A person with no ``role`` gets a review marker, so the page cannot
+    deploy until the team fills it in. A person with no photo gets their
+    initials.
+    """
+    out = []
+    for group in team["groups"]:
+        cards = []
+        for p in group["people"]:
+            slot = slots.get(p.get("photo") or "", {})
+            if slot.get("file"):
+                pic = (
+                    f'<img src="{root}img/photos/web/{slot["file"]}" '
+                    f'alt="{html.escape(p["name"])}" '
+                    'loading="lazy" decoding="async">'
+                )
+            else:
+                initials = "".join(w[0] for w in p["name"].split()[:2])
+                pic = f'<span class="initials" aria-hidden="true">{initials}</span>'
+            role = html.escape(p.get("role", ""))
+            if not role:
+                role = '<span class="review">Role needed</span>'
+            cards.append(
+                f'<div class="person"><div class="pic">{pic}</div>'
+                f"<b>{html.escape(p['name'])}</b><span>{role}</span></div>"
+            )
+        out.append(
+            f'<h3 class="group">{html.escape(group["name"])}</h3><div '
+            f'class="people">{"".join(cards)}</div>'
+        )
+    return "".join(out)
+
+
+def math_html(root: str) -> str:
+    """KaTeX (served from the site, so equations work offline) for pages with math."""
+    k = f"{root}vendor/katex/"
+    # Delimiters: $$...$$ for display math, \(...\) for inline math. In the
+    # JavaScript string a backslash is written twice.
+    opts = (
+        "{delimiters:[{left:'$$',right:'$$',display:true},"
+        r"{left:'\\(',right:'\\)',display:false}],throwOnError:false}"
+    )
+    return (
+        f'<link rel="stylesheet" href="{k}katex.min.css">\n'
+        f'<script defer src="{k}katex.min.js"></script>\n'
+        f'<script defer src="{k}auto-render.min.js" '
+        f'onload="renderMathInElement(document.body,{opts})"></script>\n'
+    )
+
+
 def gallery_html(name: str, data: dict, root: str) -> str:
     """Return a captioned grid of photo slots (images.json ``galleries``)."""
     if name not in data.get("galleries", {}):
@@ -122,9 +250,15 @@ def render_page(src: Path, src_root: Path, partials: dict[str, str], images: dic
     for marker, key in (("<!--HEAD-->", "head"), ("<!--TOP-->", "top"), ("<!--FOOT-->", "foot")):
         text = text.replace(marker, partials[key])
     text = GALLERY.sub(lambda m: gallery_html(m.group(1), images, root), text)
+    text = FIGURE.sub(lambda m: figure_html(m.group(1), images["slots"], root), text)
+    text = VIDEO.sub(lambda m: video_html(m.group(1), images, root), text)
+    text = text.replace(MATH, math_html(root))
+    if TEAM in text:
+        team = json.loads((REPO / "website" / "team.json").read_text(encoding="utf-8"))
+        text = text.replace(TEAM, team_html(team, images["slots"], root))
     text = PHOTO.sub(lambda m: photo_html(m.group(1), images["slots"], root), text)
     text = text.replace("{{ROOT}}", root)
-    for name in ("about", "course", "sim"):
+    for name in ("about", "publications", "course", "sim"):
         text = text.replace(
             f"{{{{CUR_{name}}}}}", ' aria-current="page"' if name == section else ""
         )
@@ -322,6 +456,8 @@ def build(final: bool, deps_dir: Path | None = None) -> tuple[Path, int]:
     reviews = build_pages(cfg, out)
     build_course(cfg, out)
     reviews += build_planner(cfg, out, deps_dir)
+    # KaTeX for the pages with equations (<!--MATH-->), from the course's copy.
+    shutil.copytree(REPO / cfg["katex_dir"], out / "vendor" / "katex")
     shutil.copy2(REPO / cfg["nav"]["script"], out / "site_nav.js")
     # GitHub Pages: the custom domain, and no Jekyll processing.
     (out / "CNAME").write_text(cfg["domain"] + "\n", encoding="utf-8")

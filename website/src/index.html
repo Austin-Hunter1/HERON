@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <!--HEAD-->
+<!--MATH-->
 <title>HERON · Hydrological Estimation via Reflectometry from an Overflying Navigation-signal Receiver</title>
 <meta name="description" content="HERON maps surface water from a drone with reflected GNSS signals. A CU Boulder graduate project.">
 </head>
@@ -15,73 +16,132 @@
     <div class="acro"><b>H</b>ydrological <b>E</b>stimation via <b>R</b>eflectometry from an <b>O</b>verflying <b>N</b>avigation-signal Receiver</div>
     <p class="lede">We map surface water from a drone, using GPS, Galileo and BeiDou signals that bounce off the ground.</p>
     <div class="ctas">
-      <a class="btn primary" href="about/">About the project</a>
-      <a class="btn" href="sim/">Try the mission planner</a>
-      <a class="btn" href="course/">Learn GNSS</a>
+      <a class="btn primary" href="#video">Watch a mission</a>
+      <a class="btn" href="#results">See the results</a>
+      <a class="btn" href="about/">Meet the team</a>
     </div>
   </div>
 </section>
 
 <main>
-  <section class="band">
-    <div class="eyebrow">Where we fly</div>
-    <h2>From Boulder Reservoir to the high lakes of the Front Range</h2>
-    <div class="mosaic">
-      <!--PHOTO:drone-ground-->
-      <!--PHOTO:site-main-->
-      <!--PHOTO:drone-->
+  <nav class="anchor-nav band" aria-label="On this page" style="padding-top:28px">
+    <a href="#video">Mission video</a><a href="#uav">GNSS from a UAV</a><a href="#science">The science</a>
+    <a href="#fish">The FISH</a><a href="#planning">Mission planning</a><a href="#results">Results</a>
+  </nav>
+
+  <!-- ================================================= video -->
+  <section class="band" id="video">
+    <div class="eyebrow">Mission</div>
+    <h2>A data collect, start to finish</h2>
+    <p>Plan the flight, set up the base station, launch, survey the water while four radios record, land, offload the data, and process it.</p>
+    <!--VIDEO:mission-->
+  </section>
+
+  <!-- ================================================= GNSS from a UAV -->
+  <section class="band" id="uav">
+    <div class="eyebrow">GNSS from a UAV</div>
+    <h2>Two paths from one satellite</h2>
+    <p>Each satellite reaches the drone twice: directly, and by reflection from the surface below. The reflected path is longer by about \(2h\sin e\), where \(h\) is the height above the surface and \(e\) the satellite elevation. Each measurement senses an ellipse on the ground, the <em>first Fresnel zone</em>. From a drone it is metres across, not the kilometres of a satellite.</p>
+    <div class="figs2">
+      <!--FIGURE:fig-bistatic-->
+      <!--FIGURE:fig-fresnel-scale-->
+    </div>
+    <p style="margin-top:18px"><a class="btn primary" style="color:#0d2230;border-color:var(--line)" href="course/">Learn the signal processing: GNSS course →</a></p>
+  </section>
+
+  <!-- ================================================= science -->
+  <section class="band" id="science">
+    <div class="eyebrow">The science</div>
+    <h2>From radio samples to water</h2>
+    <p>The payload records the direct and the reflected signal on one clock. The ground software tracks the direct signal, predicts the reflection from the geometry (open-loop tracking), and measures three things in each reflection: its power, its coherence, and its carrier phase. From these come four products.</p>
+    <div class="mathgrid">
+      <div class="math">
+        <h3>Geometry and footprint</h3>
+        $$\Delta\rho=\rho_R-\rho_D\approx 2h\sin e$$
+        $$b=\sqrt{\frac{\lambda h}{\sin e}},\qquad a=\frac{b}{\sin e}$$
+        <p class="cite">Excess path of the reflection, and the semi-axes of the first Fresnel zone (\(\lambda\) = 25.5 cm at L5). Camps &amp; Munoz-Martin (2020); Martín-Neira (1993).</p>
+      </div>
+      <div class="math">
+        <h3>Open-loop reflected phase</h3>
+        $$\phi_R(t)=\phi_D(t)-\frac{D_p(t)}{\lambda}+\phi_{hw}$$
+        <p class="cite">The reflected carrier phase is predicted from the direct channel and the modelled excess path \(D_p\). Both channels share one sample clock, so the receiver clock, the satellite clock and the ionosphere cancel. Zavorotny &amp; Voronovich (2000); Wang &amp; Morton (2022).</p>
+      </div>
+      <div class="math">
+        <h3>Water detection</h3>
+        $$\kappa=\frac{\left|\sum_{q} Z_q\right|^2}{W\sum_{q}\left|Z_q\right|^2},\qquad R=\left|\frac{1}{W}\sum_{q} e^{\,j w_q}\right|$$
+        <p class="cite">Calm water gives a coherent reflection: \(\kappa\) and the circular length \(R\) of the phase stay near 1; rough land gives values near 0. The reflected power rises with the water fraction of the Fresnel zone. Roesler et al. (2022); Loria et al. (2023).</p>
+      </div>
+      <div class="math">
+        <h3>Altimetry</h3>
+        $$h_\varphi(t)=h_{\mathrm{RTK}}(t)+\frac{r(t)}{2\sin e(t)}$$
+        <p class="cite">The tracked phase residual \(r\) (a Kalman filter on the reflected phase) corrects the modelled path, giving the receiver height above the surface to centimetres. With the RTK position this is the water-surface elevation. Zhang &amp; Morton (2023); Xu et al. (2025).</p>
+      </div>
+      <div class="math">
+        <h3>Bank slope</h3>
+        $$\Delta s=-\frac{r}{2\sin e},\qquad \tan\beta=\frac{\mathrm{d}s}{\mathrm{d}x}$$
+        <p class="cite">Over the shore, the same phase gives the ground height \(s\) above the water along the specular track; its gradient across the shoreline is the bank slope \(\beta\). HERON checks it against airborne lidar.</p>
+      </div>
+      <div class="math">
+        <h3>River slope</h3>
+        $$S=\frac{\hat H_{\mathrm{up}}-\hat H_{\mathrm{down}}}{D_{\mathrm{centerline}}}$$
+        <p class="cite">Water-surface elevations upstream and downstream, separated by the distance along the river centreline. Wang &amp; Morton (2022); Wang et al. (2025).</p>
+      </div>
+    </div>
+    <p class="small">Full references: <a href="publications/#references">Publications + results</a>.</p>
+  </section>
+
+  <!-- ================================================= FISH -->
+  <section class="band" id="fish">
+    <div class="eyebrow">The FISH</div>
+    <h2>The payload: four radios, one clock</h2>
+    <p>The FISH payload hangs under an Aurelia X6 hexacopter. A zenith RHCP antenna receives the direct signals; a nadir antenna receives the reflections in RHCP and LHCP. Two Ettus B200 and two B210 software-defined radios record six channels on two bands (L1 and L5). A HERON-designed clock board gives all four the same 10 MHz reference and pulse-per-second, so every channel is coherent. An Intel NUC writes the raw samples to an SSD at 264 MB/s.</p>
+    <!--FIGURE:fig-fish-->
+    <div class="figs2" style="margin-top:16px">
+      <div class="split" style="margin:0;display:block"><!--PHOTO:payload-photo--></div>
+      <!--FIGURE:fig-rack-->
+    </div>
+    <div class="figs2" style="margin-top:16px">
+      <!--FIGURE:payload-->
+      <div class="split" style="margin:0;display:block"><!--PHOTO:drone-ground--></div>
     </div>
   </section>
 
-  <section class="band">
-    <div class="eyebrow">How it works</div>
-    <h2>Two antennas, one clock, a lot of radio samples</h2>
-    <div class="steps3">
-      <div><b>Fly</b><p>The drone flies a plan that puts the reflections of each satellite on the water.</p></div>
-      <div><b>Record</b><p>An up-looking and a down-looking antenna feed four radios that share one clock.</p></div>
-      <div><b>Compare</b><p>On the ground, the reflected signal is compared with the direct one, satellite by satellite.</p></div>
-      <div><b>Map</b><p>Strong, coherent reflections mark open water. Each one is placed at its point on the ground.</p></div>
+  <!-- ================================================= planning -->
+  <section class="band" id="planning">
+    <div class="eyebrow">Mission planning</div>
+    <h2>Fly where the reflections land</h2>
+    <div class="split">
+      <div>
+        <p>The HERON mission planner places the drone so that the reflections of chosen satellites fall on a lake, a river or a mapped area at the planned time. It then flies and monitors the mission.</p>
+        <ul class="facts">
+          <li><b>Plan:</b> route, area sweep, shoreline following, or a science sequence; reflection tracks and Fresnel-zone coverage on a satellite map; GPS, Galileo and BeiDou.</li>
+          <li><b>Export:</b> ArduPilot waypoints with heading and recording segments.</li>
+          <li><b>Simulate:</b> a demo aircraft, or ArduCopter SITL, with the payload in the loop.</li>
+          <li><b>Fly:</b> launch checks, live instruments, payload and RTK base status, return home.</li>
+        </ul>
+        <p><a class="btn primary" style="color:#0d2230;border-color:var(--line)" href="sim/">Try the planner in your browser →</a></p>
+      </div>
+      <!--FIGURE:fig-conops-->
     </div>
   </section>
 
-  <section class="band">
-    <div class="eyebrow">Explore</div>
-    <h2>See the project from the inside</h2>
-    <div class="tiles">
-      <a class="tile" href="about/">
-        <!--PHOTO:payload-photo-->
-        <div class="body"><b>About HERON</b><span>The science, the payload, the signals, and where the project stands.</span><span class="go">Read more →</span></div>
-      </a>
-      <a class="tile" href="sim/">
-        <svg class="art" viewBox="0 0 400 190" aria-hidden="true">
-          <rect width="400" height="190" fill="#0f2a36"/>
-          <path d="M40 150 C 120 60, 260 170, 360 60" stroke="#2c5a6b" stroke-width="40" fill="none" stroke-linecap="round"/>
-          <path d="M150 120 q60 -40 130 -10 q40 20 -20 40 q-80 25 -110 -30z" fill="#1f6f99" opacity=".85"/>
-          <polyline points="70,40 140,40 140,70 280,70 280,100 140,100 140,130 330,130" fill="none" stroke="#ffd166" stroke-width="2.5" stroke-dasharray="6 4"/>
-          <g fill="#4cb1d0"><circle cx="190" cy="105" r="4"/><circle cx="215" cy="95" r="4"/><circle cx="240" cy="112" r="4"/><circle cx="205" cy="125" r="4"/><circle cx="252" cy="88" r="4"/></g>
-          <path d="M60 46 l10 -14 l10 14 z" fill="#fff"/>
-        </svg>
-        <div class="body"><b>Mission planner demo</b><span>Plan a flight over a reservoir and fly it in a simulation, with the payload and RTK panels live.</span><span class="go">Launch the demo →</span></div>
-      </a>
-      <a class="tile" href="course/">
-        <svg class="art" viewBox="0 0 400 190" aria-hidden="true">
-          <rect width="400" height="190" fill="#14232e"/>
-          <g stroke="#25313c">
-            <line x1="20" y1="160" x2="380" y2="160"/><line x1="20" y1="120" x2="380" y2="120"/><line x1="20" y1="80" x2="380" y2="80"/>
-          </g>
-          <polyline points="20,158 60,155 100,159 140,154 170,150 200,30 230,150 260,156 300,153 340,158 380,155" fill="none" stroke="#6e9df0" stroke-width="3"/>
-          <polyline points="20,140 50,120 80,140 110,120 140,140 170,120 200,140 230,120 260,140 290,120 320,140 350,120 380,140" fill="none" stroke="#3ec3ae" stroke-width="1.5" opacity=".6"/>
-          <text x="208" y="34" fill="#e2e8ee" font-family="monospace" font-size="13">correlation peak</text>
-        </svg>
-        <div class="body"><b>GNSS signal course</b><span>A 90-minute interactive course, from trilateration to GNSS-R geometry, with real HERON data.</span><span class="go">Open the course →</span></div>
-      </a>
+  <!-- ================================================= results -->
+  <section class="band" id="results">
+    <div class="eyebrow">Results · first flight, Boulder Reservoir, 16 Nov 2026</div>
+    <h2>Water in the phase</h2>
+    <div class="stats">
+      <div class="stat"><b>5 cm</b><span>RMS of reflected-phase height against RTK, three satellites, hover at 118.6 m</span></div>
+      <div class="stat"><b>2.4 cm</b><span>RMS of ground height from the GPS reflection against lidar, 822 epochs</span></div>
+      <div class="stat"><b>0.82–0.89</b><span>median phase coherence κ over open water</span></div>
+      <div class="stat"><b>27 × 15 m</b><span>first Fresnel zone at 118.6 m and 34° elevation</span></div>
     </div>
-  </section>
-
-  <section class="band">
-    <div class="eyebrow">The team</div>
-    <h2>Out at the field</h2>
-    <!--GALLERY:team-->
+    <!--FIGURE:res-overview-->
+    <div class="figs2" style="margin-top:16px">
+      <!--FIGURE:res-bank-->
+      <!--FIGURE:res-coherence-->
+    </div>
+    <p style="margin-top:18px"><a class="btn primary" style="color:#0d2230;border-color:var(--line)" href="publications/#results">All results and publications →</a></p>
+    <p class="small">Preliminary results from the first flights; processing continues.</p>
   </section>
 </main>
 <!--FOOT-->

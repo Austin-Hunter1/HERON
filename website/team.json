@@ -1,0 +1,65 @@
+{
+  "_comment": "People on the About page (<!--TEAM-->). photo is a slot in images.json; an empty role shows a review marker. Names as in HERON_WRITING/URSI/URSI_Summary_2page.tex.",
+  "groups": [
+    {
+      "name": "Student team",
+      "people": [
+        {
+          "name": "Austin Hunter",
+          "role": "",
+          "photo": "team-austin"
+        },
+        {
+          "name": "Jack Abrams",
+          "role": "",
+          "photo": "team-jack-frances"
+        },
+        {
+          "name": "Frances Bailey",
+          "role": "",
+          "photo": "team-jack-frances"
+        },
+        {
+          "name": "Nathan Cohen",
+          "role": "",
+          "photo": "team-nathan"
+        },
+        {
+          "name": "Grace Halbleib",
+          "role": "",
+          "photo": "team-grace"
+        },
+        {
+          "name": "Andras Szalay",
+          "role": "",
+          "photo": "team-andras"
+        }
+      ]
+    },
+    {
+      "name": "Advisors and mentors",
+      "people": [
+        {
+          "name": "Jade Morton",
+          "role": "",
+          "photo": ""
+        },
+        {
+          "name": "Brian Breitsch",
+          "role": "",
+          "photo": ""
+        },
+        {
+          "name": "Steve Taylor",
+          "role": "",
+          "photo": ""
+        },
+        {
+          "name": "Jiawei Xu",
+          "role": "",
+          "photo": ""
+        }
+      ]
+    }
+  ]
+}

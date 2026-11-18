@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--HEAD-->
+<title>Publications and results · HERON</title>
+<meta name="description" content="HERON publications, results from the first flights over Boulder Reservoir, and references.">
+</head>
+<body>
+<!--TOP-->
+<main>
+  <section class="hero" style="max-width:none">
+    <div class="kicker">Publications + results</div>
+    <h1>What we have measured</h1>
+    <p class="lede">Papers and abstracts from the HERON team, the results of the first flights, and the work HERON builds on.</p>
+    <nav class="anchor-nav" aria-label="On this page">
+      <a href="#publications">Publications</a><a href="#results">Results</a><a href="#references">References</a>
+    </nav>
+  </section>
+
+  <!-- ================================================= publications -->
+  <section id="publications">
+    <h2>Publications</h2>
+    <ul class="refs pubs">
+      <li>Abrams, J., Bailey, F., Cohen, N., Halbleib, G., Hunter, A., Szalay, A., Xu, J., Breitsch, B., Taylor, S., &amp; Morton, J. <i>HERON: Hydrological Estimation via Reflectometry from an Overflying Navigation-signal Receiver</i> [Summary paper]. URSI. <span class="review">Add the meeting, year and status of the URSI summary.</span></li>
+      <li>Hunter, A., Abrams, J., Bailey, F., Cohen, N., Szalay, A., Halbleib, G., Xu, J., Breitsch, B., &amp; Morton, J. <i>Planning, flying, and verifying specular-point tracks: Navigation-solution requirements for a UAS GNSS-reflectometry payload</i> [Abstract]. IEEE/ION PLANS 2027. <span class="review">Confirm the final title, author list and status of the PLANS 2027 abstract.</span></li>
+    </ul>
+  </section>
+
+  <!-- ================================================= results -->
+  <section id="results">
+    <h2>Results: first flights, Boulder Reservoir, 16 Nov 2026</h2>
+    <p>Three collects on the L5 band, with the nadir LHCP antenna: two hovers over open water (171756 and 172026) and one survey across the shoreline (172251). The direct signals are tracked closed-loop; the reflections are tracked open-loop from the geometry. These are preliminary results; processing continues.</p>
+    <div class="stats">
+      <div class="stat"><b>3</b><span>constellations tracked in reflection: GPS, Galileo and BeiDou</span></div>
+      <div class="stat"><b>5.0–5.1 cm</b><span>RMS of reflected-phase height against RTK (hover at 118.6 m)</span></div>
+      <div class="stat"><b>2.4 cm</b><span>RMS of ground height from G09 against lidar; correlation 0.998</span></div>
+      <div class="stat"><b>0.56–0.65</b><span>correlation of reflected C/N0 with the water fraction of the Fresnel zone</span></div>
+    </div>
+
+    <h3>Altimetry over open water (hover, collect 171756)</h3>
+    <!--FIGURE:res-overview-->
+    <div class="figs2" style="margin-top:16px">
+      <!--FIGURE:res-altimetry-->
+      <!--FIGURE:res-fresnel-->
+    </div>
+
+    <h3>Water detection and coherence</h3>
+    <div class="figs2">
+      <!--FIGURE:res-coherence-->
+      <!--FIGURE:res-water-->
+    </div>
+    <div style="margin-top:16px"><!--FIGURE:res-shoreline--></div>
+
+    <h3>Bank topography against lidar (survey, collect 172251)</h3>
+    <!--FIGURE:res-bank-->
+
+    <h3>Positioning from the recorded direct signals</h3>
+    <!--FIGURE:res-nav-->
+  </section>
+
+  <!-- ================================================= references -->
+  <section id="references">
+    <h2>References</h2>
+    <ul class="refs">
+      <li>Camps, A., &amp; Munoz-Martin, J. F. (2020). Analytical computation of the spatial resolution in GNSS-R and experimental validation at L1 and L5. <i>Remote Sensing, 12</i>(23), 3910. <a href="https://doi.org/10.3390/rs12233910">https://doi.org/10.3390/rs12233910</a></li>
+      <li>Loria, E., Russo, I. M., Wang, Y., Giangregorio, G., Galdi, C., di Bisceglie, M., Wilson-Downs, B., Lavalle, M., O’Brien, A. J., Morton, Y. J., &amp; Zuffada, C. (2023). Comparison of GNSS-R coherent reflection detection algorithms using simulated and measured CYGNSS data. <i>IEEE Transactions on Geoscience and Remote Sensing, 61</i>, Article 5105216. <a href="https://doi.org/10.1109/TGRS.2023.3277411">https://doi.org/10.1109/TGRS.2023.3277411</a></li>
+      <li>Martín-Neira, M. (1993). A passive reflectometry and interferometry system (PARIS): Application to ocean altimetry. <i>ESA Journal, 17</i>(4), 331–355.</li>
+      <li>Roesler, C. J., Morton, Y. J., Wang, Y., &amp; Nerem, R. S. (2022). Coherent GNSS-reflections characterization over ocean and sea ice based on Spire Global CubeSat data. <i>IEEE Transactions on Geoscience and Remote Sensing, 60</i>, 1–18. <a href="https://doi.org/10.1109/TGRS.2021.3129999">https://doi.org/10.1109/TGRS.2021.3129999</a></li>
+      <li>Wang, Y., &amp; Morton, Y. J. (2022). River slope observation from spaceborne GNSS-R carrier phase measurements: A case study. <i>IEEE Geoscience and Remote Sensing Letters, 19</i>, 1–5. <a href="https://doi.org/10.1109/LGRS.2021.3127750">https://doi.org/10.1109/LGRS.2021.3127750</a></li>
+      <li>Wang, Y., Morton, Y. J., Minear, J. T., Putnam, A., Conrad, A., Axelrad, P., Nerem, R. S., Warnock, A., Ruf, C., Moreira, D. M., &amp; Talpe, M. (2025). Measuring river slope using spaceborne GNSS reflectometry: Methodology and first performance assessment. <i>Remote Sensing of Environment, 318</i>, Article 114597. <a href="https://doi.org/10.1016/j.rse.2025.114597">https://doi.org/10.1016/j.rse.2025.114597</a></li>
+      <li>Watson, C., Mathews, D., Brecl, A., Stankiewiz, J., Newman, S., Buller, A., &amp; Garzione, N. (2023). <i>SURGE: Surface-water Reflectometry GNSS Experiment</i> [Final report]. University of Colorado Boulder.</li>
+      <li>Xie, J., Bu, J., Li, H., &amp; Wang, Q. (2025). Spaceborne GNSS reflectometry for vegetation and inland water monitoring: Progress, challenges, opportunities, and potential. <i>Remote Sensing, 17</i>(7), 1199. <a href="https://doi.org/10.3390/rs17071199">https://doi.org/10.3390/rs17071199</a></li>
+      <li>Xu, Z., Wang, X., Xia, J., Zhai, Z., Wang, Z., Liu, C., Tian, Y., Qiu, T., Sun, Y., Du, Q., Bai, W., Huang, F., &amp; Yin, C. (2025). Simulation and validation of real-time UAV-based GNSS-R altimetry across diverse landforms. <i>IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing, 18</i>, 22151–22164. <a href="https://doi.org/10.1109/JSTARS.2025.3602102">https://doi.org/10.1109/JSTARS.2025.3602102</a></li>
+      <li>Zavorotny, V. U., &amp; Voronovich, A. G. (2000). Scattering of GPS signals from the ocean with wind remote sensing application. <i>IEEE Transactions on Geoscience and Remote Sensing, 38</i>(2), 951–964. <a href="https://doi.org/10.1109/36.841977">https://doi.org/10.1109/36.841977</a></li>
+      <li>Zhang, J., &amp; Morton, Y. J. (2023). Inland water body surface height retrievals using CYGNSS delay Doppler maps. <i>IEEE Transactions on Geoscience and Remote Sensing, 61</i>, 1–16. <a href="https://doi.org/10.1109/TGRS.2023.3330410">https://doi.org/10.1109/TGRS.2023.3330410</a></li>
+    </ul>
+  </section>
+</main>
+<!--FOOT-->
+</body>
+</html>
