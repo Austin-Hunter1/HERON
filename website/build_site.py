@@ -191,12 +191,20 @@ def team_html(team: dict, slots: dict, root: str) -> str:
             else:
                 initials = "".join(w[0] for w in p["name"].split()[:2])
                 pic = f'<span class="initials" aria-hidden="true">{initials}</span>'
-            role = html.escape(p.get("role", ""))
-            if not role:
-                role = '<span class="review">Role needed</span>'
+            # role "" = still to be filled in (review marker); role None = no role line.
+            raw_role = p.get("role", "")
+            if raw_role is None:
+                role_html = ""
+            elif raw_role:
+                role_html = f'<span class="role">{html.escape(raw_role)}</span>'
+            else:
+                role_html = '<span class="role"><span class="review">Role needed</span></span>'
+            duties = "".join(f"<li>{html.escape(d)}</li>" for d in p.get("duties", []))
+            duties_html = f'<ul class="duties">{duties}</ul>' if duties else ""
+            cls = "person" + (" wide" if duties else "")
             cards.append(
-                f'<div class="person"><div class="pic">{pic}</div>'
-                f"<b>{html.escape(p['name'])}</b><span>{role}</span></div>"
+                f'<div class="{cls}"><div class="pic">{pic}</div>'
+                f"<b>{html.escape(p['name'])}</b>{role_html}{duties_html}</div>"
             )
         out.append(
             f'<h3 class="group">{html.escape(group["name"])}</h3><div '

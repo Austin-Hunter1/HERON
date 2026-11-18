@@ -1,64 +1,78 @@
 {
-  "_comment": "People on the About page (<!--TEAM-->). photo is a slot in images.json; an empty role shows a review marker. Names as in HERON_WRITING/URSI/URSI_Summary_2page.tex.",
+  "_comment": "People on the About page (<!--TEAM-->). photo is a slot in images.json. role \"\" shows a review marker (to be filled in); role null means no role line and no marker. duties are optional bullet points. Roles and duties: CCAR slide 'Team Member Roles & Responsibilities' (2026-11-18). Names as in HERON_WRITING/URSI/URSI_Summary_2page.tex.",
   "groups": [
     {
       "name": "Student team",
       "people": [
         {
           "name": "Austin Hunter",
-          "role": "",
-          "photo": "team-austin"
+          "role": "Project Manager & GNSS-R Science Lead",
+          "photo": "team-austin",
+          "duties": [
+            "Oversee project execution and coordinate sub-teams",
+            "Develop core algorithms to retrieve surface-water boundaries and height variations, and perform reflected-signal tracking",
+            "Conduct scientific analysis, error quantification and cross-validation of results"
+          ]
         },
         {
           "name": "Jack Abrams",
-          "role": "",
-          "photo": "team-jack-frances"
+          "role": "UAV Operations & GNC Software Lead",
+          "photo": "team-jack-frances",
+          "duties": [
+            "Pilot and co-pilot for flight testing and field operations; assist with FAA and CU Flight Ops approvals",
+            "Support Mission Planner and ground-station operations, flight planning, and waypoint generation for GNSS-R surveys",
+            "Develop and support GNSS-R data-processing and visualization tools"
+          ]
         },
         {
           "name": "Frances Bailey",
-          "role": "",
-          "photo": "team-jack-frances"
+          "role": "SDR & Payload Architecture Lead",
+          "photo": "team-jack-frances",
+          "duties": [
+            "Integrate the upgraded software-defined radios and GNSS antenna systems",
+            "Optimize the payload data flow for high-speed capture of baseband reflected signals",
+            "Manage payload-to-ground communication and in-flight telemetry"
+          ]
         },
         {
           "name": "Nathan Cohen",
-          "role": "",
-          "photo": "team-nathan"
+          "role": "Hardware Integration & Electronics Lead",
+          "photo": "team-nathan",
+          "duties": [
+            "Lead assembly and integration of the UAV payload electronics and sensors",
+            "Manage lab operations and conduct rigorous bench testing before flights",
+            "Troubleshoot field hardware to maintain power, structure and payload reliability"
+          ]
         },
         {
           "name": "Grace Halbleib",
-          "role": "",
-          "photo": "team-grace"
+          "role": "Software & Flight Compliance Lead",
+          "photo": "team-grace",
+          "duties": [
+            "Manage FAA and CU Flight Ops authorizations and regulatory compliance",
+            "Design the software architecture for remote-sensing data storage and organization",
+            "Develop automated pipelines to process raw UAV telemetry and payload data"
+          ]
         },
         {
           "name": "Andras Szalay",
-          "role": "",
-          "photo": "team-andras"
+          "role": "Geomatics & RF Analysis Lead",
+          "photo": "team-andras",
+          "duties": [
+            "Develop algorithms to compute specular reflection locations using geoid models",
+            "Model and correct RF propagation errors and ionospheric delays",
+            "Extract GNSS signal parameters (amplitude, phase, pseudorange) from raw RF data"
+          ]
         }
       ]
     },
     {
       "name": "Advisors and mentors",
       "people": [
-        {
-          "name": "Jade Morton",
-          "role": "",
-          "photo": ""
-        },
-        {
-          "name": "Brian Breitsch",
-          "role": "",
-          "photo": ""
-        },
-        {
-          "name": "Steve Taylor",
-          "role": "",
-          "photo": ""
-        },
-        {
-          "name": "Jiawei Xu",
-          "role": "",
-          "photo": ""
-        }
+        {"name": "Jade Morton", "role": null, "photo": ""},
+        {"name": "Brian Breitsch", "role": null, "photo": ""},
+        {"name": "Steve Taylor", "role": null, "photo": ""},
+        {"name": "Jiawei Xu", "role": null, "photo": ""}
       ]
     }
   ]
