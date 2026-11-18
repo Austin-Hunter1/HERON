@@ -223,3 +223,22 @@ h3.group{font:700 15px var(--ff-m);letter-spacing:.1em;text-transform:uppercase;
 .anchor-nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
 .anchor-nav a{font:600 14px var(--ff-d);text-decoration:none;color:var(--ink);border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:999px}
 .anchor-nav a:hover{border-color:var(--accent)}
+
+/* v2.1: videos with captions, expandable science needs, FISH photos */
+.vid{margin:0}
+.vid figcaption{font-size:14.5px;color:var(--ink2);margin-top:8px}
+.needs-list{display:grid;gap:12px;margin-top:8px}
+.need-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.need-card[open]{border-color:var(--accent)}
+.need-card>summary{list-style:none;cursor:pointer;display:flex;gap:16px;align-items:center;padding:16px 20px}
+.need-card>summary::-webkit-details-marker{display:none}
+.need-card>summary::after{content:"+";margin-left:auto;font:600 24px/1 var(--ff-m);color:var(--accent)}
+.need-card[open]>summary::after{content:"\2212"}
+.need-card .nk{font:700 14px var(--ff-m);color:var(--accent);letter-spacing:.08em}
+.need-card summary b{display:block;font:750 20px/1.2 var(--ff-d)}
+.need-card summary em{font-style:normal;color:var(--ink3);font-size:14.5px}
+.need-card .nb{padding:0 20px 16px;border-top:1px solid var(--line);overflow-x:auto}
+.need-card .nb p{max-width:80ch}
+.figs3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.figs3 .photo{aspect-ratio:4/3}
+.fish-mosaic{margin-bottom:16px}

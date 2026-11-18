@@ -249,11 +249,12 @@
       "want": "The SURGE team (2022–23), group photo, landscape."
     },
     "team-group": {
-      "source": "",
-      "file": "",
-      "alt": "",
+      "source": "website/src/img/photos/20261116_173625017_iOS.heic",
+      "file": "team-group.jpg",
+      "alt": "The HERON team standing behind the drone on the launch mat at the flying field, 16 November 2026",
       "credit": "",
-      "want": "The HERON team, group photo, landscape, at least 2000 px wide."
+      "want": "",
+      "max_px": 2400
     },
     "fig-rack": {
       "source": "Hardware/payload_rack/out/preview_open.png",
@@ -263,6 +264,82 @@
       "credit": "",
       "want": "",
       "max_px": 1400
+    },
+    "fig-footprint-scale": {
+      "source": "docs/images/trr/fig2d_footprint_scale_uav_vs_satellite_wide.png",
+      "file": "footprint-uav-vs-satellite.webp",
+      "alt": "A CYGNSS footprint of about one kilometre over a lake, with an inset of HERON's 10 by 19 metre Fresnel zones crossing a shoreline",
+      "caption": "Footprint scale: a spaceborne CYGNSS reflection covers about 0.9 × 1.8 km at 30° elevation. HERON's first Fresnel zone at 150 ft is 9.7 × 19.3 m, small enough to resolve a shoreline.",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
+    },
+    "res-crossing": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/presentation/01_overview.png",
+      "file": "res-172251-crossing.webp",
+      "alt": "Specular-point tracks of G09, E05 and C12 crossing the shoreline, the measured minus modelled path, and reflected power by delay for each satellite",
+      "caption": "Survey flight 172251: as each specular point crosses the shoreline, the reflection fades over land and returns over water, for GPS, Galileo and BeiDou alike.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-g09-phase": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/presentation/09_G09_phase_timeseries.png",
+      "file": "res-172251-g09-phase.webp",
+      "alt": "GPS G09 raw residual phase, path change, coherence and reflected C/N0 against time, with land periods shaded",
+      "caption": "GPS G09 on the survey flight: over water the reflected phase is steady and coherent (R and κ near 1); over land (shaded) it winds and the coherence drops.",
+      "credit": "",
+      "want": "",
+      "max_px": 2400
+    },
+    "res-g09-ffz": {
+      "source": "D:/01_Data/outputs/reports/20261116_HERON_Payload/openloop_172251_full/presentation/10_G09_fresnel_map.png",
+      "file": "res-172251-g09-ffz.webp",
+      "alt": "First Fresnel zones of G09 every 2 s along the survey legs, coloured by the water fraction of each zone",
+      "caption": "Where G09's reflection meets the shoreline: its 24 m × 14 m first Fresnel zone every 2 s, coloured by how much of it lies on water.",
+      "credit": "",
+      "want": "",
+      "max_px": 1800
+    },
+    "fish-rack": {
+      "source": "website/src/img/photos/20261116_143251256_iOS.heic",
+      "file": "fish-rack-sdrs.jpg",
+      "alt": "Close-up of the FISH payload rack with the SDR boards, cables and the clock board",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
+    },
+    "fish-side": {
+      "source": "website/src/img/photos/20261116_143232681_iOS.heic",
+      "file": "fish-rack-side.jpg",
+      "alt": "Side view of the FISH payload rack with the Intel NUC and power wiring",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
+    },
+    "fish-under": {
+      "source": "website/src/img/photos/20261116_164339119_iOS.heic",
+      "file": "fish-under-aircraft.jpg",
+      "alt": "The FISH payload mounted under the Aurelia X6 on the launch mat",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
+    },
+    "fish-antenna": {
+      "source": "website/src/img/photos/20261116_164316035_iOS.heic",
+      "file": "fish-nadir-antenna.jpg",
+      "alt": "The nadir antenna and the payload under the aircraft",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
+    },
+    "fish-top": {
+      "source": "website/src/img/photos/20261116_164345034_iOS.heic",
+      "file": "fish-top-antennas.jpg",
+      "alt": "Top of the aircraft with the zenith GNSS antennas and the wiring",
+      "credit": "",
+      "want": "",
+      "max_px": 2000
     }
   },
   "galleries": {
@@ -276,11 +353,18 @@
   },
   "videos": {
     "mission": {
-      "title": "HERON mission and data collect, start to finish",
-      "file": "",
+      "title": "The 16 Nov 2026 flight in the HERON mission planner",
+      "file": "heron-mission-planner-flight.mp4",
       "embed": "",
-      "poster": "drone-ground",
-      "want": "Mission video, start to finish. Either an MP4 (H.264, 1080p, under about 90 MB) for website/src/video/, or a YouTube/Vimeo link."
+      "poster": "",
+      "want": ""
+    },
+    "science3d": {
+      "title": "The science flight over Boulder Reservoir, in 3D",
+      "file": "heron-science-flight-3d.mp4",
+      "embed": "",
+      "poster": "",
+      "want": ""
     }
   }
 }

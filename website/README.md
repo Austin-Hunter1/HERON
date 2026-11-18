@@ -67,6 +67,19 @@ Only `src/img/photos/web/` is committed and published; the originals are
 ignored by git. A slot with no photo shows a labelled placeholder and blocks
 the deploy.
 
+## Videos, figures and team
+
+- **Videos:** `images.json` → `videos`. An MP4 in `src/video/` (`file`) or a
+  hosted player URL (`embed`). Keep each MP4 under 100 MB (GitHub's file limit).
+- **Figures:** plots and diagrams use `<!--FIGURE:name-->`; they are shown
+  whole (not cropped) and open full size on click. Use a `.webp` file name so
+  `prepare_photos.py` keeps the text sharp. A source may be an absolute path,
+  for example a processing report under `D:/01_Data`.
+- **Team:** `team.json` lists the people and their roles; the About page
+  renders it with `<!--TEAM-->`. An empty role is a review marker.
+- **Equations:** a page with `<!--MATH-->` in its head gets KaTeX (served from
+  the site). Write `$$...$$` for display math and `\(...\)` inline.
+
 ## The mission planner demo (`/sim/`)
 
 The page is Jack Abrams' planner page (`Specular_Planner/static/index.html`),

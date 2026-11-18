@@ -31,20 +31,23 @@
 
   <!-- ================================================= video -->
   <section class="band" id="video">
-    <div class="eyebrow">Mission</div>
+    <div class="eyebrow">Mission · Boulder Reservoir, 16 Nov 2026</div>
     <h2>A data collect, start to finish</h2>
     <p>Plan the flight, set up the base station, launch, survey the water while four radios record, land, offload the data, and process it.</p>
-    <!--VIDEO:mission-->
+    <div class="figs2">
+      <figure class="vid"><!--VIDEO:mission--><figcaption>The flight as the team saw it: the HERON mission planner during the 16 Nov collect.</figcaption></figure>
+      <figure class="vid"><!--VIDEO:science3d--><figcaption>The same science flight in 3D: the drone, its specular points and their Fresnel zones over the reservoir.</figcaption></figure>
+    </div>
   </section>
 
   <!-- ================================================= GNSS from a UAV -->
   <section class="band" id="uav">
     <div class="eyebrow">GNSS from a UAV</div>
     <h2>Two paths from one satellite</h2>
-    <p>Each satellite reaches the drone twice: directly, and by reflection from the surface below. The reflected path is longer by about \(2h\sin e\), where \(h\) is the height above the surface and \(e\) the satellite elevation. Each measurement senses an ellipse on the ground, the <em>first Fresnel zone</em>. From a drone it is metres across, not the kilometres of a satellite.</p>
+    <p>Each satellite reaches the drone twice: directly, and by reflection from the surface below. The reflected path is longer by about \(2h\sin e\), where \(h\) is the height above the surface and \(e\) the satellite elevation. Each measurement senses an ellipse on the ground, the <em>first Fresnel zone</em>. From a drone it is about 10 × 20 m; from a satellite it is about a kilometre.</p>
     <div class="figs2">
       <!--FIGURE:fig-bistatic-->
-      <!--FIGURE:fig-fresnel-scale-->
+      <!--FIGURE:fig-footprint-scale-->
     </div>
     <p style="margin-top:18px"><a class="btn primary" style="color:#0d2230;border-color:var(--line)" href="course/">Learn the signal processing: GNSS course →</a></p>
   </section>
@@ -52,42 +55,51 @@
   <!-- ================================================= science -->
   <section class="band" id="science">
     <div class="eyebrow">The science</div>
-    <h2>From radio samples to water</h2>
-    <p>The payload records the direct and the reflected signal on one clock. The ground software tracks the direct signal, predicts the reflection from the geometry (open-loop tracking), and measures three things in each reflection: its power, its coherence, and its carrier phase. From these come four products.</p>
-    <div class="mathgrid">
-      <div class="math">
-        <h3>Geometry and footprint</h3>
-        $$\Delta\rho=\rho_R-\rho_D\approx 2h\sin e$$
-        $$b=\sqrt{\frac{\lambda h}{\sin e}},\qquad a=\frac{b}{\sin e}$$
-        <p class="cite">Excess path of the reflection, and the semi-axes of the first Fresnel zone (\(\lambda\) = 25.5 cm at L5). Camps &amp; Munoz-Martin (2020); Martín-Neira (1993).</p>
-      </div>
-      <div class="math">
-        <h3>Open-loop reflected phase</h3>
-        $$\phi_R(t)=\phi_D(t)-\frac{D_p(t)}{\lambda}+\phi_{hw}$$
-        <p class="cite">The reflected carrier phase is predicted from the direct channel and the modelled excess path \(D_p\). Both channels share one sample clock, so the receiver clock, the satellite clock and the ionosphere cancel. Zavorotny &amp; Voronovich (2000); Wang &amp; Morton (2022).</p>
-      </div>
-      <div class="math">
-        <h3>Water detection</h3>
-        $$\kappa=\frac{\left|\sum_{q} Z_q\right|^2}{W\sum_{q}\left|Z_q\right|^2},\qquad R=\left|\frac{1}{W}\sum_{q} e^{\,j w_q}\right|$$
-        <p class="cite">Calm water gives a coherent reflection: \(\kappa\) and the circular length \(R\) of the phase stay near 1; rough land gives values near 0. The reflected power rises with the water fraction of the Fresnel zone. Roesler et al. (2022); Loria et al. (2023).</p>
-      </div>
-      <div class="math">
-        <h3>Altimetry</h3>
-        $$h_\varphi(t)=h_{\mathrm{RTK}}(t)+\frac{r(t)}{2\sin e(t)}$$
-        <p class="cite">The tracked phase residual \(r\) (a Kalman filter on the reflected phase) corrects the modelled path, giving the receiver height above the surface to centimetres. With the RTK position this is the water-surface elevation. Zhang &amp; Morton (2023); Xu et al. (2025).</p>
-      </div>
-      <div class="math">
-        <h3>Bank slope</h3>
-        $$\Delta s=-\frac{r}{2\sin e},\qquad \tan\beta=\frac{\mathrm{d}s}{\mathrm{d}x}$$
-        <p class="cite">Over the shore, the same phase gives the ground height \(s\) above the water along the specular track; its gradient across the shoreline is the bank slope \(\beta\). HERON checks it against airborne lidar.</p>
-      </div>
-      <div class="math">
-        <h3>River slope</h3>
-        $$S=\frac{\hat H_{\mathrm{up}}-\hat H_{\mathrm{down}}}{D_{\mathrm{centerline}}}$$
-        <p class="cite">Water-surface elevations upstream and downstream, separated by the distance along the river centreline. Wang &amp; Morton (2022); Wang et al. (2025).</p>
-      </div>
+    <h2>What water science needs, and how we measure it</h2>
+    <p>Rivers, lakes, reservoirs and wetlands drive floods, droughts and water supply. Hydrologists need to know where the water is, how high it stands, and how steeply it falls, at the scale of a stream or a shoreline and as often as conditions change. Gauges are precise but sparse; optical satellites stop at clouds; radar altimeters see only along their ground tracks (Xie et al., 2025). A reflected GNSS signal measured from a drone can fill that gap. Open each need to see the math.</p>
+    <div class="needs-list">
+      <details class="need-card" open>
+        <summary><span class="nk">01</span><span><b>Where is the water?</b><em>Water extent and shorelines</em></span></summary>
+        <div class="nb">
+          <p>Calm water reflects GNSS signals coherently, like a mirror; land and vegetation scatter them. The reflected power and the steadiness of its phase therefore mark open water, for each first Fresnel zone along the track (Loria et al., 2023).</p>
+          $$\kappa=\frac{\left|\sum_{q} Z_q\right|^2}{W\sum_{q}\left|Z_q\right|^2},\qquad R=\left|\frac{1}{W}\sum_{q} e^{\,j w_q}\right|$$
+          <p>\(Z_q\) are the reflected correlator sums over \(W\) consecutive 20 ms periods and \(w_q\) their phases. Over water \(\kappa\) and the circular length \(R\) stay near 1; for noise alone \(\mathrm{E}[\kappa]\approx 1/W\) (Roesler et al., 2022). The reflected power responds to the water fraction of the footprint,</p>
+          $$f=\frac{|E\cap W_{\mathrm{water}}|}{|E|},$$
+          <p>with \(E\) the Fresnel-zone ellipse; a shoreline is where \(f\) crosses 0.5.</p>
+        </div>
+      </details>
+      <details class="need-card">
+        <summary><span class="nk">02</span><span><b>How high is the water?</b><em>Water-surface elevation (altimetry)</em></span></summary>
+        <div class="nb">
+          <p>The reflected path is longer than the direct one by an amount set by the height of the receiver above the surface (Martín-Neira, 1993):</p>
+          $$\Delta\rho=\rho_R-\rho_D\approx 2h\sin e .$$
+          <p>HERON predicts this path from the RTK trajectory and the satellite orbit, and tracks the reflected carrier phase against the prediction. Both channels share one clock, so the receiver clock, the satellite clock and the ionosphere cancel:</p>
+          $$\phi_R(t)=\phi_D(t)-\frac{D_p(t)}{\lambda}+\phi_{hw}.$$
+          <p>A Kalman filter on the phase residual gives the correction \(r\) (in metres) to the modelled path, and from it the height above the water to centimetres:</p>
+          $$h_\varphi(t)=h_{\mathrm{RTK}}(t)+\frac{r(t)}{2\sin e(t)},\qquad \mathrm{WSE}=z_{\mathrm{RTK}}-h_\varphi .$$
+          <p>At L5, one cycle of phase (\(\lambda\) = 25.5 cm) is a few centimetres of height (Zhang &amp; Morton, 2023; Xu et al., 2025).</p>
+        </div>
+      </details>
+      <details class="need-card">
+        <summary><span class="nk">03</span><span><b>How steep is the bank?</b><em>Shore and bank slope</em></span></summary>
+        <div class="nb">
+          <p>Where the reflection moves onto the shore, the same phase measures the ground instead of the water. Relative to the water surface, the ground height along the specular track is</p>
+          $$\Delta s=-\frac{r}{2\sin e},$$
+          <p>and the bank slope \(\beta\) is its gradient along the track, across the shoreline:</p>
+          $$\tan\beta=\frac{\mathrm{d}s}{\mathrm{d}x}.$$
+          <p>The footprint sets the resolution: at 150 ft and 30° elevation the first Fresnel zone is about 10 × 19 m (Camps &amp; Munoz-Martin, 2020). HERON checks these heights against airborne lidar.</p>
+        </div>
+      </details>
+      <details class="need-card">
+        <summary><span class="nk">04</span><span><b>How fast does the river fall?</b><em>River slope</em></span></summary>
+        <div class="nb">
+          <p>River slope controls discharge and is hard to measure at scale. From water-surface elevations upstream and downstream, separated by the distance along the river centreline:</p>
+          $$S=\frac{\hat H_{\mathrm{up}}-\hat H_{\mathrm{down}}}{D_{\mathrm{centerline}}}.$$
+          <p>From orbit, carrier-phase GNSS-R has measured slopes of a few centimetres per kilometre (Wang &amp; Morton, 2022; Wang et al., 2025). From a drone, the footprint is small enough for streams.</p>
+        </div>
+      </details>
     </div>
-    <p class="small">Full references: <a href="publications/#references">Publications + results</a>.</p>
+    <p class="small">References: <a href="publications/#references">Publications + results</a>. The signal-processing background is in the <a href="course/">GNSS course</a>.</p>
   </section>
 
   <!-- ================================================= FISH -->
@@ -95,14 +107,20 @@
     <div class="eyebrow">The FISH</div>
     <h2>The payload: four radios, one clock</h2>
     <p>The FISH payload hangs under an Aurelia X6 hexacopter. A zenith RHCP antenna receives the direct signals; a nadir antenna receives the reflections in RHCP and LHCP. Two Ettus B200 and two B210 software-defined radios record six channels on two bands (L1 and L5). A HERON-designed clock board gives all four the same 10 MHz reference and pulse-per-second, so every channel is coherent. An Intel NUC writes the raw samples to an SSD at 264 MB/s.</p>
+    <div class="mosaic fish-mosaic">
+      <!--PHOTO:fish-under-->
+      <!--PHOTO:fish-rack-->
+      <!--PHOTO:fish-antenna-->
+    </div>
     <!--FIGURE:fig-fish-->
-    <div class="figs2" style="margin-top:16px">
-      <div class="split" style="margin:0;display:block"><!--PHOTO:payload-photo--></div>
-      <!--FIGURE:fig-rack-->
+    <div class="figs3" style="margin-top:16px">
+      <!--PHOTO:fish-side-->
+      <!--PHOTO:fish-top-->
+      <!--PHOTO:payload-photo-->
     </div>
     <div class="figs2" style="margin-top:16px">
+      <!--FIGURE:fig-rack-->
       <!--FIGURE:payload-->
-      <div class="split" style="margin:0;display:block"><!--PHOTO:drone-ground--></div>
     </div>
   </section>
 
@@ -127,19 +145,14 @@
 
   <!-- ================================================= results -->
   <section class="band" id="results">
-    <div class="eyebrow">Results · first flight, Boulder Reservoir, 16 Nov 2026</div>
+    <div class="eyebrow">Results · first flights, Boulder Reservoir, 16 Nov 2026</div>
     <h2>Water in the phase</h2>
-    <div class="stats">
-      <div class="stat"><b>5 cm</b><span>RMS of reflected-phase height against RTK, three satellites, hover at 118.6 m</span></div>
-      <div class="stat"><b>2.4 cm</b><span>RMS of ground height from the GPS reflection against lidar, 822 epochs</span></div>
-      <div class="stat"><b>0.82–0.89</b><span>median phase coherence κ over open water</span></div>
-      <div class="stat"><b>27 × 15 m</b><span>first Fresnel zone at 118.6 m and 34° elevation</span></div>
-    </div>
-    <!--FIGURE:res-overview-->
+    <!--FIGURE:res-crossing-->
     <div class="figs2" style="margin-top:16px">
-      <!--FIGURE:res-bank-->
-      <!--FIGURE:res-coherence-->
+      <!--FIGURE:res-g09-phase-->
+      <!--FIGURE:res-g09-ffz-->
     </div>
+    <div style="margin-top:16px"><!--FIGURE:res-altimetry--></div>
     <p style="margin-top:18px"><a class="btn primary" style="color:#0d2230;border-color:var(--line)" href="publications/#results">All results and publications →</a></p>
     <p class="small">Preliminary results from the first flights; processing continues.</p>
   </section>
