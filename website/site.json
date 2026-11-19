@@ -32,7 +32,7 @@
     ]
   },
   "nav": {
-    "_comment": "The menu (☰) on the course and planner pages, which keep their own layout. key matches the page; path is from the site root.",
+    "_comment": "The menu button on the course and planner pages, which keep their own layout. key matches the page; path is from the site root.",
     "script": "website/nav/site_nav.js",
     "logo": "img/heron-logo-white-sky.png",
     "links": [

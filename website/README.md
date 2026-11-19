@@ -1,5 +1,9 @@
 # herongnss.org
 
+> **Want to edit the site?** Start with [EDITING_GUIDE.md](EDITING_GUIDE.md): a step-by-step guide for the
+> team (text, photos, figures, team, publications, videos, equations, deploys). This README covers
+> how the build works inside.
+
 The public HERON website (decisions D-116 to D-122 in `docs/DECISIONS.md`).
 
 | Path | What | Source |
