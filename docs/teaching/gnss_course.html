@@ -192,6 +192,71 @@ body.present .part-h{min-height:auto}
   .side{display:none}
   .mob-toc{display:flex;flex-wrap:wrap;gap:6px}
 }
+
+/* phone.css - Phone layout of the GNSS course (see js/phone.js).
+   Every rule is under html.phone, which phone.js sets on narrow screens. */
+#pbar,#pnav,#psheet{display:none}
+html.phone{scroll-padding-top:64px}
+html.phone body{padding-top:56px;padding-bottom:64px}
+html.phone .wrap{padding:16px 14px 24px;gap:28px}
+
+/* Top bar: parts menu and the current part. Right padding leaves room for
+   the site menu button that herongnss.org adds in the top-right corner. */
+html.phone #pbar{display:flex;align-items:center;gap:10px;position:fixed;top:0;left:0;right:0;z-index:50;height:56px;
+  padding:0 66px 0 10px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+html.phone #pbar .pmenu{display:inline-flex;align-items:center;gap:6px;flex:none;height:38px;padding:0 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--bg);color:var(--ink);font:650 14px var(--ff-d)}
+html.phone #pbar .pcur{flex:1;min-width:0;font:650 15px/1.2 var(--ff-d);color:var(--ink);text-decoration:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Bottom bar: previous and next part. */
+html.phone #pnav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;position:fixed;left:0;right:0;bottom:0;z-index:50;
+  height:56px;padding:0 10px env(safe-area-inset-bottom,0);background:color-mix(in srgb,var(--surface) 94%,transparent);
+  backdrop-filter:blur(8px);border-top:1px solid var(--line)}
+html.phone #pnav a{font:650 15px var(--ff-d);color:var(--accent);text-decoration:none;padding:10px 6px}
+html.phone #pnav .pnext{text-align:right}
+html.phone #pnav a.off{visibility:hidden}
+html.phone #pnav .pidx{font:500 12px var(--ff-m);color:var(--ink3)}
+
+/* Parts sheet. */
+html.phone #psheet:not([hidden]){display:block;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45)}
+html.phone .psheet-in{position:absolute;left:0;right:0;bottom:0;max-height:85vh;overflow:auto;background:var(--surface);
+  border-radius:18px 18px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom,0))}
+html.phone .psheet-h{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 10px}
+html.phone .psheet-h b{font:700 17px var(--ff-d)}
+html.phone .pclose{border:0;background:none;color:var(--ink2);font-size:28px;line-height:1;padding:4px 8px}
+html.phone #psheet ol{list-style:none;margin:0;padding:0}
+html.phone #psheet a{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:baseline;padding:12px 8px;border-radius:10px;
+  color:var(--ink);text-decoration:none;font-size:16px}
+html.phone #psheet a.on{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+html.phone #psheet .pn{font:600 13px var(--ff-m);color:var(--accent)}
+html.phone #psheet .pm{font:500 12px var(--ff-m);color:var(--ink3)}
+html.phone .pall{display:flex;gap:8px;align-items:center;padding:14px 8px 4px;border-top:1px solid var(--line);margin-top:8px;font-size:15px}
+html.psheet-open{overflow:hidden}
+
+/* Intro: short, and no duplicate parts lists (the menu has them). */
+html.phone .hero{gap:12px}
+html.phone .hero h1{font-size:30px}
+html.phone .hero p{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+html.phone .agenda,html.phone .mob-toc,html.phone .timer,html.phone .side{display:none!important}
+
+/* Part headers: compact. */
+html.phone .part-h{gap:2px 12px;padding-top:10px}
+html.phone .part-h .num{font-size:30px}
+html.phone .part-h h2{font-size:23px}
+html.phone .part-h .lede{font-size:15px}
+
+/* Notes: first paragraph, equations and controls; the rest behind "Read more". */
+html.phone .notes{font-size:15px;gap:10px}
+html.phone:not(.pall-text) .pmore:not(.pmore-open *){display:none}
+html.phone:not(.pall-text) .pmore-open .pmore{display:revert}
+html.phone.pall-text .pmore-btn{display:none}
+html.phone .pmore-btn{align-self:flex-start;border:1px solid var(--line);background:var(--surface);color:var(--accent);
+  border-radius:999px;padding:6px 14px;font:650 14px var(--ff-d)}
+html.phone .eq{overflow-x:auto;padding:10px 12px}
+html.phone .panel{gap:14px}
+html.phone .tablewrap{overflow-x:auto}
+html:not(.phone) .pmore-btn{display:none}
 </style>
 
 </head>
@@ -3063,6 +3128,145 @@ G.section("s10", (root) => {
   };
   G.mount(wfC, drawOL); G.mount(cohC, drawOL);
 });
+
+</script>
+<script>
+/* phone.js - Phone layout of the GNSS course.
+ *
+ * Why: on a phone the course is one very long page (about 45 000 px)
+ * with 25 000 characters of notes, and the parts list sits under the
+ * introduction. On a narrow screen (see PHONE_QUERY) this script:
+ *
+ * 1. Adds a top bar with a parts menu and the name of the current part.
+ * 2. Adds a bottom bar that jumps to the previous or next part.
+ * 3. Shortens the notes: each notes block keeps its heading, its first
+ *    paragraph, its equations and its controls. The rest (more text, the
+ *    "where" lines under equations, long remarks) folds behind a
+ *    "Read more" button. The menu has a switch to show all text.
+ *
+ * It adds the class "phone" to <html>; phone.css styles everything under
+ * that class, so the desktop and present-mode layouts do not change.
+ * It reads the page as it is (parts, headings, notes); it needs no change
+ * to the sections.
+ */
+(function () {
+  "use strict";
+  const PHONE_QUERY = "(max-width: 760px)";
+  // Notes children that always stay visible on a phone.
+  const KEEP = "h3, .eq, .controls, .readouts, .btnrow, .steps, .stepbody, .viz, .fig, .figrow, canvas, table, .tablewrap";
+  const mq = window.matchMedia(PHONE_QUERY);
+  let built = false;
+
+  function partsList() {
+    return [...document.querySelectorAll("section.part")].map((s) => ({
+      el: s,
+      id: s.id,
+      num: (s.querySelector(".part-h .num") || {}).textContent || "",
+      title: (s.querySelector(".part-h h2") || {}).textContent || s.id,
+      min: s.dataset.min || "",
+    }));
+  }
+
+  /** Fold everything after the first paragraph of one notes block. */
+  function shorten(box) {
+    let firstP = false, folded = 0;
+    for (const c of [...box.children]) {
+      if (c.matches(".pmore-btn")) continue;
+      if (c.matches(KEEP)) {
+        if (c.matches(".stepbody")) shorten(c);
+        // An equation keeps its formula; its "where" line folds.
+        c.querySelectorAll(":scope > .where").forEach((w) => { w.classList.add("pmore"); folded++; });
+        continue;
+      }
+      if (c.tagName === "P" && !firstP && !c.matches(".tech, .hint")) { firstP = true; continue; }
+      c.classList.add("pmore"); folded++;
+    }
+    if (folded && !box.querySelector(":scope > .pmore-btn")) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "pmore-btn"; b.textContent = "Read more";
+      b.addEventListener("click", () => {
+        const open = box.classList.toggle("pmore-open");
+        b.textContent = open ? "Show less" : "Read more";
+      });
+      box.append(b);
+    }
+  }
+
+  function build() {
+    if (built) return;
+    built = true;
+    const parts = partsList();
+    document.querySelectorAll(".notes").forEach(shorten);
+    // Long remarks directly in a panel (for example under HERON figures).
+    document.querySelectorAll(".panel").forEach((p) => {
+      const loose = [...p.children].filter((c) => c.matches("p.tech, p.hint"));
+      if (loose.length) {
+        const wrap = document.createElement("div");
+        wrap.className = "notes panel-notes";
+        loose[0].before(wrap); loose.forEach((c) => wrap.append(c));
+        shorten(wrap);
+      }
+    });
+
+    // Top bar: parts menu button and the current part.
+    const bar = document.createElement("div");
+    bar.id = "pbar";
+    bar.innerHTML = '<button type="button" class="pmenu" aria-label="Course parts" aria-expanded="false">' +
+      '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>' +
+      '<span>Parts</span></button><a class="pcur" href="#top">GNSS course</a>';
+    document.body.prepend(bar);
+
+    // Parts sheet.
+    const sheet = document.createElement("div");
+    sheet.id = "psheet"; sheet.hidden = true;
+    sheet.innerHTML = '<div class="psheet-in"><div class="psheet-h"><b>HERON GNSS course</b><button type="button" class="pclose" aria-label="Close">×</button></div>' +
+      '<ol>' + parts.map((p) => `<li><a href="#${p.id}"><span class="pn">${p.num}</span><span>${p.title}</span><span class="pm">${p.min}′</span></a></li>`).join("") + '</ol>' +
+      '<label class="pall"><input type="checkbox"> Show all text</label></div>';
+    document.body.append(sheet);
+    const menuBtn = bar.querySelector(".pmenu");
+    const setSheet = (open) => { sheet.hidden = !open; menuBtn.setAttribute("aria-expanded", String(open)); document.documentElement.classList.toggle("psheet-open", open); };
+    menuBtn.addEventListener("click", () => setSheet(sheet.hidden));
+    sheet.querySelector(".pclose").addEventListener("click", () => setSheet(false));
+    sheet.addEventListener("click", (e) => { if (e.target === sheet || e.target.closest("a")) setSheet(false); });
+    sheet.querySelector(".pall input").addEventListener("change", (e) => {
+      document.documentElement.classList.toggle("pall-text", e.target.checked);
+      setTimeout(() => window.G && G.redrawAll && G.redrawAll(), 50);
+    });
+
+    // Bottom bar: previous and next part.
+    const nav = document.createElement("nav");
+    nav.id = "pnav"; nav.setAttribute("aria-label", "Previous and next part");
+    nav.innerHTML = '<a class="pprev" href="#">‹ Prev</a><span class="pidx"></span><a class="pnext" href="#">Next ›</a>';
+    document.body.append(nav);
+
+    // Follow the part on screen.
+    const cur = bar.querySelector(".pcur");
+    const show = (i) => {
+      const p = parts[i];
+      cur.textContent = p ? `${p.num} · ${p.title}` : "GNSS course";
+      cur.setAttribute("href", p ? "#" + p.id : "#top");
+      nav.querySelector(".pidx").textContent = p ? `${i + 1} of ${parts.length}` : `Intro · ${parts.length} parts`;
+      const prev = nav.querySelector(".pprev"), next = nav.querySelector(".pnext");
+      prev.classList.toggle("off", i <= 0); prev.setAttribute("href", i > 0 ? "#" + parts[i - 1].id : "#top");
+      const ni = Math.min(parts.length - 1, i + 1);
+      next.classList.toggle("off", i >= parts.length - 1); next.setAttribute("href", "#" + parts[ni].id);
+      sheet.querySelectorAll("a").forEach((a, k) => a.classList.toggle("on", k === i));
+    };
+    show(-1);
+    const io = new IntersectionObserver((ents) => {
+      for (const e of ents) if (e.isIntersecting) show(parts.findIndex((p) => p.el === e.target));
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    parts.forEach((p) => io.observe(p.el));
+    if (window.G && G.redrawAll) setTimeout(G.redrawAll, 50);
+  }
+
+  const apply = () => {
+    document.documentElement.classList.toggle("phone", mq.matches);
+    if (mq.matches) build();
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply); else apply();
+  mq.addEventListener && mq.addEventListener("change", apply);
+})();
 
 </script>
 

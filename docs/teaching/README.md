@@ -30,6 +30,14 @@ step from panel to panel). Press `Esc` to leave present mode.
 | 09 | Pseudorange and carrier models; dual-frequency correction | 6 |
 | 10 | GNSS-R geometry, Fresnel zone, open-loop error model | 8 |
 
+## On a phone
+
+On a screen narrower than 760 px the course switches to a phone layout
+(`src/js/phone.js`, `src/css/phone.css`): a top bar with a parts menu, a
+bottom bar for the previous and next part, and shorter notes. Each notes
+block keeps its heading, first paragraph, equations and controls; the rest
+opens with "Read more", or everywhere with "Show all text" in the menu.
+
 ## Edit and rebuild
 
 Edit the sources in `src/`, then run (standard library only):

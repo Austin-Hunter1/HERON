@@ -80,6 +80,9 @@ def build(fragment: bool) -> str:
         js = SRC / "js" / f"{sid}.js"
         if js.exists():
             scripts.append(f"<script>\n{js.read_text(encoding='utf-8')}\n</script>")
+    # The phone layout runs after the sections exist (js/phone.js).
+    phone_js = (SRC / "js" / "phone.js").read_text(encoding="utf-8")
+    scripts.append(f"<script>\n{phone_js}\n</script>")
     total = sum(p[2] for p in PARTS)
     agenda.append(f"<span></span><span><b>Total</b></span><span>{total} min</span>")
 
@@ -89,7 +92,10 @@ def build(fragment: bool) -> str:
     data = data.replace("</", "<\\/")
     swaps = {
         "/*KATEX_CSS*/": katex_css_inline(),
-        "/*COURSE_CSS*/": (SRC / "css" / "course.css").read_text(encoding="utf-8"),
+        # phone.css follows course.css; it only acts under html.phone (js/phone.js).
+        "/*COURSE_CSS*/": (SRC / "css" / "course.css").read_text(encoding="utf-8")
+        + "\n"
+        + (SRC / "css" / "phone.css").read_text(encoding="utf-8"),
         "<!--TOC-->": "\n".join(toc),
         "<!--AGENDA-->": "\n".join(agenda),
         "<!--MOBTOC-->": "".join(mob),
