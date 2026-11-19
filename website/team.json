@@ -17,7 +17,7 @@
         {
           "name": "Jack Abrams",
           "role": "UAV Operations & GNC Software Lead",
-          "photo": "team-jack-frances",
+          "photo": "team-jack",
           "duties": [
             "Pilot and co-pilot for flight testing and field operations; assist with FAA and CU Flight Ops approvals",
             "Support Mission Planner and ground-station operations, flight planning, and waypoint generation for GNSS-R surveys",
@@ -27,7 +27,7 @@
         {
           "name": "Frances Bailey",
           "role": "SDR & Payload Architecture Lead",
-          "photo": "team-jack-frances",
+          "photo": "team-frances",
           "duties": [
             "Integrate the upgraded software-defined radios and GNSS antenna systems",
             "Optimize the payload data flow for high-speed capture of baseband reflected signals",
@@ -69,10 +69,26 @@
     {
       "name": "Advisors and mentors",
       "people": [
-        {"name": "Jade Morton", "role": null, "photo": ""},
-        {"name": "Brian Breitsch", "role": null, "photo": ""},
-        {"name": "Steve Taylor", "role": null, "photo": ""},
-        {"name": "Jiawei Xu", "role": null, "photo": ""}
+        {
+          "name": "Jade Morton",
+          "role": null,
+          "photo": ""
+        },
+        {
+          "name": "Brian Breitsch",
+          "role": null,
+          "photo": ""
+        },
+        {
+          "name": "Steve Taylor",
+          "role": null,
+          "photo": ""
+        },
+        {
+          "name": "Jiawei Xu",
+          "role": null,
+          "photo": ""
+        }
       ]
     }
   ]

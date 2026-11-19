@@ -340,6 +340,34 @@
       "credit": "",
       "want": "",
       "max_px": 2000
+    },
+    "team-jack": {
+      "source": "website/src/img/photos/20261116_164912349_iOS.heic",
+      "file": "team-jack.jpg",
+      "alt": "Jack Abrams working on the drone on the launch mat",
+      "credit": "",
+      "want": "",
+      "max_px": 900,
+      "crop": [
+        0.15,
+        0.17,
+        0.49,
+        0.62
+      ]
+    },
+    "team-frances": {
+      "source": "website/src/img/photos/Jack&Frances.heic",
+      "file": "team-frances.jpg",
+      "alt": "Frances Bailey at the field table with a laptop",
+      "credit": "",
+      "want": "",
+      "crop": [
+        0.27,
+        0.34,
+        0.45,
+        0.58
+      ],
+      "max_px": 900
     }
   },
   "galleries": {

@@ -5,7 +5,8 @@ large JPEGs, PNG screenshots. Each photo slot in website/images.json
 names its original in ``source``. This tool writes a web copy to
 ``website/src/img/photos/web/<file>``:
 
-- turned upright (EXIF orientation),
+- turned upright (EXIF orientation), and cut to ``crop`` when the slot
+  has one ([left, top, right, bottom] as fractions of the image),
 - at most ``max_px`` on the long side (images.json ``web.max_px``, or
   the slot's own ``max_px``),
 - JPEG at ``web.quality``, or WebP (``web.figure_quality``) when the
@@ -86,6 +87,12 @@ def main() -> None:
         if not src.is_file():
             sys.exit(f"slot {name}: source {slot['source']} is missing")
         im = ImageOps.exif_transpose(open_photo(src)).convert("RGB")
+        if slot.get("crop"):
+            # crop = [left, top, right, bottom] as fractions of the upright
+            # image, so one person can be cut out of a group photo.
+            x0, y0, x1, y1 = slot["crop"]
+            w, h = im.size
+            im = im.crop((round(x0 * w), round(y0 * h), round(x1 * w), round(y1 * h)))
         size = slot.get("max_px", web["max_px"])
         im.thumbnail((size, size), Image.LANCZOS)
         out = WEB_DIR / slot["file"]
