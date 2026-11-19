@@ -7,7 +7,7 @@
  *
  * The build sets window.HERON_NAV before this script loads:
  *   { root: "../", here: "course", pos: "top-right" | "bottom-left",
- *     logo: "img/heron-logo.png", links: [{ key, label, path }, ...] }
+ *     logo: "img/heron-logo-white-sky.png", links: [{ key, label, path }, ...] }
  * The links come from site.json ("nav"), so all pages list the same set.
  */
 (function () {

@@ -76,7 +76,7 @@
       if (!overlay) {
         overlay = document.createElement("div");
         overlay.id = "web-loading";
-        overlay.innerHTML = '<div class="box"><img src="../img/heron-logo.png" alt=""><b>HERON mission planner</b><span class="msg"></span><span class="sub">The real planner runs in your browser. The first visit downloads about 25 MB; later visits are faster.</span></div>';
+        overlay.innerHTML = '<div class="box"><img src="../img/heron-logo-white-sky.png" alt=""><b>HERON mission planner</b><span class="msg"></span><span class="sub">The real planner runs in your browser. The first visit downloads about 25 MB; later visits are faster.</span></div>';
         document.body.append(overlay);
       }
       overlay.querySelector(".msg").textContent = text;
